@@ -1,0 +1,163 @@
+# Secret scanning (all events) and a scan of the shipped dependencies for known vulnerabilities
+# and licences (main and weekly; pull requests use dependency-review.yml, which only blocks on
+# what the pull request changes). The weekly run catches advisories published after a merge.
+name: Security
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * 1" # Mondays 04:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      GITLEAKS_VERSION: "8.30.1"
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # The gitleaks binary, not gitleaks-action (which needs a licence key for organisations and
+      # posts PR comments). Findings are redacted in logs and in the report.
+      - name: Download gitleaks
+        run: |
+          scripts/ci/fetch-tool.sh "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" "$GITLEAKS_SHA256" "$RUNNER_TEMP/gitleaks.tar.gz"
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+
+      - name: Scan
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p build/reports/gitleaks
+          if [ "$EVENT" = "pull_request" ]; then
+            # Only the commits this pull request adds.
+            range=(--log-opts "$BASE_SHA..$HEAD_SHA")
+            scope="commits $BASE_SHA..$HEAD_SHA"
+          else
+            range=()
+            scope="full history"
+          fi
+          set +e
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner --exit-code 1 "${range[@]}" \
+            --report-format sarif --report-path build/reports/gitleaks/gitleaks.sarif .
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "## Secret scan: no leaks found ($scope)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Secret scan: possible secrets found ($scope)" >> "$GITHUB_STEP_SUMMARY"
+            echo "Values are redacted. Rotate any real credential first, then remove it from history. See SECURITY.md." >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=Secret scan::gitleaks found possible secrets ($scope). See the gitleaks-report artifact; values are redacted."
+          fi
+          exit "$rc"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: gitleaks-report
+          path: build/reports/gitleaks/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  tracked-secrets:
+    name: No keystores or credential files in the repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check tracked files
+        run: |
+          found="$(git ls-files | grep -iE '\.(jks|keystore|p12|pfx|pem|key)$|(^|/)google-services\.json$|(^|/)local\.properties$|service[-_]?account.*\.json$' || true)"
+          if [ -n "$found" ]; then
+            echo "::error title=Tracked secrets::signing keys or credential files are committed: $found"
+            exit 1
+          fi
+          echo "## Tracked files: no keystores or credential files" >> "$GITHUB_STEP_SUMMARY"
+
+  dependencies:
+    name: Shipped dependencies (OSV, licences)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      OSV_VERSION: "2.7.0"
+      OSV_SHA256: 160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Android platform 37
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" > /dev/null
+
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-provider: basic
+          cache-read-only: true
+
+      - name: SBOM of the release APK
+        run: ./gradlew :app:cyclonedxDirectBom
+
+      - name: Download OSV-Scanner
+        run: |
+          scripts/ci/fetch-tool.sh "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64" "$OSV_SHA256" "$RUNNER_TEMP/osv-scanner"
+          chmod +x "$RUNNER_TEMP/osv-scanner"
+
+      - name: Known vulnerabilities (fails at high and critical)
+        run: |
+          mkdir -p build/reports/deps
+          # OSV-Scanner recognises CycloneDX files by the .cdx.json suffix.
+          cp app/build/reports/sbom/muxlume-bom.json build/reports/deps/muxlume.cdx.json
+          set +e
+          "$RUNNER_TEMP/osv-scanner" scan source -L build/reports/deps/muxlume.cdx.json --format json > build/reports/deps/osv.json
+          rc=$?
+          set -e
+          # 0: no vulnerabilities, 1: vulnerabilities found (judged below by severity), other: scanner error.
+          if [ "$rc" -gt 1 ]; then echo "::error title=OSV-Scanner::scanner failed (exit $rc)"; exit "$rc"; fi
+          python3 scripts/ci/deps_check.py vulns --osv build/reports/deps/osv.json --fail-at high
+
+      - name: Licences
+        if: always()
+        run: python3 scripts/ci/deps_check.py licenses --sbom app/build/reports/sbom/muxlume-bom.json
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: dependency-report
+          path: |
+            build/reports/deps/
+            app/build/reports/sbom/
+          retention-days: 30
+          if-no-files-found: ignore

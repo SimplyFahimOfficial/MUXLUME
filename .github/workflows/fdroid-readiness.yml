@@ -1,0 +1,76 @@
+# F-Droid readiness: static checks that the source can be built and accepted by F-Droid.
+# This does NOT publish anything. The official F-Droid repository builds and signs apps itself after
+# a merge request to fdroiddata is reviewed; see docs/FDROID.md.
+name: F-Droid readiness
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  audit:
+    name: FLOSS, metadata and version audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Audit
+        run: |
+          set -euo pipefail
+          blockers=0
+          hard=0 # proprietary code or opaque binaries fail the check; the rest is reported
+          warn() { echo "::warning title=F-Droid::$1"; echo "- ⚠️ $1" >> "$GITHUB_STEP_SUMMARY"; blockers=$((blockers + 1)); }
+          ok() { echo "- ✅ $1" >> "$GITHUB_STEP_SUMMARY"; }
+          echo "## F-Droid readiness" >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ -f LICENSE || -f LICENSE.md || -f COPYING ]]; then ok "Root licence file present"; else warn "No LICENSE file: choose a FLOSS licence before submission"; fi
+
+          if grep -RniE '(com\.google\.android\.gms|com\.google\.firebase|play-services|firebase-|crashlytics|com\.google\.android\.play|admob|appcenter|onesignal)' \
+              --include='*.kts' --include='*.toml' --include='*.gradle' app gradle build.gradle.kts settings.gradle.kts; then
+            warn "Proprietary SDK reference in the build files (list above)"; hard=1
+          else ok "No Google Play services, Firebase, ads or analytics SDKs"; fi
+
+          if grep -nE 'maven\s*\(|jitpack|maven\.google\.com/.+/snapshots' settings.gradle.kts build.gradle.kts app/build.gradle.kts; then
+            warn "Extra Maven repositories need F-Droid review (only google() and mavenCentral() are expected)"
+          else ok "Dependencies only from Google Maven and Maven Central"; fi
+
+          bins="$(git ls-files | grep -iE '\.(jar|aar|so|apk|aab|dex)$' | grep -v '^gradle/wrapper/gradle-wrapper.jar$' || true)"
+          if [[ -n "$bins" ]]; then warn "Prebuilt binaries in the repository: $bins"; hard=1; else ok "No prebuilt binaries (besides the Gradle wrapper)"; fi
+
+          if grep -q 'includeInApk = false' app/build.gradle.kts; then ok "Dependency-info blob disabled (dependenciesInfo)"; else warn "dependenciesInfo.includeInApk should be false (reproducible builds)"; fi
+
+          name="$(sed -nE 's/^\s*versionName\s*=\s*"([^"]+)".*/\1/p' app/build.gradle.kts)"
+          code="$(sed -nE 's/^\s*versionCode\s*=\s*([0-9]+).*/\1/p' app/build.gradle.kts)"
+          if [[ -n "$name" && -n "$code" ]]; then ok "Literal versionName $name / versionCode $code (F-Droid update checks read these)"; else warn "versionName/versionCode must be literals in app/build.gradle.kts"; fi
+          if grep -qE "^## \[$name\]" CHANGELOG.md; then ok "CHANGELOG.md has $name"; else warn "CHANGELOG.md has no section for $name"; fi
+          if [[ -f "fastlane/metadata/android/en-US/changelogs/$code.txt" ]]; then ok "Fastlane changelog for versionCode $code"; else warn "Missing fastlane/metadata/android/en-US/changelogs/$code.txt"; fi
+
+          for f in title.txt short_description.txt full_description.txt images/icon.png; do
+            if [[ -s "fastlane/metadata/android/en-US/$f" ]]; then ok "Fastlane $f"; else warn "Missing fastlane/metadata/android/en-US/$f"; fi
+          done
+          short="$(wc -m < fastlane/metadata/android/en-US/short_description.txt 2>/dev/null || echo 0)"
+          if (( short > 81 )); then warn "short_description.txt is longer than 80 characters"; fi
+          if [[ -f fdroid/com.muxlume.app.yml ]]; then ok "fdroiddata metadata template present"; else warn "Missing fdroid/com.muxlume.app.yml"; fi
+
+          echo >> "$GITHUB_STEP_SUMMARY"
+          if (( blockers > 0 )); then
+            echo "**Not ready:** $blockers item(s) above. This audit never builds or publishes an F-Droid APK." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "**Static checks passed.** Not a substitute for an fdroidserver build, its scanner, or F-Droid maintainer review." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$hard"

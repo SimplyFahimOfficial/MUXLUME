@@ -1,0 +1,63 @@
+# Static checks of the GitHub Actions workflows and the Dependabot configuration:
+# actionlint (syntax, expressions, shellcheck of run steps) and zizmor (security: injection,
+# excessive permissions, unpinned actions, credential persistence, cache poisoning, known
+# vulnerable actions). zizmor findings of medium severity and above fail the check.
+name: Workflow audit
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  audit:
+    name: actionlint and zizmor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      ACTIONLINT_VERSION: "1.7.12"
+      ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+      ZIZMOR_VERSION: "1.31.1"
+      ZIZMOR_SHA256: d185f726bdaf92df78273217dfdd24ebcd6b0ef48cf3ce776ff5762b6e138c99
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download actionlint and zizmor
+        run: |
+          scripts/ci/fetch-tool.sh "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" "$ACTIONLINT_SHA256" "$RUNNER_TEMP/actionlint.tar.gz"
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          scripts/ci/fetch-tool.sh "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-x86_64-unknown-linux-gnu.tar.gz" "$ZIZMOR_SHA256" "$RUNNER_TEMP/zizmor.tar.gz"
+          tar -xzf "$RUNNER_TEMP/zizmor.tar.gz" -C "$RUNNER_TEMP" zizmor
+
+      - name: actionlint
+        run: |
+          "$RUNNER_TEMP/actionlint" -color
+          echo "## actionlint: no problems" >> "$GITHUB_STEP_SUMMARY"
+
+      # Online audits (impostor commits, ref confusion, known-vulnerable actions) query the GitHub
+      # API with the job's read-only token.
+      - name: zizmor
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          "$RUNNER_TEMP/zizmor" --min-severity medium --format plain .github/ > "$RUNNER_TEMP/zizmor.txt" 2>&1
+          rc=$?
+          set -e
+          cat "$RUNNER_TEMP/zizmor.txt"
+          { echo "## zizmor (medium and above)"; echo; echo '```'; tail -40 "$RUNNER_TEMP/zizmor.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"

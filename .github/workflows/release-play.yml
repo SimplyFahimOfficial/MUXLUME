@@ -1,0 +1,105 @@
+# Uploads the signed AAB of an already-published, stable GitHub release to Google Play.
+# Separate from release-github.yml on purpose: pushing a tag never publishes to Play.
+#
+# - Verifies the AAB's checksum and its signed build provenance from release-github.yml.
+# - Authenticates with short-lived GitHub OIDC credentials (Workload Identity Federation), no JSON key.
+# - Testing tracks use the `play-testing` environment; production uses `play-production`, which must
+#   require a reviewer, and is uploaded as a draft that a maintainer finishes in Play Console.
+# See docs/PLAY_STORE.md for the one-time setup.
+name: Release (Google Play)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Published stable GitHub release tag (for example v1.0.0)
+        required: true
+        type: string
+      track:
+        description: Google Play track
+        required: true
+        default: internal
+        type: choice
+        options:
+          - internal
+          - alpha
+          - beta
+          - production
+
+permissions: {}
+
+concurrency:
+  group: play-${{ inputs.tag_name }}-${{ inputs.track }}
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: Upload signed AAB to Google Play
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: ${{ inputs.track == 'production' && 'play-production' || 'play-testing' }}
+    permissions:
+      contents: read
+      attestations: read
+      id-token: write
+    steps:
+      - name: Check configuration
+        env:
+          PLAY_WIF_PROVIDER: ${{ vars.PLAY_WIF_PROVIDER }}
+          PLAY_SERVICE_ACCOUNT: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$PLAY_WIF_PROVIDER" ] || [ -z "$PLAY_SERVICE_ACCOUNT" ]; then
+            echo "::error title=Play::PLAY_WIF_PROVIDER and PLAY_SERVICE_ACCOUNT are not configured for this environment. See docs/PLAY_STORE.md."
+            exit 1
+          fi
+
+      - name: Validate stable release and download its AAB
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_INPUT: ${{ inputs.tag_name }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG_INPUT" =~ ^v[0-9]+(\.[0-9]+){2}$ ]]; then
+            echo "::error::Only stable vMAJOR.MINOR.PATCH tags can be uploaded. Received: $TAG_INPUT"; exit 1
+          fi
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG_INPUT}")"
+          if [[ "$(jq -r '.draft' <<< "$release_json")" != "false" || "$(jq -r '.prerelease' <<< "$release_json")" != "false" ]]; then
+            echo "::error::${TAG_INPUT} must be a published, stable GitHub release."; exit 1
+          fi
+          dir="$RUNNER_TEMP/play-release"
+          mkdir -p "$dir"
+          gh release download "$TAG_INPUT" --repo "$GITHUB_REPOSITORY" --pattern '*.aab' --pattern 'SHA256SUMS.txt' --dir "$dir"
+          mapfile -t bundles < <(find "$dir" -maxdepth 1 -type f -name '*.aab')
+          if [[ "${#bundles[@]}" -ne 1 ]]; then echo "::error::Expected exactly one AAB in ${TAG_INPUT}"; exit 1; fi
+          name="$(basename "${bundles[0]}")"
+          awk -v t="$name" '$2 == t { print; n++ } END { if (n != 1) exit 1 }' "$dir/SHA256SUMS.txt" > "$dir/aab.sha256"
+          (cd "$dir" && sha256sum --check --strict aab.sha256)
+          # Signed provenance from the release workflow, not just a colocated checksum (public repositories).
+          if [[ "$(gh api "repos/${GITHUB_REPOSITORY}" --jq '.private')" == "false" ]]; then
+            gh attestation verify "${bundles[0]}" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-github.yml"
+          else
+            echo "::warning::Private repository: no build attestation to verify; relying on the release checksum."
+          fi
+          { echo "aab_path=${bundles[0]}"; echo "tag=$TAG_INPUT"; } >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate with Google Cloud using GitHub OIDC
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.PLAY_WIF_PROVIDER }}
+          service_account: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          cleanup_credentials: true
+
+      - name: Upload App Bundle to Google Play
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJson: ${{ steps.auth.outputs.credentials_file_path }}
+          packageName: com.muxlume.app
+          releaseFile: ${{ steps.release.outputs.aab_path }}
+          releaseName: ${{ steps.release.outputs.tag }}
+          track: ${{ inputs.track }}
+          # Production is uploaded as a draft; a maintainer completes review and rollout in Play Console.
+          status: ${{ inputs.track == 'production' && 'draft' || 'completed' }}
+          changesNotSentForReview: ${{ inputs.track == 'production' }}
