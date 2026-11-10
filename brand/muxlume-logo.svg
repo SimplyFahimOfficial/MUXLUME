@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- MUXLUME mark, traced from muxlume-logo.png (the supplied artwork). Flat colours, no effects. -->
+  <rect width="1024" height="1024" fill="#000000"/>
+  <path fill="#FDF6EB" fill-rule="evenodd" d="M319,246 H703 A125,125 0 0 1 828,371 V574 A125,125 0 0 1 703,699 H319 A125,125 0 0 1 194,574 V371 A125,125 0 0 1 319,246 Z M324,298 H699 A78,78 0 0 1 777,376 V569 A78,78 0 0 1 699,647 H324 A78,78 0 0 1 246,569 V376 A78,78 0 0 1 324,298 Z"/>
+  <path fill="#FD5902" stroke="#FD5902" stroke-width="40" stroke-linejoin="round" d="M453,392 L453,551 L587,472 Z"/>
+  <path fill="none" stroke="#FD5902" stroke-width="46" stroke-linecap="round" d="M303,754 H719"/>
+</svg>

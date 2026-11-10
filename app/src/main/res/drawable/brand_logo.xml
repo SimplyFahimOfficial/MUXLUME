@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- MUXLUME mark traced from brand/muxlume-logo.png (1024 px artwork; 97% pixel overlap). Source: brand/muxlume-logo.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <group
+        android:pivotX="512"
+        android:pivotY="512"
+        android:scaleX="1.55"
+        android:scaleY="1.55">
+        <path
+            android:fillColor="#FFFDF6EB"
+            android:fillType="evenOdd"
+            android:pathData="M319,246 H703 A125,125 0 0 1 828,371 V574 A125,125 0 0 1 703,699 H319 A125,125 0 0 1 194,574 V371 A125,125 0 0 1 319,246 Z M324,298 H699 A78,78 0 0 1 777,376 V569 A78,78 0 0 1 699,647 H324 A78,78 0 0 1 246,569 V376 A78,78 0 0 1 324,298 Z" />
+        <path
+            android:fillColor="#FFFD5902"
+            android:pathData="M453,392 L453,551 L587,472 Z"
+            android:strokeColor="#FFFD5902"
+            android:strokeLineJoin="round"
+            android:strokeWidth="40" />
+        <path
+            android:pathData="M303,754 H719"
+            android:strokeColor="#FFFD5902"
+            android:strokeLineCap="round"
+            android:strokeWidth="46" />
+    </group>
+</vector>

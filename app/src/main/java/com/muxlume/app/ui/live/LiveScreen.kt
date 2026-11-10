@@ -1,0 +1,203 @@
+package com.muxlume.app.ui.live
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.SortByAlpha
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.muxlume.app.AppContainer
+import com.muxlume.app.container
+import com.muxlume.app.data.db.FavoriteEntity
+import com.muxlume.app.data.db.ItemEntity
+import com.muxlume.app.data.db.ItemKind
+import com.muxlume.app.data.db.SourceEntity
+import com.muxlume.app.ui.Nav
+import com.muxlume.app.ui.components.Artwork
+import com.muxlume.app.ui.components.EmptyState
+import com.muxlume.app.ui.components.PillRow
+import com.muxlume.app.ui.components.pressable
+import com.muxlume.app.ui.main.BottomBarSpace
+import com.muxlume.app.ui.main.TopHeader
+import com.muxlume.app.ui.playFromList
+import com.muxlume.app.ui.theme.Mux
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+/** Group filter: all channels, favorites, or one provider group. */
+sealed interface GroupFilter {
+    data object All : GroupFilter
+    data object Favorites : GroupFilter
+    data class Group(val title: String) : GroupFilter
+}
+
+data class Browse(val sourceId: Long?, val filter: GroupFilter, val alphabetical: Boolean)
+
+/**
+ * Shared by Live TV, Movies and Series: one source at a time, provider groups as pills,
+ * favorites as a filter, provider order or A-Z.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class BrowseViewModel(private val c: AppContainer, val kind: ItemKind) : ViewModel() {
+    val browse = MutableStateFlow(Browse(null, GroupFilter.All, false))
+
+    val sources: StateFlow<List<SourceEntity>?> = c.sources.sources
+        .map { list -> list.filter { s -> s.lastError != null || s.refreshedAt == null || countOf(s) > 0 } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private fun countOf(s: SourceEntity) = when (kind) {
+        ItemKind.LIVE -> s.liveCount
+        ItemKind.MOVIE -> s.movieCount
+        ItemKind.SERIES -> s.seriesCount
+    }
+
+    /** The selected source, or the first one with items of this kind. */
+    val sourceId: StateFlow<Long?> = combine(sources, browse) { list, b ->
+        list?.let { l -> b.sourceId?.takeIf { id -> l.any { it.id == id } } ?: (l.firstOrNull { countOf(it) > 0 } ?: l.firstOrNull())?.id }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val groups: StateFlow<List<String>> = sourceId.flatMapLatest { id -> if (id == null) flowOf(emptyList()) else c.db.items().groups(id, kind) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val items: StateFlow<List<ItemEntity>?> = combine(sourceId, browse) { id, b -> id to b }.flatMapLatest { (id, b) ->
+        when {
+            id == null -> flowOf(emptyList())
+            b.filter is GroupFilter.Favorites -> c.db.items().favorites(kind, id)
+            else -> c.db.items().list(id, kind, (b.filter as? GroupFilter.Group)?.title, b.alphabetical)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val favorites: StateFlow<Set<String>> = sourceId.flatMapLatest { id -> if (id == null) flowOf(emptyList()) else c.db.favorites().keys(id) }
+        .map { it.toSet() }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    fun selectSource(id: Long) = browse.value.let { browse.value = Browse(id, GroupFilter.All, it.alphabetical) }
+    fun filter(f: GroupFilter) { browse.value = browse.value.copy(filter = f) }
+    fun toggleSort() { browse.value = browse.value.copy(alphabetical = !browse.value.alphabetical) }
+
+    fun toggleFavorite(item: ItemEntity, isFavorite: Boolean) = viewModelScope.launch {
+        if (isFavorite) c.db.favorites().remove(item.sourceId, item.stableKey)
+        else c.db.favorites().add(FavoriteEntity(item.sourceId, item.stableKey, System.currentTimeMillis()))
+    }
+}
+
+@Composable
+fun LiveScreen(nav: Nav) {
+    val context = LocalContext.current
+    val vm: BrowseViewModel = viewModel(key = "live") { BrowseViewModel(context.container, ItemKind.LIVE) }
+    val sources by vm.sources.collectAsStateWithLifecycle()
+    val sourceId by vm.sourceId.collectAsStateWithLifecycle()
+    val browse by vm.browse.collectAsStateWithLifecycle()
+    val groups by vm.groups.collectAsStateWithLifecycle()
+    val channels by vm.items.collectAsStateWithLifecycle()
+    val favorites by vm.favorites.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    LaunchedEffect(browse, sourceId) { listState.scrollToItem(0) }
+
+    Column(Modifier.fillMaxSize()) {
+        TopHeader("Live TV", onSearch = nav::search)
+        val list = sources ?: return@Column
+        if (list.isEmpty()) {
+            EmptyState("No channels yet", "Add an M3U playlist or an Xtream Codes-compatible account to see live channels here.", action = "Add a playlist", onAction = { nav.addSource() })
+            return@Column
+        }
+        BrowseFilters(vm, list, sourceId, browse, groups)
+        val items = channels ?: return@Column
+        if (items.isEmpty()) {
+            EmptyState(
+                if (browse.filter is GroupFilter.Favorites) "No favorites here" else "Nothing in this list",
+                if (browse.filter is GroupFilter.Favorites) "Tap the star next to a channel to add it." else "This playlist has no live channels in this group.",
+            )
+            return@Column
+        }
+        LazyColumn(state = listState, contentPadding = PaddingValues(bottom = BottomBarSpace + 16.dp, top = 8.dp)) {
+            itemsIndexed(items, key = { _, it -> it.id }) { i, ch ->
+                val fav = ch.stableKey in favorites
+                ChannelRow(ch, fav, onClick = { scope.launch { if (context.playFromList(items, i)) nav.player() } }, onFavorite = { vm.toggleFavorite(ch, fav) })
+            }
+        }
+    }
+}
+
+@Composable
+fun BrowseFilters(vm: BrowseViewModel, sources: List<SourceEntity>, sourceId: Long?, browse: Browse, groups: List<String>) {
+    if (sources.size > 1) {
+        PillRow(sources.map { it.name }, sources.indexOfFirst { it.id == sourceId }, { vm.selectSource(sources[it].id) })
+        Spacer(Modifier.height(8.dp))
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val labels = listOf("All", "Favorites") + groups.map { it.ifEmpty { "Ungrouped" } }
+        val selected = when (val f = browse.filter) {
+            GroupFilter.All -> 0
+            GroupFilter.Favorites -> 1
+            is GroupFilter.Group -> groups.indexOf(f.title).let { if (it < 0) 0 else it + 2 }
+        }
+        PillRow(labels, selected, { i -> vm.filter(if (i == 0) GroupFilter.All else if (i == 1) GroupFilter.Favorites else GroupFilter.Group(groups[i - 2])) }, Modifier.weight(1f))
+        IconButton(vm::toggleSort) {
+            Icon(Icons.Rounded.SortByAlpha, if (browse.alphabetical) "Sort by provider order" else "Sort A to Z", tint = if (browse.alphabetical) Mux.Orange else Mux.TextSecondary)
+        }
+    }
+}
+
+@Composable
+private fun ChannelRow(ch: ItemEntity, favorite: Boolean, onClick: () -> Unit, onFavorite: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().pressable(onClick, label = "Play ${ch.name}").padding(horizontal = Mux.ScreenPadding, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Artwork(ch.logo, ch.name, Modifier.size(width = 72.dp, height = 52.dp).clip(Mux.CardShape).background(Mux.Raised).padding(6.dp), contentScale = ContentScale.Fit, monogramSize = 16)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(ch.name, style = MaterialTheme.typography.titleMedium, color = Mux.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val meta = listOfNotNull(ch.number?.toString(), ch.groupTitle.ifEmpty { null }).joinToString(" · ")
+            if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodySmall, color = Mux.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        IconButton(onFavorite) {
+            Icon(
+                if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                if (favorite) "Remove ${ch.name} from favorites" else "Add ${ch.name} to favorites",
+                tint = if (favorite) Mux.Orange else Mux.TextSecondary,
+            )
+        }
+    }
+}
