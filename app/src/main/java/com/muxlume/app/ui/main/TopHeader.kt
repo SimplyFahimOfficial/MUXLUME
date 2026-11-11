@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.muxlume.app.ui.components.Wordmark
 import com.muxlume.app.ui.theme.Mux
+import com.muxlume.app.ui.theme.MuxTheme
 
 /** Screen title (or the wordmark) with search always one tap away. */
 @Composable
@@ -33,16 +34,16 @@ fun TopHeader(title: String?, onSearch: (() -> Unit)?, modifier: Modifier = Modi
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (onBack != null) {
-            IconButton(onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = Mux.White) }
+            IconButton(onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = MuxTheme.White) }
         }
         if (title == null) {
             Wordmark(Modifier.weight(1f))
         } else {
-            Text(title, style = MaterialTheme.typography.headlineMedium, color = Mux.White, modifier = Modifier.weight(1f).semantics { heading() })
+            Text(title, style = MaterialTheme.typography.headlineMedium, color = MuxTheme.White, modifier = Modifier.weight(1f).semantics { heading() })
         }
         if (onSearch != null) {
-            IconButton(onSearch, Modifier.size(48.dp).clip(Mux.PillShape).background(Mux.Raised)) {
-                Icon(Icons.Rounded.Search, "Search", tint = Mux.White)
+            IconButton(onSearch, Modifier.size(48.dp).clip(Mux.PillShape).background(MuxTheme.Raised)) {
+                Icon(Icons.Rounded.Search, "Search", tint = MuxTheme.White)
             }
         }
     }

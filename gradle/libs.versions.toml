@@ -61,6 +61,8 @@ media3-ui-compose = { module = "androidx.media3:media3-ui-compose", version.ref 
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
+# Pure-Java QR encoder for the on-device UPI code (Apache-2.0, no network, no permissions).
+zxing-core = { module = "com.google.zxing:core", version = "3.5.4" }
 junit = { module = "junit:junit", version.ref = "junit" }
 truth = { module = "com.google.truth:truth", version.ref = "truth" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }

@@ -67,4 +67,21 @@ class VisualRender {
         compose.waitUntil(5_000) { compose.onAllNodes(androidx.compose.ui.test.hasText("Resume")).fetchSemanticsNodes().isNotEmpty() }
         save("03-home")
     }
+
+    @Test fun homeLight() {
+        seed()
+        compose.setContent { MuxlumeTheme(theme = com.muxlume.app.data.ThemeMode.LIGHT) { MainScreen(Nav(androidx.navigation.compose.rememberNavController())) } }
+        compose.waitUntil(5_000) { compose.onAllNodes(androidx.compose.ui.test.hasText("Resume")).fetchSemanticsNodes().isNotEmpty() }
+        save("04-home-light")
+    }
+
+    @Test fun support() {
+        compose.setContent { MuxlumeTheme { com.muxlume.app.ui.library.SupportScreen(onBack = {}) } }
+        save("05-support")
+    }
+
+    @Test fun appearance() {
+        compose.setContent { MuxlumeTheme { com.muxlume.app.ui.library.AppearanceScreen(onBack = {}) } }
+        save("06-appearance")
+    }
 }

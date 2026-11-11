@@ -1,9 +1,11 @@
 package com.muxlume.app.data
 
 import android.content.Context
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -11,19 +13,34 @@ import kotlinx.coroutines.flow.map
 
 val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
+enum class ThemeMode { SYSTEM, LIGHT, DARK }
+
+/** Highlight colour; maps to a [androidx.compose.ui.graphics.Color] in the theme. */
+enum class Accent { ORANGE, AMBER, CRIMSON, TEAL, VIOLET }
+
 data class AppSettings(
     val onboardingDone: Boolean = false,
     /** Keep audio playing when the app is left (otherwise playback pauses, except in picture-in-picture). */
     val backgroundPlayback: Boolean = false,
     /** Reduce motion even when the system animator scale is on. */
     val reduceMotion: Boolean = false,
+    val theme: ThemeMode = ThemeMode.DARK,
+    /** In dark mode, use pure black for raised surfaces too (OLED-friendly). */
+    val amoled: Boolean = false,
+    val accent: Accent = Accent.ORANGE,
+    /** Android 12+: take the highlight colour from the system (Material You), ignoring [accent]. */
+    val dynamicColor: Boolean = false,
 )
 
-class SettingsRepository(private val store: androidx.datastore.core.DataStore<Preferences>) {
+class SettingsRepository(private val store: DataStore<Preferences>) {
     private object Keys {
         val onboardingDone = booleanPreferencesKey("onboarding_done")
         val backgroundPlayback = booleanPreferencesKey("background_playback")
         val reduceMotion = booleanPreferencesKey("reduce_motion")
+        val theme = stringPreferencesKey("theme")
+        val amoled = booleanPreferencesKey("amoled")
+        val accent = stringPreferencesKey("accent")
+        val dynamicColor = booleanPreferencesKey("dynamic_color")
     }
 
     val settings: Flow<AppSettings> = store.data.map {
@@ -31,6 +48,10 @@ class SettingsRepository(private val store: androidx.datastore.core.DataStore<Pr
             onboardingDone = it[Keys.onboardingDone] ?: false,
             backgroundPlayback = it[Keys.backgroundPlayback] ?: false,
             reduceMotion = it[Keys.reduceMotion] ?: false,
+            theme = it[Keys.theme]?.let(::themeOf) ?: ThemeMode.DARK,
+            amoled = it[Keys.amoled] ?: false,
+            accent = it[Keys.accent]?.let(::accentOf) ?: Accent.ORANGE,
+            dynamicColor = it[Keys.dynamicColor] ?: false,
         )
     }
 
@@ -39,4 +60,11 @@ class SettingsRepository(private val store: androidx.datastore.core.DataStore<Pr
     suspend fun setOnboardingDone() = store.edit { it[Keys.onboardingDone] = true }
     suspend fun setBackgroundPlayback(on: Boolean) = store.edit { it[Keys.backgroundPlayback] = on }
     suspend fun setReduceMotion(on: Boolean) = store.edit { it[Keys.reduceMotion] = on }
+    suspend fun setTheme(mode: ThemeMode) = store.edit { it[Keys.theme] = mode.name }
+    suspend fun setAmoled(on: Boolean) = store.edit { it[Keys.amoled] = on }
+    suspend fun setAccent(accent: Accent) = store.edit { it[Keys.accent] = accent.name }
+    suspend fun setDynamicColor(on: Boolean) = store.edit { it[Keys.dynamicColor] = on }
+
+    private fun themeOf(name: String) = runCatching { ThemeMode.valueOf(name) }.getOrDefault(ThemeMode.DARK)
+    private fun accentOf(name: String) = runCatching { Accent.valueOf(name) }.getOrDefault(Accent.ORANGE)
 }

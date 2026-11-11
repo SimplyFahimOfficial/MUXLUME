@@ -155,6 +155,7 @@ dependencies {
 
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.zxing.core)
 
     constraints {
         // GHSA-xxph-c9ww-hj94 (high): Media3 brings Guava 33.3.1; 33.7.2 is the first fixed release.

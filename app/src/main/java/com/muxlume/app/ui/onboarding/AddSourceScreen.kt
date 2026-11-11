@@ -76,6 +76,7 @@ import com.muxlume.app.ui.components.PrimaryButton
 import com.muxlume.app.ui.components.SecondaryButton
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.theme.Mux
+import com.muxlume.app.ui.theme.MuxTheme
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -228,7 +229,7 @@ fun AddSourceScreen(existingId: Long?, onDone: () -> Unit, onBack: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(Mux.Black)) {
+    Column(Modifier.fillMaxSize().background(MuxTheme.Black)) {
         TopHeader(if (vm.isEditing) "Edit source" else "Add a playlist", onSearch = null, onBack = onBack)
         when (val phase = s.phase) {
             is Phase.Importing -> Progress(phase.count, vm::cancel)
@@ -252,7 +253,7 @@ private fun Form(s: FormState, vm: AddSourceViewModel, onPickFile: () -> Unit) {
                 Mode.LINK -> Field("Playlist link", s.url, { v -> vm.edit { it.copy(url = v) } }, keyboard = KeyboardType.Uri, placeholder = "https://…/playlist.m3u")
                 Mode.FILE -> {
                     SecondaryButton(if (s.fileUri == null) "Choose a file" else s.fileName, onPickFile, Modifier.fillMaxWidth(), icon = Icons.Rounded.FileOpen)
-                    Text("The file stays where it is; MUXLUME keeps read access to re-import it.", style = MaterialTheme.typography.bodySmall, color = Mux.TextSecondary)
+                    Text("The file stays where it is; MUXLUME keeps read access to re-import it.", style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
                 }
                 Mode.XTREAM -> {
                     Field("Server address", s.server, { v -> vm.edit { it.copy(server = v) } }, keyboard = KeyboardType.Uri, placeholder = "https://provider.example:8080")
@@ -262,58 +263,58 @@ private fun Form(s: FormState, vm: AddSourceViewModel, onPickFile: () -> Unit) {
                         visual = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                         trailing = {
                             IconButton({ showPassword = !showPassword }) {
-                                Icon(if (showPassword) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, if (showPassword) "Hide password" else "Show password", tint = Mux.TextSecondary)
+                                Icon(if (showPassword) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, if (showPassword) "Hide password" else "Show password", tint = MuxTheme.TextSecondary)
                             }
                         },
                     )
-                    Text("Credentials are encrypted with a key that never leaves this device and are only sent to this server.", style = MaterialTheme.typography.bodySmall, color = Mux.TextSecondary)
+                    Text("Credentials are encrypted with a key that never leaves this device and are only sent to this server.", style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
                 }
             }
             // A local file can list plain-HTTP streams; that is opt-in here instead of required up front.
             if (s.usesHttp || s.mode == Mode.FILE) HttpWarning(s.httpAcknowledged, optional = s.mode == Mode.FILE) { on -> vm.edit { it.copy(httpAcknowledged = on) } }
             s.accountInfo?.let { info ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.CheckCircle, null, tint = Mux.Orange, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Rounded.CheckCircle, null, tint = MuxTheme.Orange, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(info, color = Mux.Cream, style = MaterialTheme.typography.bodyMedium)
+                    Text(info, color = MuxTheme.Cream, style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            s.error?.let { Text(it, color = Mux.Error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+            s.error?.let { Text(it, color = MuxTheme.Error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
             Spacer(Modifier.height(4.dp))
             PrimaryButton(if (vm.isEditing) "Save and re-import" else "Add and import", vm::submit, Modifier.fillMaxWidth(), enabled = s.canSubmit)
             if (s.mode == Mode.XTREAM) {
                 if (s.phase == Phase.Testing) {
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(28.dp), color = Mux.Orange) }
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(28.dp), color = MuxTheme.Orange) }
                 } else {
                     SecondaryButton("Test connection", vm::testConnection, Modifier.fillMaxWidth(), enabled = s.canSubmit)
                 }
             }
-            if (!s.canSubmit && s.phase == Phase.Editing) s.validationError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Mux.TextSecondary) }
+            if (!s.canSubmit && s.phase == Phase.Editing) s.validationError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary) }
         }
     }
 }
 
 @Composable
 private fun HttpWarning(acknowledged: Boolean, optional: Boolean, onChange: (Boolean) -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(Mux.CardShape).background(Mux.Surface).padding(16.dp)) {
+    Column(Modifier.fillMaxWidth().clip(Mux.CardShape).background(MuxTheme.Surface).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.Warning, null, tint = Mux.Orange)
+            Icon(Icons.Rounded.Warning, null, tint = MuxTheme.Orange)
             Spacer(Modifier.width(10.dp))
-            Text(if (optional) "Streams over plain HTTP" else "This server doesn't use encryption", style = MaterialTheme.typography.titleMedium, color = Mux.White)
+            Text(if (optional) "Streams over plain HTTP" else "This server doesn't use encryption", style = MaterialTheme.typography.titleMedium, color = MuxTheme.White)
         }
         Spacer(Modifier.height(8.dp))
         Text(
             (if (optional) "Many playlist files list http:// streams, which are blocked unless you allow them. " else "") +
                 "With plain HTTP, anyone on your network path (public Wi-Fi, your ISP) can see what you watch and read any username, password or token sent to the server. Use an https:// address if your provider offers one.",
-            style = MaterialTheme.typography.bodyMedium, color = Mux.TextSecondary,
+            style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
         )
         Row(
             Modifier.fillMaxWidth().padding(top = 8.dp).toggleable(acknowledged, role = Role.Checkbox, onValueChange = onChange),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Checkbox(acknowledged, null, colors = CheckboxDefaults.colors(checkedColor = Mux.Orange, checkmarkColor = Mux.Black))
+            Checkbox(acknowledged, null, colors = CheckboxDefaults.colors(checkedColor = MuxTheme.Orange, checkmarkColor = MuxTheme.Black))
             Spacer(Modifier.width(8.dp))
-            Text("I understand, allow unencrypted HTTP", color = Mux.White, style = MaterialTheme.typography.bodyMedium)
+            Text("I understand, allow unencrypted HTTP", color = MuxTheme.White, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -327,15 +328,15 @@ private fun Field(
     OutlinedTextField(
         value, { onChange(it.take(4096)) }, Modifier.fillMaxWidth(),
         label = { Text(label) },
-        placeholder = placeholder?.let { { Text(it, color = Mux.TextSecondary) } },
+        placeholder = placeholder?.let { { Text(it, color = MuxTheme.TextSecondary) } },
         singleLine = true,
         visualTransformation = visual,
         trailingIcon = trailing,
         keyboardOptions = KeyboardOptions(keyboardType = keyboard, imeAction = ImeAction.Next, autoCorrectEnabled = false),
         shape = Mux.CardShape,
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = Mux.Cream, unfocusedBorderColor = Mux.Outline, focusedLabelColor = Mux.Cream,
-            cursorColor = Mux.Orange, focusedContainerColor = Mux.Surface, unfocusedContainerColor = Mux.Surface,
+            focusedBorderColor = MuxTheme.Cream, unfocusedBorderColor = MuxTheme.Outline, focusedLabelColor = MuxTheme.Cream,
+            cursorColor = MuxTheme.Orange, focusedContainerColor = MuxTheme.Surface, unfocusedContainerColor = MuxTheme.Surface,
         ),
     )
 }
@@ -343,12 +344,12 @@ private fun Field(
 @Composable
 private fun Progress(count: Int, onCancel: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(Mux.ScreenPadding), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        CircularProgressIndicator(color = Mux.Orange)
+        CircularProgressIndicator(color = MuxTheme.Orange)
         Spacer(Modifier.height(24.dp))
-        Text("Importing", style = MaterialTheme.typography.headlineSmall, color = Mux.White)
+        Text("Importing", style = MaterialTheme.typography.headlineSmall, color = MuxTheme.White)
         Text(
             if (count == 0) "Connecting…" else "$count items read",
-            style = MaterialTheme.typography.bodyLarge, color = Mux.TextSecondary,
+            style = MaterialTheme.typography.bodyLarge, color = MuxTheme.TextSecondary,
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
         )
         Spacer(Modifier.height(24.dp))
@@ -359,15 +360,15 @@ private fun Progress(count: Int, onCancel: () -> Unit) {
 @Composable
 private fun Done(r: ImportResult, onDone: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(Mux.ScreenPadding), verticalArrangement = Arrangement.Center) {
-        Icon(Icons.Rounded.CheckCircle, null, tint = Mux.Orange, modifier = Modifier.size(56.dp))
+        Icon(Icons.Rounded.CheckCircle, null, tint = MuxTheme.Orange, modifier = Modifier.size(56.dp))
         Spacer(Modifier.height(20.dp))
-        Text("You're all set", style = MaterialTheme.typography.displaySmall, color = Mux.White)
+        Text("You're all set", style = MaterialTheme.typography.displaySmall, color = MuxTheme.White)
         Spacer(Modifier.height(8.dp))
         Text(
             listOfNotNull(
                 "${r.live} channels", r.movies.takeIf { it > 0 }?.let { "$it movies" }, r.series.takeIf { it > 0 }?.let { "$it series" },
             ).joinToString(" · "),
-            style = MaterialTheme.typography.titleMedium, color = Mux.Cream,
+            style = MaterialTheme.typography.titleMedium, color = MuxTheme.Cream,
         )
         if (r.skipped > 0 || r.duplicates > 0) {
             Text(
@@ -375,7 +376,7 @@ private fun Done(r: ImportResult, onDone: () -> Unit) {
                     r.duplicates.takeIf { it > 0 }?.let { "$it duplicates merged" },
                     r.skipped.takeIf { it > 0 }?.let { "$it unreadable or unsupported entries skipped" },
                 ).joinToString(" · "),
-                style = MaterialTheme.typography.bodyMedium, color = Mux.TextSecondary,
+                style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
             )
         }
         Spacer(Modifier.height(28.dp))

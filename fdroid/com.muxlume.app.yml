@@ -3,7 +3,7 @@
 # License below to its SPDX id), and a release tag must exist. See docs/FDROID.md.
 Categories:
   - Multimedia
-License: TODO-SPDX-ID
+License: GPL-3.0-or-later
 AuthorName: SimplyFahim
 WebSite: https://simplyfahim.pages.dev/Muxlume
 SourceCode: https://github.com/SimplyFahimOfficial/MUXLUME

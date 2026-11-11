@@ -1,13 +1,6 @@
 package com.muxlume.app.ui.library
 
-import android.content.ActivityNotFoundException
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
-import android.widget.Toast
 import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,12 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Send
-import androidx.compose.material.icons.rounded.Code
-import androidx.compose.material.icons.rounded.Email
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,31 +23,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.background
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import com.muxlume.app.BuildConfig
 import com.muxlume.app.ui.components.MuxLogo
 import com.muxlume.app.ui.components.SectionHeader
 import com.muxlume.app.ui.components.pressable
 import com.muxlume.app.ui.main.TopHeader
-import com.muxlume.app.ui.theme.Mux
-
-/**
- * Project and developer links. Only destinations that were checked to exist are listed: the
- * project website and the GitHub repository are added once they are public (see docs/RELEASE.md).
- */
-object Links {
-    const val TELEGRAM = "https://t.me/Muxlume"
-    const val CONTACT = "https://simplyfahim.pages.dev/contactme"
-    const val SUPPORT = "https://simplyfahim.pages.dev/pay-options"
-    const val GITHUB_PROFILE = "https://github.com/SimplyFahimOfficial"
-    const val INSTAGRAM = "https://instagram.com/SimplyFahimofficial"
-}
+import com.muxlume.app.ui.theme.MuxTheme
 
 private val faq = listOf(
     "Does MUXLUME include channels?" to "No. MUXLUME is a player. You add playlists or provider accounts you're authorized to use; nothing is bundled or sold.",
@@ -76,46 +49,39 @@ private val licenses = listOf(
     "Kotlin and kotlinx (coroutines, serialization)" to "Apache License 2.0",
     "OkHttp and Okio" to "Apache License 2.0",
     "Coil" to "Apache License 2.0",
+    "ZXing Core (UPI QR code)" to "Apache License 2.0",
     "Guava (via Media3)" to "Apache License 2.0",
 )
 
+/** Troubleshooting, version and licences. Project and developer links live on the Support screen. */
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
-    val context = LocalContext.current
-    Column(Modifier.fillMaxSize().background(Mux.Black)) {
-        TopHeader("Help and about", onSearch = null, onBack = onBack)
+    Column(Modifier.fillMaxSize().background(MuxTheme.Black)) {
+        TopHeader("Help & about", onSearch = null, onBack = onBack)
         Column(Modifier.verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 32.dp)) {
-            Row(Modifier.padding(Mux.ScreenPadding), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(com.muxlume.app.ui.theme.Mux.ScreenPadding), verticalAlignment = Alignment.CenterVertically) {
                 MuxLogo(size = 56.dp)
                 Spacer(Modifier.width(16.dp))
                 Column {
-                    Text("MUXLUME", style = MaterialTheme.typography.headlineMedium, color = Mux.White)
-                    Text("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", style = MaterialTheme.typography.bodyMedium, color = Mux.TextSecondary)
+                    Text("MUXLUME", style = MaterialTheme.typography.headlineMedium, color = MuxTheme.White)
+                    Text("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary)
                 }
             }
             Text(
                 "MUXLUME is an IPTV player. It doesn't provide TV channels, subscriptions or copyrighted media, and isn't affiliated with any provider. " +
-                    "You are responsible for only adding content you're legally allowed to watch.",
-                style = MaterialTheme.typography.bodyMedium, color = Mux.TextSecondary, modifier = Modifier.padding(horizontal = Mux.ScreenPadding),
+                    "You are responsible for only adding content you're legally allowed to watch. MUXLUME is free software under the GNU GPL v3.",
+                style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
+                modifier = Modifier.padding(horizontal = com.muxlume.app.ui.theme.Mux.ScreenPadding),
             )
             Spacer(Modifier.height(20.dp))
             SectionHeader("Troubleshooting")
             faq.forEach { (q, a) -> Expandable(q, a) }
             Spacer(Modifier.height(20.dp))
-            SectionHeader("Community")
-            LinkRow(Icons.AutoMirrored.Rounded.Send, "Telegram community", "News, help and feedback", { open(context, Links.TELEGRAM) })
-            Spacer(Modifier.height(12.dp))
-            SectionHeader("Developer")
-            LinkRow(Icons.Rounded.Email, "Contact the developer", "simplyfahim.pages.dev", { open(context, Links.CONTACT) })
-            LinkRow(Icons.Rounded.Favorite, "Support development", "Payment options", { open(context, Links.SUPPORT) })
-            LinkRow(Icons.Rounded.Code, "GitHub", "SimplyFahimOfficial", { open(context, Links.GITHUB_PROFILE) })
-            LinkRow(Icons.Rounded.PhotoCamera, "Instagram", "@SimplyFahimofficial", { open(context, Links.INSTAGRAM) })
-            Spacer(Modifier.height(20.dp))
             SectionHeader("Open-source licenses")
             licenses.forEach { (lib, lic) ->
-                Column(Modifier.padding(horizontal = Mux.ScreenPadding, vertical = 6.dp)) {
-                    Text(lib, style = MaterialTheme.typography.bodyMedium, color = Mux.White)
-                    Text(lic, style = MaterialTheme.typography.bodySmall, color = Mux.TextSecondary)
+                Column(Modifier.padding(horizontal = com.muxlume.app.ui.theme.Mux.ScreenPadding, vertical = 6.dp)) {
+                    Text(lib, style = MaterialTheme.typography.bodyMedium, color = MuxTheme.White)
+                    Text(lic, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
                 }
             }
         }
@@ -128,22 +94,12 @@ private fun Expandable(question: String, answer: String) {
     Column(
         Modifier.fillMaxWidth().animateContentSize().pressable({ open = !open }, role = Role.Button)
             .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
-            .padding(horizontal = Mux.ScreenPadding, vertical = 12.dp),
+            .padding(horizontal = com.muxlume.app.ui.theme.Mux.ScreenPadding, vertical = 12.dp),
     ) {
-        Text(question, style = MaterialTheme.typography.titleMedium, color = Mux.White)
+        Text(question, style = MaterialTheme.typography.titleMedium, color = MuxTheme.White)
         if (open) {
             Spacer(Modifier.height(6.dp))
-            Text(answer, style = MaterialTheme.typography.bodyMedium, color = Mux.TextSecondary)
+            Text(answer, style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary)
         }
-    }
-}
-
-/** Opens an https link in the user's browser; copies it if no app can open it. */
-private fun open(context: Context, url: String) {
-    try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).addCategory(Intent.CATEGORY_BROWSABLE))
-    } catch (_: ActivityNotFoundException) {
-        context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("link", url))
-        Toast.makeText(context, "No browser found. Link copied.", Toast.LENGTH_SHORT).show()
     }
 }
