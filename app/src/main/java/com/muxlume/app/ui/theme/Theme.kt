@@ -14,6 +14,7 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -56,10 +57,14 @@ data class MuxPalette(
     val white: Color,
     val cream: Color,
     val orange: Color,
+    /** Text and icons on an [orange] fill (black on dark-theme accents, white on light-theme ones). */
+    val onOrange: Color,
     val textSecondary: Color,
     val error: Color,
     val scrim: Color,
     val isLight: Boolean,
+    /** The dark-theme variant of the accent, used by [onMedia]. */
+    val mediaOrange: Color = orange,
 ) {
     /**
      * A dark variant that keeps the accent, for content that always sits on dark media (the player,
@@ -74,16 +79,34 @@ data class MuxPalette(
         cream = Color(0xFFFFF7E8),
         textSecondary = Color(0xFFA4A4AC),
         error = Color(0xFFFF6B5E),
+        orange = mediaOrange,
+        onOrange = Color.Black,
         isLight = false,
     )
 }
 
-fun accentColor(accent: Accent): Color = when (accent) {
-    Accent.ORANGE -> Color(0xFFE65A00)
-    Accent.AMBER -> Color(0xFFE6A100)
-    Accent.CRIMSON -> Color(0xFFE4454E)
-    Accent.TEAL -> Color(0xFF1FA89B)
-    Accent.VIOLET -> Color(0xFF7C5CFF)
+/**
+ * The accent as used in the given theme. Light-theme values are darkened so text, icons and white
+ * labels on accent fills all reach WCAG AA (4.5:1) on the light background; dark-theme values pass
+ * on black, and their fills take black labels (see [MuxPalette.onOrange]).
+ */
+@Suppress("MagicNumber") // the hex values are the colour tokens
+fun accentColor(accent: Accent, light: Boolean = false): Color = if (light) {
+    when (accent) {
+        Accent.ORANGE -> Color(0xFFC34C00)
+        Accent.AMBER -> Color(0xFF956800)
+        Accent.CRIMSON -> Color(0xFFCA3D45)
+        Accent.TEAL -> Color(0xFF177F75)
+        Accent.VIOLET -> Color(0xFF7456EF)
+    }
+} else {
+    when (accent) {
+        Accent.ORANGE -> Color(0xFFE65A00)
+        Accent.AMBER -> Color(0xFFE6A100)
+        Accent.CRIMSON -> Color(0xFFE4454E)
+        Accent.TEAL -> Color(0xFF1FA89B)
+        Accent.VIOLET -> Color(0xFF7C5CFF)
+    }
 }
 
 private fun darkPalette(orange: Color, amoled: Boolean) = MuxPalette(
@@ -94,13 +117,14 @@ private fun darkPalette(orange: Color, amoled: Boolean) = MuxPalette(
     white = Color(0xFFFFFFFF),
     cream = Color(0xFFFFF7E8),
     orange = orange,
+    onOrange = Color.Black,
     textSecondary = Color(0xFFA4A4AC),
     error = Color(0xFFFF6B5E),
     scrim = Color(0xB3000000),
     isLight = false,
 )
 
-private fun lightPalette(orange: Color) = MuxPalette(
+private fun lightPalette(orange: Color, mediaOrange: Color) = MuxPalette(
     black = Color(0xFFFAF7F2), // warm paper, screen background
     surface = Color(0xFFFFFFFF),
     raised = Color(0xFFF0EBE3),
@@ -108,10 +132,12 @@ private fun lightPalette(orange: Color) = MuxPalette(
     white = Color(0xFF17130E), // primary text / icons
     cream = Color(0xFF1C1813), // primary-button fill (dark); its text uses `black` (light)
     orange = orange,
+    onOrange = Color.White,
     textSecondary = Color(0xFF6B655C),
     error = Color(0xFFC0392B),
     scrim = Color(0xB3000000), // overlays sit on media, which is dark in either theme
     isLight = true,
+    mediaOrange = mediaOrange,
 )
 
 val LocalMux = staticCompositionLocalOf { darkPalette(accentColor(Accent.ORANGE), amoled = false) }
@@ -127,6 +153,7 @@ object MuxTheme {
     val White: Color @Composable @ReadOnlyComposable get() = LocalMux.current.white
     val Cream: Color @Composable @ReadOnlyComposable get() = LocalMux.current.cream
     val Orange: Color @Composable @ReadOnlyComposable get() = LocalMux.current.orange
+    val OnOrange: Color @Composable @ReadOnlyComposable get() = LocalMux.current.onOrange
     val TextSecondary: Color @Composable @ReadOnlyComposable get() = LocalMux.current.textSecondary
     val Error: Color @Composable @ReadOnlyComposable get() = LocalMux.current.error
     val Scrim: Color @Composable @ReadOnlyComposable get() = LocalMux.current.scrim
@@ -149,7 +176,7 @@ private fun scheme(p: MuxPalette) = (if (p.isLight) lightColorScheme() else dark
     primary = p.cream,
     onPrimary = p.black,
     secondary = p.orange,
-    onSecondary = if (p.isLight) Color.White else Color.Black,
+    onSecondary = p.onOrange,
     tertiary = p.orange,
     background = p.black,
     onBackground = p.white,
@@ -181,6 +208,12 @@ private val typography = Typography(
     labelLarge = base.labelLarge.copy(fontWeight = FontWeight.SemiBold),
 )
 
+private tailrec fun android.content.Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is android.content.ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
 private val shapes = Shapes(small = RoundedCornerShape(12.dp), medium = Mux.CardShape, large = Mux.HeroShape)
 
 @Composable
@@ -198,18 +231,22 @@ fun MuxlumeTheme(
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
-    val orange = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        dynamicDarkColorScheme(context).primary
+    val dynamic = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    // Material You: each theme takes the matching system scheme's primary (the dark one is a light
+    // pastel that would be unreadable on the light background).
+    val darkOrange = if (dynamic) dynamicDarkColorScheme(context).primary else accentColor(accent, light = false)
+    val palette = if (dark) {
+        darkPalette(darkOrange, amoled)
     } else {
-        accentColor(accent)
+        lightPalette(if (dynamic) dynamicLightColorScheme(context).primary else accentColor(accent, light = true), darkOrange)
     }
-    val palette = if (dark) darkPalette(orange, amoled) else lightPalette(orange)
 
     val systemOff = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
+            // Status/navigation-bar icons follow the theme. The context can be a wrapper, so unwrap it.
+            val window = view.context.findActivity()?.window ?: return@SideEffect
             val controller = WindowCompat.getInsetsController(window, view)
             controller.isAppearanceLightStatusBars = palette.isLight
             controller.isAppearanceLightNavigationBars = palette.isLight

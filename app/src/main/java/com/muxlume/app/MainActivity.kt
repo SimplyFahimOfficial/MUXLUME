@@ -43,12 +43,16 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splash = installSplashScreen()
         enableEdgeToEdge(SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         super.onCreate(savedInstanceState)
         addOnPictureInPictureModeChangedListener(pipListener)
+        var settingsLoaded = false
+        splash.setKeepOnScreenCondition { !settingsLoaded }
         setContent {
-            val settings by container.settings.settings.collectAsStateWithLifecycle(AppSettings(onboardingDone = true))
+            val loaded by container.settings.settings.collectAsStateWithLifecycle(null)
+            val settings = loaded ?: AppSettings(onboardingDone = true)
+            settingsLoaded = loaded != null
             MuxlumeTheme(
                 theme = settings.theme,
                 amoled = settings.amoled,

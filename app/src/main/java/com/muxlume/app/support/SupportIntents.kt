@@ -96,6 +96,8 @@ object SupportIntents {
     /** Shares the QR PNG through the system share sheet with temporary read access only. */
     fun shareQr(context: Context): Boolean = try {
         val directory = File(context.cacheDir, SHARE_DIR).apply { mkdirs() }
+        // Older shares are done (the receiver copied the file or gave up); don't let them pile up.
+        directory.listFiles()?.forEach { it.delete() }
         val file = File.createTempFile("SimplyFahim-UPI-QR-", ".png", directory)
         file.outputStream().use(::writeQrPng)
         val uri = FileProvider.getUriForFile(context, context.packageName + AUTHORITY_SUFFIX, file)

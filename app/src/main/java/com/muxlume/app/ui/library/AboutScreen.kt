@@ -33,6 +33,7 @@ import com.muxlume.app.ui.components.MuxLogo
 import com.muxlume.app.ui.components.SectionHeader
 import com.muxlume.app.ui.components.pressable
 import com.muxlume.app.ui.main.TopHeader
+import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
 
 private val faq = listOf(
@@ -59,7 +60,7 @@ fun AboutScreen(onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(MuxTheme.Black)) {
         TopHeader("Help & about", onSearch = null, onBack = onBack)
         Column(Modifier.verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 32.dp)) {
-            Row(Modifier.padding(com.muxlume.app.ui.theme.Mux.ScreenPadding), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(Mux.ScreenPadding), verticalAlignment = Alignment.CenterVertically) {
                 MuxLogo(size = 56.dp)
                 Spacer(Modifier.width(16.dp))
                 Column {
@@ -71,7 +72,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 "MUXLUME is an IPTV player. It doesn't provide TV channels, subscriptions or copyrighted media, and isn't affiliated with any provider. " +
                     "You are responsible for only adding content you're legally allowed to watch. MUXLUME is free software under the GNU GPL v3.",
                 style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
-                modifier = Modifier.padding(horizontal = com.muxlume.app.ui.theme.Mux.ScreenPadding),
+                modifier = Modifier.padding(horizontal = Mux.ScreenPadding),
             )
             Spacer(Modifier.height(20.dp))
             SectionHeader("Troubleshooting")
@@ -79,7 +80,7 @@ fun AboutScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(20.dp))
             SectionHeader("Open-source licenses")
             licenses.forEach { (lib, lic) ->
-                Column(Modifier.padding(horizontal = com.muxlume.app.ui.theme.Mux.ScreenPadding, vertical = 6.dp)) {
+                Column(Modifier.padding(horizontal = Mux.ScreenPadding, vertical = 6.dp)) {
                     Text(lib, style = MaterialTheme.typography.bodyMedium, color = MuxTheme.White)
                     Text(lic, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
                 }
@@ -94,7 +95,7 @@ private fun Expandable(question: String, answer: String) {
     Column(
         Modifier.fillMaxWidth().animateContentSize().pressable({ open = !open }, role = Role.Button)
             .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
-            .padding(horizontal = com.muxlume.app.ui.theme.Mux.ScreenPadding, vertical = 12.dp),
+            .padding(horizontal = Mux.ScreenPadding, vertical = 12.dp),
     ) {
         Text(question, style = MaterialTheme.typography.titleMedium, color = MuxTheme.White)
         if (open) {

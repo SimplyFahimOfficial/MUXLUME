@@ -312,7 +312,7 @@ private fun HttpWarning(acknowledged: Boolean, optional: Boolean, onChange: (Boo
             Modifier.fillMaxWidth().padding(top = 8.dp).toggleable(acknowledged, role = Role.Checkbox, onValueChange = onChange),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Checkbox(acknowledged, null, colors = CheckboxDefaults.colors(checkedColor = MuxTheme.Orange, checkmarkColor = MuxTheme.Black))
+            Checkbox(acknowledged, null, colors = CheckboxDefaults.colors(checkedColor = MuxTheme.Orange, checkmarkColor = MuxTheme.OnOrange))
             Spacer(Modifier.width(8.dp))
             Text("I understand, allow unencrypted HTTP", color = MuxTheme.White, style = MaterialTheme.typography.bodyMedium)
         }

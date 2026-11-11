@@ -222,7 +222,7 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
         IconButton(
             nav::back,
             Modifier.windowInsetsPadding(WindowInsets.statusBars).padding(8.dp).clip(Mux.PillShape).background(MuxTheme.Scrim),
-        ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = MuxTheme.White) }
+        ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = androidx.compose.ui.graphics.Color.White) } // on the dark scrim in any theme
     }
 }
 

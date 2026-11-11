@@ -20,7 +20,7 @@ The app connects only to:
 
 - the playlist links and provider servers you add (to download lists, metadata and streams);
 - the artwork (logo, poster) addresses those lists contain;
-- links you open yourself from Help and about, in your browser.
+- links you open yourself from the Support screen, in your browser.
 
 There are no analytics, advertising, crash-reporting or tracking SDKs. Servers you connect to see
 your IP address and what you request, as with any streaming app; their own privacy policies apply.

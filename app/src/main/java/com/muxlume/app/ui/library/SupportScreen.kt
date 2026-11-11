@@ -62,6 +62,9 @@ import com.muxlume.app.ui.theme.MuxTheme
 @Composable
 fun SupportScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    fun open(url: String) {
+        if (!SupportIntents.openUrl(context, url)) Toast.makeText(context, "No browser found. Link copied.", Toast.LENGTH_SHORT).show()
+    }
     // Encoded once; the payload identifies only the payee (no amount) and never leaves the device.
     val qr = remember { UpiQrCode.toBitmap(UpiQrCode.encode(SupportConfig.upiPaymentUri())).asImageBitmap() }
     val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(SupportIntents.QR_MIME_TYPE)) { uri ->
@@ -133,15 +136,15 @@ fun SupportScreen(onBack: () -> Unit) {
             }
 
             Spacer(Modifier.height(10.dp))
-            LinkRow(Icons.Rounded.Favorite, "More ways to pay", "Cards and other options", { SupportIntents.openUrl(context, SupportConfig.MORE_WAYS_TO_PAY) })
+            LinkRow(Icons.Rounded.Favorite, "More ways to pay", "Cards and other options", { open(SupportConfig.MORE_WAYS_TO_PAY) })
 
             Spacer(Modifier.height(12.dp))
             SectionHeader("Project and developer")
-            LinkRow(Icons.AutoMirrored.Rounded.Send, "Telegram community", "t.me/Muxlume", { SupportIntents.openUrl(context, SupportConfig.TELEGRAM) })
-            LinkRow(Icons.Rounded.Language, "Project website", "simplyfahim.pages.dev/Muxlume", { SupportIntents.openUrl(context, SupportConfig.WEBSITE) })
-            LinkRow(Icons.Rounded.Email, "Contact the developer", "simplyfahim.pages.dev", { SupportIntents.openUrl(context, SupportConfig.CONTACT) })
-            LinkRow(Icons.Rounded.Code, "GitHub", "SimplyFahimOfficial", { SupportIntents.openUrl(context, SupportConfig.GITHUB_PROFILE) })
-            LinkRow(Icons.Rounded.PhotoCamera, "Instagram", "@SimplyFahimofficial", { SupportIntents.openUrl(context, SupportConfig.INSTAGRAM) })
+            LinkRow(Icons.AutoMirrored.Rounded.Send, "Telegram community", "t.me/Muxlume", { open(SupportConfig.TELEGRAM) })
+            LinkRow(Icons.Rounded.Language, "Project website", "simplyfahim.pages.dev/Muxlume", { open(SupportConfig.WEBSITE) })
+            LinkRow(Icons.Rounded.Email, "Contact the developer", "simplyfahim.pages.dev", { open(SupportConfig.CONTACT) })
+            LinkRow(Icons.Rounded.Code, "GitHub", "SimplyFahimOfficial", { open(SupportConfig.GITHUB_PROFILE) })
+            LinkRow(Icons.Rounded.PhotoCamera, "Instagram", "@SimplyFahimofficial", { open(SupportConfig.INSTAGRAM) })
         }
     }
 }
@@ -149,7 +152,7 @@ fun SupportScreen(onBack: () -> Unit) {
 @Composable
 private fun ActionChip(icon: ImageVector, label: String, modifier: Modifier = Modifier, accent: Boolean = false, onClick: () -> Unit) {
     val bg = if (accent) MuxTheme.Orange else MuxTheme.Raised
-    val fg = if (accent) Color.White else MuxTheme.White
+    val fg = if (accent) MuxTheme.OnOrange else MuxTheme.White
     Row(
         modifier.height(48.dp).clip(Mux.PillShape).background(bg).pressable(onClick, label = label).padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,

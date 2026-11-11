@@ -75,7 +75,7 @@ fun AppearanceScreen(onBack: () -> Unit) {
                 val dynamicOn = settings.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
                 Accent.entries.forEach { accent ->
                     Swatch(
-                        color = accentColor(accent),
+                        color = accentColor(accent, light = com.muxlume.app.ui.theme.LocalMux.current.isLight),
                         selected = !dynamicOn && settings.accent == accent,
                         enabled = !dynamicOn,
                         label = accentLabels.getValue(accent),
@@ -117,6 +117,6 @@ private fun Swatch(color: Color, selected: Boolean, enabled: Boolean, label: Str
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        if (selected) Icon(Icons.Rounded.Check, null, tint = Color.White)
+        if (selected) Icon(Icons.Rounded.Check, null, tint = MuxTheme.OnOrange)
     }
 }

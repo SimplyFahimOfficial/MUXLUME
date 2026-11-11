@@ -10,6 +10,15 @@
     <!-- Keeps the CPU and Wi-Fi awake only while a stream is playing (ExoPlayer wake mode). -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Support screen: package visibility (Android 11+) for installed UPI apps, so "Pay with UPI"
+         can open one or show a chooser. Without this the query is always empty. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="upi" />
+        </intent>
+    </queries>
+
     <application
         android:name=".MuxlumeApp"
         android:allowBackup="false"

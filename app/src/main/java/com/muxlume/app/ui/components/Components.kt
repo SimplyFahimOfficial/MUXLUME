@@ -57,7 +57,9 @@ import com.muxlume.app.ui.theme.SectionLabel
 /** The brand mark (screen, play triangle, underline) from the supplied logo artwork. */
 @Composable
 fun MuxLogo(modifier: Modifier = Modifier, size: Dp = 32.dp) {
-    Image(painterResource(R.drawable.brand_logo), contentDescription = null, modifier = modifier.size(size))
+    // The cream frame would vanish on the light background, so light mode uses a dark-framed copy.
+    val res = if (com.muxlume.app.ui.theme.LocalMux.current.isLight) R.drawable.brand_logo_light else R.drawable.brand_logo
+    Image(painterResource(res), contentDescription = null, modifier = modifier.size(size))
 }
 
 @Composable
@@ -227,6 +229,6 @@ fun LiveBadge(modifier: Modifier = Modifier) {
     Row(modifier.clip(Mux.PillShape).background(MuxTheme.Scrim).padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(8.dp).clip(Mux.PillShape).background(MuxTheme.Orange))
         Spacer(Modifier.width(6.dp))
-        Text("LIVE", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MuxTheme.White, letterSpacing = 1.sp)
+        Text("LIVE", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, letterSpacing = 1.sp) // always on the dark scrim
     }
 }
