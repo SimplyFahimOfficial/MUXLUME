@@ -25,6 +25,7 @@ import com.muxlume.app.container
 import com.muxlume.app.ui.guide.GuideMappingScreen
 import com.muxlume.app.ui.guide.GuideScreen
 import com.muxlume.app.ui.guide.GuideSettingsScreen
+import com.muxlume.app.ui.library.BackupScreen
 import com.muxlume.app.ui.library.AboutScreen
 import com.muxlume.app.ui.library.AppearanceScreen
 import com.muxlume.app.ui.library.SettingsScreen
@@ -52,6 +53,7 @@ import kotlinx.serialization.Serializable
 @Serializable object SupportRoute
 @Serializable object GuideRoute
 @Serializable object GuideSettingsRoute
+@Serializable object BackupRoute
 @Serializable data class GuideMappingRoute(val sourceId: Long)
 @Serializable object AboutRoute
 
@@ -66,6 +68,7 @@ class Nav(private val controller: NavHostController) {
     fun support() = controller.navigate(SupportRoute)
     fun guide() = controller.navigate(GuideRoute) { launchSingleTop = true }
     fun guideSettings() = controller.navigate(GuideSettingsRoute)
+    fun backup() = controller.navigate(BackupRoute)
     fun guideMapping(sourceId: Long) = controller.navigate(GuideMappingRoute(sourceId))
     fun about() = controller.navigate(AboutRoute)
     fun back() = controller.popBackStack()
@@ -109,6 +112,7 @@ fun MuxlumeRoot() {
             composable<SupportRoute> { SupportScreen(onBack = { nav.back() }) }
             composable<GuideRoute> { GuideScreen(nav) }
             composable<GuideSettingsRoute> { GuideSettingsScreen(nav) }
+            composable<BackupRoute> { BackupScreen(nav) }
             composable<GuideMappingRoute> { entry -> GuideMappingScreen(entry.toRoute<GuideMappingRoute>().sourceId, onBack = { nav.back() }) }
             composable<AboutRoute> { AboutScreen(onBack = { nav.back() }) }
         }

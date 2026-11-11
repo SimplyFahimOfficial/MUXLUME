@@ -13,6 +13,8 @@ MUXLUME is a local media player. It has no user accounts and the developer runs 
   the device.
 - Settings, and cached artwork images.
 
+A backup file is created only when you ask for one, is saved where you choose, and is encrypted with a passphrase only you know. The app does not upload it.
+
 None of it is sent to the developer or anyone else, and none of it is included in Android backups or
 device-to-device transfers. **Settings → Delete all data** removes everything; uninstalling does too.
 

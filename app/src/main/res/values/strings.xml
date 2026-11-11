@@ -354,6 +354,37 @@
     <string name="reminders_starting_soon">Starting soon: %1$s</string>
     <string name="reminders_channel_at">%1$s · %2$s</string>
 
+    <!-- Backup -->
+    <string name="backup_title">Backup and restore</string>
+    <string name="backup_summary">Save or restore playlists, favorites, history and settings</string>
+    <string name="backup_intro">A backup is one file you keep wherever you like. It holds your playlists (including links and logins), favorites, watch history and settings, encrypted with a passphrase. Channel lists are not saved; they download again after a restore.</string>
+    <string name="backup_create">Create a backup</string>
+    <string name="backup_passphrase">Passphrase</string>
+    <string name="backup_repeat_passphrase">Repeat passphrase</string>
+    <string name="backup_passphrase_warning">If you forget the passphrase, the backup cannot be opened. Nobody, including the developer, can recover it.</string>
+    <string name="backup_passphrase_short">Use at least 8 characters.</string>
+    <string name="backup_passphrase_mismatch">The two passphrases are different.</string>
+    <string name="backup_save_backup">Choose where to save</string>
+    <string name="backup_restore">Restore a backup</string>
+    <string name="backup_choose_backup">Choose a backup file</string>
+    <string name="backup_backup_file">Backup file</string>
+    <string name="backup_restore_note">Restoring adds playlists that are not already here and keeps what you have. Favorites and history are merged; appearance settings are replaced.</string>
+    <string name="backup_restore_button">Restore</string>
+    <string name="backup_restored">Restored: %1$d new playlists (%2$d already here), %3$d favorites, %4$d history entries. Channel lists are downloading.</string>
+    <string name="backup_skipped">%1$d playlists could not be restored.</string>
+    <plurals name="backup_saved">
+        <item quantity="one">Backup saved with %1$d playlist.</item>
+        <item quantity="other">Backup saved with %1$d playlists.</item>
+    </plurals>
+    <plurals name="backup_file_playlists_left_out">
+        <item quantity="one">%1$d playlist that points to a file on this device was left out; add it again after restoring.</item>
+        <item quantity="other">%1$d playlists that point to files on this device were left out; add them again after restoring.</item>
+    </plurals>
+    <string name="error_backup_not_a_backup">This is not a MUXLUME backup.</string>
+    <string name="error_backup_wrong_passphrase">Wrong passphrase, or the file is damaged.</string>
+    <string name="error_backup_too_new">This backup was made by a newer version of MUXLUME. Update the app first.</string>
+    <string name="error_backup_too_large">This backup is too large.</string>
+    <string name="error_backup_weak_passphrase">Use a passphrase of at least 8 characters.</string>
     <!-- TV guide -->
     <string name="guide_title">TV guide</string>
     <string name="guide_settings_title">TV guide</string>
