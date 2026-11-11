@@ -9,7 +9,8 @@ import com.muxlume.app.core.net.CleartextBlockedException
 import com.muxlume.app.core.net.CleartextGate
 import com.muxlume.app.core.net.Http
 import com.muxlume.app.core.net.HttpStatusException
-import com.muxlume.app.core.security.SecretBox
+import com.muxlume.app.PlainBox
+import com.muxlume.app.data.epg.EpgLinker
 import com.muxlume.app.data.db.FavoriteEntity
 import com.muxlume.app.data.db.ItemDao
 import com.muxlume.app.data.db.ItemKind
@@ -27,13 +28,6 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
-import java.util.Base64
-
-/** Robolectric has no AndroidKeyStore; the storage format is what's under test here, not the cipher. */
-private class PlainBox : SecretBox() {
-    override fun seal(plain: String): String = Base64.getEncoder().encodeToString(plain.toByteArray())
-    override fun open(sealed: String): String = String(Base64.getDecoder().decode(sealed))
-}
 
 @RunWith(AndroidJUnit4::class)
 // Plain Application: MuxlumeApp would start its own database and observers during the test.
@@ -48,7 +42,7 @@ class SourceRepositoryTest {
         server.start()
         val context = ApplicationProvider.getApplicationContext<Context>()
         db = Room.inMemoryDatabaseBuilder(context, MuxlumeDatabase::class.java).allowMainThreadQueries().build()
-        repo = SourceRepository(db, Http.client(), PlainBox(), context.contentResolver, context.resources)
+        repo = SourceRepository(db, Http.client(), PlainBox(), context.contentResolver, context.resources, EpgLinker(db))
     }
 
     @After

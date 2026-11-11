@@ -4,6 +4,7 @@ import com.muxlume.app.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -30,7 +31,14 @@ import com.muxlume.app.ui.theme.MuxTheme
 
 /** Screen title (or the wordmark) with search always one tap away. */
 @Composable
-fun TopHeader(title: String?, onSearch: (() -> Unit)?, modifier: Modifier = Modifier, onBack: (() -> Unit)? = null) {
+fun TopHeader(
+    title: String?,
+    onSearch: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null,
+    /** Extra icon buttons, shown before search. */
+    actions: @Composable RowScope.() -> Unit = {},
+) {
     Row(
         modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = if (onBack != null) 8.dp else Mux.ScreenPadding, end = 12.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -43,6 +51,7 @@ fun TopHeader(title: String?, onSearch: (() -> Unit)?, modifier: Modifier = Modi
         } else {
             Text(title, style = MaterialTheme.typography.headlineMedium, color = MuxTheme.TextPrimary, modifier = Modifier.weight(1f).semantics { heading() })
         }
+        actions()
         if (onSearch != null) {
             IconButton(onSearch, Modifier.size(48.dp).clip(Mux.PillShape).background(MuxTheme.Raised)) {
                 Icon(Icons.Rounded.Search, stringResource(R.string.top_header_search), tint = MuxTheme.TextPrimary)

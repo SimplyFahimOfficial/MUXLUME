@@ -24,7 +24,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
@@ -57,6 +57,7 @@ import com.muxlume.app.data.db.SourceEntity
 import com.muxlume.app.data.db.SourceType
 import com.muxlume.app.ui.Nav
 import com.muxlume.app.ui.components.PosterCard
+import com.muxlume.app.ui.components.HighlightRow
 import com.muxlume.app.ui.components.PrimaryButton
 import com.muxlume.app.ui.components.SectionHeader
 import com.muxlume.app.ui.components.pressable
@@ -120,7 +121,7 @@ fun LibraryScreen(nav: Nav) {
         }
         item { Spacer(Modifier.height(12.dp)); SectionHeader(stringResource(R.string.library_more)) }
         item { LinkRow(Icons.Rounded.Settings, stringResource(R.string.library_settings), stringResource(R.string.library_appearance_playback_privacy_and_data), nav::settings) }
-        item { LinkRow(Icons.Rounded.FavoriteBorder, stringResource(R.string.library_support_my_work), stringResource(R.string.library_telegram_project_website_payment_options), nav::support) }
+        item { HighlightRow(Icons.Rounded.Favorite, stringResource(R.string.library_support_my_work), stringResource(R.string.library_telegram_project_website_payment_options), nav::support) }
         item { LinkRow(Icons.AutoMirrored.Rounded.Help, stringResource(R.string.library_help_about), stringResource(R.string.library_troubleshooting_licenses_version), nav::about) }
     }
 

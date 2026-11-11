@@ -138,6 +138,7 @@ dependencies {
     implementation(libs.room.ktx)
     implementation(libs.room.paging)
     implementation(libs.paging.compose)
+    implementation(libs.work.runtime)
     ksp(libs.room.compiler)
     implementation(libs.datastore.preferences)
 

@@ -42,6 +42,21 @@ interface SourceDao {
 
     @Query("UPDATE sources SET lastError = :error WHERE id = :id")
     suspend fun setError(id: Long, error: String?)
+
+    @Query("SELECT * FROM sources")
+    suspend fun allNow(): List<SourceEntity>
+
+    @Query("UPDATE sources SET guideEnabled = :enabled WHERE id = :id")
+    suspend fun setGuideEnabled(id: Long, enabled: Boolean)
+
+    @Query("UPDATE sources SET epgRefreshedAt = :at, epgError = NULL, epgPrograms = :programs WHERE id = :id")
+    suspend fun setGuideDone(id: Long, at: Long, programs: Int)
+
+    @Query("UPDATE sources SET epgError = :error WHERE id = :id")
+    suspend fun setGuideError(id: Long, error: String?)
+
+    @Query("UPDATE sources SET epgRefreshedAt = NULL, epgError = NULL, epgPrograms = 0 WHERE id = :id")
+    suspend fun resetGuide(id: Long)
 }
 
 @Dao
@@ -202,21 +217,35 @@ interface HistoryDao {
 }
 
 @Database(
-    entities = [SourceEntity::class, ItemEntity::class, ItemFtsEntity::class, FavoriteEntity::class, HistoryEntity::class],
-    version = 2,
+    entities = [
+        SourceEntity::class, ItemEntity::class, ItemFtsEntity::class, FavoriteEntity::class, HistoryEntity::class,
+        EpgChannelEntity::class, ProgramEntity::class, EpgLinkEntity::class, ReminderEntity::class,
+    ],
+    version = 3,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2, spec = MuxlumeDatabase.Migration1To2::class)],
+    autoMigrations = [
+        AutoMigration(from = 1, to = 2, spec = MuxlumeDatabase.Migration1To2::class),
+        AutoMigration(from = 2, to = 3, spec = MuxlumeDatabase.Migration2To3::class),
+    ],
 )
 abstract class MuxlumeDatabase : RoomDatabase() {
     abstract fun sources(): SourceDao
     abstract fun items(): ItemDao
     abstract fun favorites(): FavoriteDao
     abstract fun history(): HistoryDao
+    abstract fun epg(): EpgDao
 
     /** v2: staged imports (`items.pending`) and the full-text index, filled from existing rows. */
     class Migration1To2 : AutoMigrationSpec {
         override fun onPostMigrate(db: SupportSQLiteDatabase) {
             db.execSQL("INSERT INTO items_fts(items_fts) VALUES('rebuild')")
+        }
+    }
+
+    /** v3: guide tables. Guide links used to be stored in plain text in `sources.epgUrl`; they can carry credentials, so drop them. */
+    class Migration2To3 : AutoMigrationSpec {
+        override fun onPostMigrate(db: SupportSQLiteDatabase) {
+            db.execSQL("UPDATE sources SET epgUrl = NULL")
         }
     }
 

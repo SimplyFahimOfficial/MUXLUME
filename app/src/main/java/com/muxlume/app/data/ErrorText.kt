@@ -2,6 +2,7 @@ package com.muxlume.app.data
 
 import android.content.res.Resources
 import com.muxlume.app.R
+import com.muxlume.app.data.epg.EpgFormatException
 import com.muxlume.app.core.net.CleartextBlockedException
 import com.muxlume.app.core.net.HttpStatusException
 import com.muxlume.app.core.net.TooLargeException
@@ -29,6 +30,7 @@ object ErrorText {
             in 500..599 -> res.getString(R.string.error_http_server, e.code)
             else -> res.getString(R.string.error_http_other, e.code)
         }
+        is EpgFormatException -> res.getString(R.string.error_guide_format)
         is TooLargeException -> res.getString(R.string.error_too_large)
         is UnknownHostException -> res.getString(R.string.error_unknown_host)
         is SSLException -> res.getString(R.string.error_tls)

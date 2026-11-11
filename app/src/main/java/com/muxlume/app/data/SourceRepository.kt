@@ -16,6 +16,7 @@ import com.muxlume.app.data.db.ItemKind
 import com.muxlume.app.data.db.MuxlumeDatabase
 import com.muxlume.app.data.db.SourceEntity
 import com.muxlume.app.data.db.SourceType
+import com.muxlume.app.data.epg.EpgLinker
 import com.muxlume.app.data.m3u.M3uParser
 import com.muxlume.app.data.xtream.XtreamAccount
 import com.muxlume.app.data.xtream.XtreamApi
@@ -30,6 +31,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import java.io.IOException
 import java.io.InputStream
@@ -37,19 +39,35 @@ import java.security.MessageDigest
 
 /** Everything secret about a source. Sealed with [SecretBox] before it is stored. */
 @Serializable
-data class SourceSecret(val url: String? = null, val username: String? = null, val password: String? = null)
+data class SourceSecret(
+    val url: String? = null,
+    val username: String? = null,
+    val password: String? = null,
+    /** Guide link the user entered (M3U sources). Guide links can carry credentials, hence sealed. */
+    val epgUrl: String? = null,
+    /** Guide link announced by the playlist's #EXTM3U header; used when [epgUrl] is empty. */
+    val playlistEpgUrl: String? = null,
+)
 
 /** What the user entered on the "add playlist" screen. */
 sealed interface SourceInput {
     val name: String
     val allowHttp: Boolean
 
-    data class M3uUrl(override val name: String, val url: String, override val allowHttp: Boolean) : SourceInput
-    data class M3uFile(override val name: String, val uri: Uri, val fileName: String, override val allowHttp: Boolean) : SourceInput
+    data class M3uUrl(override val name: String, val url: String, override val allowHttp: Boolean, val guideUrl: String? = null) : SourceInput
+    data class M3uFile(override val name: String, val uri: Uri, val fileName: String, override val allowHttp: Boolean, val guideUrl: String? = null) : SourceInput
     data class Xtream(override val name: String, val server: String, val username: String, val password: String, override val allowHttp: Boolean) : SourceInput
 }
 
-data class ImportResult(val live: Int, val movies: Int, val series: Int, val skipped: Int, val duplicates: Int)
+data class ImportResult(
+    val live: Int,
+    val movies: Int,
+    val series: Int,
+    val skipped: Int,
+    val duplicates: Int,
+    /** The source offers a TV guide (a guide link, or an Xtream account). */
+    val guideAvailable: Boolean = false,
+)
 
 class SourceRepository(
     private val db: MuxlumeDatabase,
@@ -57,6 +75,7 @@ class SourceRepository(
     private val secrets: SecretBox,
     private val resolver: ContentResolver,
     private val res: Resources,
+    private val linker: EpgLinker,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     val sources: Flow<List<SourceEntity>> = db.sources().all()
@@ -71,6 +90,12 @@ class SourceRepository(
         return XtreamApi(http, server, s.username.orEmpty(), s.password.orEmpty(), HttpPolicy.of(source.allowHttp))
     }
 
+    /** Where this source's TV guide (XMLTV) comes from: its own guide link, the one its playlist announces, or the Xtream feed. */
+    fun guideUrl(source: SourceEntity): HttpUrl? = when (source.type) {
+        SourceType.XTREAM -> Urls.parseHttp(xtreamApi(source).xmltvUrl())
+        else -> secretOf(source).let { Urls.parseHttp(it.epgUrl ?: it.playlistEpgUrl) }
+    }
+
     /** Checks Xtream credentials without saving anything. */
     suspend fun testXtream(input: SourceInput.Xtream): XtreamAccount = withContext(Dispatchers.IO) {
         val server = XtreamApi.normalizeServer(input.server) ?: throw IOException("Invalid server address")
@@ -79,9 +104,20 @@ class SourceRepository(
 
     /** Saves a new source (or replaces the settings of [existingId]) and returns its id. Does not import. */
     suspend fun save(input: SourceInput, existingId: Long? = null): Long {
+        val existing = existingId?.let { db.sources().get(it) }
+        // Keep what the playlist announced about its guide; the user's own guide link is what they typed.
+        val announced = existing?.let { runCatching { secretOf(it).playlistEpgUrl }.getOrNull() }
         val (type, secret, label) = when (input) {
-            is SourceInput.M3uUrl -> Triple(SourceType.M3U_URL, SourceSecret(url = input.url.trim()), Urls.redact(input.url))
-            is SourceInput.M3uFile -> Triple(SourceType.M3U_FILE, SourceSecret(url = input.uri.toString()), input.fileName)
+            is SourceInput.M3uUrl -> Triple(
+                SourceType.M3U_URL,
+                SourceSecret(url = input.url.trim(), epgUrl = input.guideUrl.cleanGuideUrl(), playlistEpgUrl = announced),
+                Urls.redact(input.url),
+            )
+            is SourceInput.M3uFile -> Triple(
+                SourceType.M3U_FILE,
+                SourceSecret(url = input.uri.toString(), epgUrl = input.guideUrl.cleanGuideUrl(), playlistEpgUrl = announced),
+                input.fileName,
+            )
             is SourceInput.Xtream -> {
                 val server = XtreamApi.normalizeServer(input.server) ?: throw IOException("Invalid server address")
                 Triple(SourceType.XTREAM, SourceSecret(server.toString(), input.username.trim(), input.password), Urls.redact(server.toString()))
@@ -89,7 +125,6 @@ class SourceRepository(
         }
         val sealed = secrets.seal(Json.encodeToString(SourceSecret.serializer(), secret))
         val name = input.name.trim().ifEmpty { label }.take(80)
-        val existing = existingId?.let { db.sources().get(it) }
         return if (existing != null) {
             db.sources().update(existing.copy(name = name, type = type, secret = sealed, label = label, allowHttp = input.allowHttp))
             existing.id
@@ -120,7 +155,7 @@ class SourceRepository(
     suspend fun refresh(id: Long, onProgress: (Int) -> Unit = {}): ImportResult = withContext(Dispatchers.IO) {
         val source = db.sources().get(id) ?: throw IOException("Source not found")
         db.items().deletePending(id) // left over if the app was killed during an earlier import
-        try {
+        val result = try {
             when (source.type) {
                 SourceType.M3U_URL, SourceType.M3U_FILE -> importM3u(source, onProgress)
                 SourceType.XTREAM -> importXtream(source, onProgress)
@@ -136,6 +171,10 @@ class SourceRepository(
             }
             throw e
         }
+        // New channels may have guide data already stored.
+        val fresh = db.sources().get(id)
+        if (fresh?.guideEnabled == true) linker.relink(id)
+        result.copy(guideAvailable = fresh != null && runCatching { guideUrl(fresh) }.getOrNull() != null)
     }
 
     /** Makes the staged rows visible and records the import, re-reading the source so a rename made meanwhile is kept. */
@@ -143,6 +182,12 @@ class SourceRepository(
         val current = db.sources().get(id) ?: throw IOException("Source not found")
         db.items().commitPending(id)
         db.sources().update(update(current))
+    }
+
+    /** The sealed secret with the guide link the playlist header announced (null if it announces none now). */
+    private fun withAnnouncedGuide(source: SourceEntity, url: String?): String {
+        val secret = secretOf(source)
+        return if (secret.playlistEpgUrl == url) source.secret else secrets.seal(Json.encodeToString(SourceSecret.serializer(), secret.copy(playlistEpgUrl = url)))
     }
 
     private fun open(source: SourceEntity): InputStream {
@@ -186,7 +231,7 @@ class SourceRepository(
         commit(source.id) {
             it.copy(
                 refreshedAt = now(), lastError = null, liveCount = live, movieCount = movies, seriesCount = 0,
-                epgUrl = parser.epgUrl ?: it.epgUrl,
+                secret = withAnnouncedGuide(it, parser.epgUrl),
             )
         }
         ImportResult(live, movies, 0, parser.skipped, dupes)
@@ -247,6 +292,8 @@ class SourceRepository(
 
     companion object {
         private const val BATCH = 1000
+
+        private fun String?.cleanGuideUrl(): String? = this?.trim()?.takeIf { Urls.parseHttp(it) != null }
         private const val MAX_PLAYLIST_BYTES = 256L * 1024 * 1024
 
         fun stableKey(s: String): String =

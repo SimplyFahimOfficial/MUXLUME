@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -237,11 +239,15 @@ fun LiveBadge(modifier: Modifier = Modifier) {
     }
 }
 
+private const val DISABLED_ALPHA = 0.5f
+
 /** A setting row with a switch; the whole row is the touch target. */
 @Composable
-fun Toggle(title: String, body: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+fun Toggle(title: String, body: String, checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = true) {
     Row(
-        Modifier.fillMaxWidth().toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(horizontal = Mux.ScreenPadding, vertical = 12.dp),
+        Modifier.fillMaxWidth().toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
+            .graphicsLayer { alpha = if (enabled) 1f else DISABLED_ALPHA }
+            .padding(horizontal = Mux.ScreenPadding, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -250,5 +256,40 @@ fun Toggle(title: String, body: String, checked: Boolean, onChange: (Boolean) ->
         }
         Spacer(Modifier.width(16.dp))
         Switch(checked, null, colors = SwitchDefaults.colors(checkedTrackColor = MuxTheme.Accent, checkedThumbColor = MuxTheme.Primary))
+    }
+}
+
+/**
+ * A prominent row for the few things worth drawing the eye to: an accent-tinted card with an accent
+ * border. The 10% tint keeps secondary text above 4.5:1 on the light theme in every accent.
+ */
+@Composable
+fun HighlightRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    trailing: ImageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+) {
+    val accent = MuxTheme.Accent
+    Row(
+        modifier
+            .padding(horizontal = Mux.ScreenPadding, vertical = 6.dp)
+            .fillMaxWidth()
+            .clip(Mux.CardShape)
+            .background(accent.copy(alpha = 0.10f))
+            .border(1.dp, accent.copy(alpha = 0.6f), Mux.CardShape)
+            .pressable(onClick, label = title)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = accent, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MuxTheme.TextPrimary)
+            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
+        }
+        Icon(trailing, null, tint = accent)
     }
 }

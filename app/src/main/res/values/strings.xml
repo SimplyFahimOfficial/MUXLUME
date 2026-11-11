@@ -139,7 +139,7 @@
     <string name="support_upi_qr_code_for">UPI QR code for %1$s</string>
     <string name="support_upi">UPI</string>
     <string name="support_payee">Payee: %1$s</string>
-    <string name="support_scan_with_any_upi_app">Scan with any UPI app. You choose the amount.</string>
+    <string name="support_scan_with_any_upi_app">Scan with any UPI app, or tap the code to enlarge it. You choose the amount.</string>
     <string name="support_copy_upi_id">Copy UPI ID</string>
     <string name="support_upi_id_copied">UPI ID copied</string>
     <string name="support_pay_with_upi">Pay with UPI</string>
@@ -155,9 +155,6 @@
     <string name="support_project_website">Project website</string>
     <string name="support_contact_the_developer">Contact the developer</string>
     <string name="support_github">GitHub</string>
-    <string name="support_simplyfahimofficial">SimplyFahimOfficial</string>
-    <string name="support_instagram">Instagram</string>
-    <string name="support_simplyfahimofficial_2">\@SimplyFahimofficial</string>
     <string name="live_live_tv">Live TV</string>
     <string name="live_no_channels_yet">No channels yet</string>
     <string name="live_add_an_m3u_playlist_or">Add an M3U playlist or an Xtream Codes-compatible account to see live channels here.</string>
@@ -344,4 +341,13 @@
         <item quantity="one">%1$d season</item>
         <item quantity="other">%1$d seasons</item>
     </plurals>
+    <string name="support_enlarge_the_qr_code">Enlarge the QR code</string>
+    <string name="support_close">Close</string>
+
+    <!-- TV guide -->
+    <string name="error_no_guide_link">This source has no TV guide link.</string>
+    <string name="error_guide_format">The TV guide file isn\'t valid or is too large to read.</string>
+    <string name="reminders_channel_name">Programme reminders</string>
+    <string name="reminders_starting_soon">Starting soon: %1$s</string>
+    <string name="reminders_channel_at">%1$s · %2$s</string>
 </resources>

@@ -22,6 +22,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.muxlume.app.container
+import com.muxlume.app.ui.guide.GuideMappingScreen
+import com.muxlume.app.ui.guide.GuideScreen
+import com.muxlume.app.ui.guide.GuideSettingsScreen
 import com.muxlume.app.ui.library.AboutScreen
 import com.muxlume.app.ui.library.AppearanceScreen
 import com.muxlume.app.ui.library.SettingsScreen
@@ -47,6 +50,9 @@ import kotlinx.serialization.Serializable
 @Serializable object SettingsRoute
 @Serializable object AppearanceRoute
 @Serializable object SupportRoute
+@Serializable object GuideRoute
+@Serializable object GuideSettingsRoute
+@Serializable data class GuideMappingRoute(val sourceId: Long)
 @Serializable object AboutRoute
 
 /** Navigation actions shared by screens. */
@@ -58,6 +64,9 @@ class Nav(private val controller: NavHostController) {
     fun settings() = controller.navigate(SettingsRoute)
     fun appearance() = controller.navigate(AppearanceRoute)
     fun support() = controller.navigate(SupportRoute)
+    fun guide() = controller.navigate(GuideRoute) { launchSingleTop = true }
+    fun guideSettings() = controller.navigate(GuideSettingsRoute)
+    fun guideMapping(sourceId: Long) = controller.navigate(GuideMappingRoute(sourceId))
     fun about() = controller.navigate(AboutRoute)
     fun back() = controller.popBackStack()
     fun home() = controller.navigate(MainRoute) { popUpTo(0) { inclusive = true } }
@@ -98,6 +107,9 @@ fun MuxlumeRoot() {
             composable<SettingsRoute> { SettingsScreen(nav) }
             composable<AppearanceRoute> { AppearanceScreen(onBack = { nav.back() }) }
             composable<SupportRoute> { SupportScreen(onBack = { nav.back() }) }
+            composable<GuideRoute> { GuideScreen(nav) }
+            composable<GuideSettingsRoute> { GuideSettingsScreen(nav) }
+            composable<GuideMappingRoute> { entry -> GuideMappingScreen(entry.toRoute<GuideMappingRoute>().sourceId, onBack = { nav.back() }) }
             composable<AboutRoute> { AboutScreen(onBack = { nav.back() }) }
         }
     }

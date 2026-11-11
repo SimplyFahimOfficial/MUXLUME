@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import androidx.work.Configuration
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
@@ -15,6 +16,11 @@ import com.muxlume.app.core.net.Http
 import com.muxlume.app.core.security.SecretBox
 import com.muxlume.app.data.SettingsRepository
 import com.muxlume.app.data.SourceRepository
+import com.muxlume.app.data.epg.EpgLinker
+import com.muxlume.app.data.epg.EpgRepository
+import com.muxlume.app.data.epg.EpgWork
+import com.muxlume.app.reminders.Notifications
+import com.muxlume.app.reminders.ReminderScheduler
 import com.muxlume.app.data.db.MuxlumeDatabase
 import com.muxlume.app.data.settingsDataStore
 import com.muxlume.app.playback.PlaybackService
@@ -22,6 +28,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.guava.await
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -36,7 +45,10 @@ class AppContainer(context: Context) {
     val http by lazy { Http.client() }
     val db by lazy { MuxlumeDatabase.build(app) }
     val settings by lazy { SettingsRepository(app.settingsDataStore) }
-    val sources by lazy { SourceRepository(db, http, SecretBox(), app.contentResolver, app.resources) }
+    private val linker by lazy { EpgLinker(db) }
+    val sources by lazy { SourceRepository(db, http, SecretBox(), app.contentResolver, app.resources, linker) }
+    val epg by lazy { EpgRepository(db, sources, linker, http, app.resources) }
+    val reminders by lazy { ReminderScheduler(app) }
 
     private val controllerLock = Mutex()
     private var controller: MediaController? = null
@@ -51,7 +63,10 @@ class AppContainer(context: Context) {
     }
 }
 
-class MuxlumeApp : Application(), SingletonImageLoader.Factory {
+class MuxlumeApp : Application(), SingletonImageLoader.Factory, Configuration.Provider {
+    // WorkManager is created on first use with this configuration (also where no startup provider runs, e.g. tests).
+    override val workManagerConfiguration: Configuration get() = Configuration.Builder().setMinimumLoggingLevel(android.util.Log.WARN).build()
+
     lateinit var container: AppContainer
         private set
 
@@ -60,6 +75,13 @@ class MuxlumeApp : Application(), SingletonImageLoader.Factory {
         container = AppContainer(this)
         // Artwork isn't tied to a source: allow it over HTTP only while some source allows HTTP.
         container.appScope.launch { container.db.sources().anyAllowsHttp().collect { CleartextGate.artworkAllowed = it } }
+        Notifications.createChannels(this)
+        // Background guide refresh runs only while some source has its guide on.
+        container.appScope.launch {
+            combine(container.db.sources().all().map { list -> list.any { it.guideEnabled } }, container.settings.settings.map { it.guideWifiOnly }, ::Pair)
+                .distinctUntilChanged()
+                .collect { (anyGuide, wifiOnly) -> if (anyGuide) EpgWork.schedule(this@MuxlumeApp, wifiOnly) else EpgWork.cancel(this@MuxlumeApp) }
+        }
     }
 
     override fun newImageLoader(context: Context): ImageLoader = ImageLoader.Builder(context)

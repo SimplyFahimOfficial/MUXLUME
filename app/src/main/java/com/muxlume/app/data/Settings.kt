@@ -33,6 +33,8 @@ data class AppSettings(
     val accent: Accent = Accent.ORANGE,
     /** Android 12+: take the highlight colour from the system (Material You), ignoring [accent]. */
     val dynamicColor: Boolean = false,
+    /** Refresh the TV guide in the background only on an unmetered (Wi-Fi) network. */
+    val guideWifiOnly: Boolean = true,
 )
 
 class SettingsRepository(private val store: DataStore<Preferences>) {
@@ -44,6 +46,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val amoled = booleanPreferencesKey("amoled")
         val accent = stringPreferencesKey("accent")
         val dynamicColor = booleanPreferencesKey("dynamic_color")
+        val guideWifiOnly = booleanPreferencesKey("guide_wifi_only")
     }
 
     val settings: Flow<AppSettings> = store.data
@@ -57,6 +60,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
             amoled = it[Keys.amoled] ?: false,
             accent = it[Keys.accent]?.let(::accentOf) ?: Accent.ORANGE,
             dynamicColor = it[Keys.dynamicColor] ?: false,
+            guideWifiOnly = it[Keys.guideWifiOnly] ?: true,
         )
     }
 
@@ -69,6 +73,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
     suspend fun setAmoled(on: Boolean) = store.edit { it[Keys.amoled] = on }
     suspend fun setAccent(accent: Accent) = store.edit { it[Keys.accent] = accent.name }
     suspend fun setDynamicColor(on: Boolean) = store.edit { it[Keys.dynamicColor] = on }
+    suspend fun setGuideWifiOnly(on: Boolean) = store.edit { it[Keys.guideWifiOnly] = on }
 
     private fun themeOf(name: String) = runCatching { ThemeMode.valueOf(name) }.getOrDefault(ThemeMode.DARK)
     private fun accentOf(name: String) = runCatching { Accent.valueOf(name) }.getOrDefault(Accent.ORANGE)
