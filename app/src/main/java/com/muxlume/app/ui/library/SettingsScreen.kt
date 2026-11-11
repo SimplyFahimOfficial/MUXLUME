@@ -42,6 +42,7 @@ import com.muxlume.app.container
 import com.muxlume.app.data.AppSettings
 import com.muxlume.app.ui.Nav
 import com.muxlume.app.ui.components.SectionHeader
+import com.muxlume.app.ui.components.Toggle
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
@@ -57,7 +58,7 @@ fun SettingsScreen(nav: Nav) {
     val scope = rememberCoroutineScope()
     var confirm by remember { mutableStateOf<String?>(null) }
 
-    Column(Modifier.fillMaxSize().background(MuxTheme.Black)) {
+    Column(Modifier.fillMaxSize().background(MuxTheme.Background)) {
         TopHeader("Settings", onSearch = null, onBack = { nav.back() })
         Column(Modifier.verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 24.dp)) {
             LinkRow(Icons.Rounded.Palette, "Appearance", "Theme, accent colour, AMOLED, motion", nav::appearance)
@@ -103,23 +104,8 @@ fun SettingsScreen(nav: Nav) {
                     }
                 }) { Text(if (what == "all") "Delete" else "Clear", color = MuxTheme.Error) }
             },
-            dismissButton = { TextButton({ confirm = null }) { Text("Cancel", color = MuxTheme.Cream) } },
+            dismissButton = { TextButton({ confirm = null }) { Text("Cancel", color = MuxTheme.Primary) } },
             containerColor = MuxTheme.Raised,
         )
-    }
-}
-
-@Composable
-fun Toggle(title: String, body: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(horizontal = Mux.ScreenPadding, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = MuxTheme.White)
-            Text(body, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
-        }
-        Spacer(Modifier.width(16.dp))
-        Switch(checked, null, colors = SwitchDefaults.colors(checkedTrackColor = MuxTheme.Orange, checkedThumbColor = MuxTheme.Cream))
     }
 }

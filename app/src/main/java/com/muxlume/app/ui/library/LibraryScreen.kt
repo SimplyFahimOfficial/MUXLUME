@@ -128,7 +128,7 @@ fun LibraryScreen(nav: Nav) {
             title = { Text("Remove ${s.name}?") },
             text = { Text("Its channels, favorites and watch history are deleted from this device. The playlist itself isn't affected.") },
             confirmButton = { TextButton({ vm.delete(s.id); confirmDelete = null }) { Text("Remove", color = MuxTheme.Error) } },
-            dismissButton = { TextButton({ confirmDelete = null }) { Text("Cancel", color = MuxTheme.Cream) } },
+            dismissButton = { TextButton({ confirmDelete = null }) { Text("Cancel", color = MuxTheme.Primary) } },
             containerColor = MuxTheme.Raised,
         )
     }
@@ -137,7 +137,7 @@ fun LibraryScreen(nav: Nav) {
 @Composable
 private fun SourceCard(s: SourceEntity, refreshing: Boolean, onRefresh: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     Column(Modifier.padding(horizontal = Mux.ScreenPadding).fillMaxWidth().clip(Mux.CardShape).background(MuxTheme.Surface).padding(start = 18.dp, top = 16.dp, bottom = 8.dp, end = 8.dp)) {
-        Text(s.name, style = MaterialTheme.typography.titleLarge, color = MuxTheme.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(s.name, style = MaterialTheme.typography.titleLarge, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
             listOfNotNull(
                 when (s.type) { SourceType.M3U_URL -> "M3U link"; SourceType.M3U_FILE -> "M3U file"; SourceType.XTREAM -> "Xtream Codes" },
@@ -153,7 +153,7 @@ private fun SourceCard(s: SourceEntity, refreshing: Boolean, onRefresh: () -> Un
                 s.movieCount.takeIf { it > 0 }?.let { "$it movies" },
                 s.seriesCount.takeIf { it > 0 }?.let { "$it series" },
             ).joinToString(" · ").ifEmpty { "No items" },
-            style = MaterialTheme.typography.bodyMedium, color = MuxTheme.Cream,
+            style = MaterialTheme.typography.bodyMedium, color = MuxTheme.Primary,
         )
         val updated = s.refreshedAt?.let { "Updated " + DateUtils.getRelativeTimeSpanString(it, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS) }
         val expires = s.expiresAt?.let { "account expires " + DateUtils.formatDateTime(null, it * 1000, DateUtils.FORMAT_SHOW_DATE) }
@@ -161,12 +161,12 @@ private fun SourceCard(s: SourceEntity, refreshing: Boolean, onRefresh: () -> Un
         s.lastError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MuxTheme.Error, modifier = Modifier.padding(top = 4.dp)) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             if (refreshing) {
-                CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp), color = MuxTheme.Orange, strokeWidth = 2.dp)
+                CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp), color = MuxTheme.Accent, strokeWidth = 2.dp)
             } else {
-                IconButton(onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh ${s.name}", tint = MuxTheme.White) }
+                IconButton(onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh ${s.name}", tint = MuxTheme.TextPrimary) }
             }
-            IconButton(onEdit, enabled = !refreshing) { Icon(Icons.Rounded.Edit, "Edit ${s.name}", tint = MuxTheme.White) }
-            IconButton(onDelete, enabled = !refreshing) { Icon(Icons.Rounded.Delete, "Remove ${s.name}", tint = MuxTheme.White) }
+            IconButton(onEdit, enabled = !refreshing) { Icon(Icons.Rounded.Edit, "Edit ${s.name}", tint = MuxTheme.TextPrimary) }
+            IconButton(onDelete, enabled = !refreshing) { Icon(Icons.Rounded.Delete, "Remove ${s.name}", tint = MuxTheme.TextPrimary) }
         }
     }
 }
@@ -174,10 +174,10 @@ private fun SourceCard(s: SourceEntity, refreshing: Boolean, onRefresh: () -> Un
 @Composable
 fun LinkRow(icon: ImageVector, title: String, subtitle: String?, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().pressable(onClick, label = title).padding(horizontal = Mux.ScreenPadding, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = MuxTheme.Cream, modifier = Modifier.size(24.dp))
+        Icon(icon, null, tint = MuxTheme.Primary, modifier = Modifier.size(24.dp))
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = MuxTheme.White)
+            Text(title, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary)
             if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
         }
         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MuxTheme.TextSecondary)

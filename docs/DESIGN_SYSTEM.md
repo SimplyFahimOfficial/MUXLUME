@@ -47,12 +47,17 @@ small orange bar, so layouts never jump and no stock posters are bundled.
 
 ## Theming
 
-Colour roles come from `LocalMux` (a `MuxPalette`), so screens read `MuxTheme.<role>` and never a
-fixed colour. `MuxlumeTheme` builds a dark or light palette from the user's choice (System/Light/Dark),
-the accent (five presets or Material You on Android 12+) and the AMOLED toggle, and also drives the
-Material 3 `colorScheme` and the status-bar icon colour. Content that sits on artwork (the player,
-the home hero) wraps its subtree in `LocalMux provides current.onMedia()` so it stays light-on-dark
-in either theme.
+Screens read colour roles from `MuxTheme` (`Background`, `Surface`, `Raised`, `Outline`,
+`TextPrimary`, `TextSecondary`, `Primary`/`OnPrimary`, `Accent`/`OnAccent`, `Error`, `Scrim`), never
+fixed colours. `MuxlumeTheme` builds the palette from Appearance settings (System/Light/Dark, accent
+or Material You, AMOLED) and also sets the Material 3 colour scheme and the system-bar icon colour.
+
+- Each accent has a dark-theme and a darker light-theme value so accent text and labels on accent
+  fills reach WCAG AA; `SupportTest` checks every accent in both themes.
+- UI drawn over video or artwork (player, home hero) is wrapped in `OnMedia { }`, which switches to
+  the dark palette with the same accent. White icons on a `Scrim` may use `Color.White` directly.
+- The logo has a dark-framed copy (`brand_logo_light`) because the cream frame vanishes on the light
+  background.
 
 ## Planned
 

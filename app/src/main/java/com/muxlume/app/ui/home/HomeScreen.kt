@@ -20,7 +20,6 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -55,7 +54,7 @@ import com.muxlume.app.ui.main.Tab
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.play
 import com.muxlume.app.ui.playFromList
-import com.muxlume.app.ui.theme.LocalMux
+import com.muxlume.app.ui.theme.OnMedia
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
 import kotlinx.coroutines.flow.SharingStarted
@@ -167,7 +166,7 @@ fun HomeScreen(nav: Nav, openTab: (Tab) -> Unit) {
             LazyRow(contentPadding = PaddingValues(horizontal = Mux.ScreenPadding), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(s.sources, key = { it.id }) { src ->
                     Column(Modifier.widthIn(min = 160.dp).clip(Mux.CardShape).background(MuxTheme.Surface).padding(16.dp)) {
-                        Text(src.name, style = MaterialTheme.typography.titleMedium, color = MuxTheme.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(src.name, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(
                             listOfNotNull(
                                 src.liveCount.takeIf { it > 0 }?.let { "$it channels" },
@@ -198,28 +197,28 @@ private fun <T> Shelf(title: String, items: List<T>, action: String? = null, onA
 @Composable
 private fun Hero(title: String, subtitle: String?, artwork: String?, live: Boolean, progress: Float?, action: String, onPlay: () -> Unit, fitArt: Boolean = false) {
     // Text sits on artwork, so force the dark palette here regardless of the app theme.
-    CompositionLocalProvider(LocalMux provides LocalMux.current.onMedia()) {
-    Box(Modifier.padding(horizontal = Mux.ScreenPadding).fillMaxWidth().aspectRatio(4f / 5f).clip(Mux.HeroShape).background(MuxTheme.Surface)) {
-        Artwork(
-            artwork, title,
-            Modifier.fillMaxWidth().aspectRatio(if (fitArt) 1.3f else 4f / 5f).padding(if (fitArt) 48.dp else 0.dp),
-            contentScale = if (fitArt) androidx.compose.ui.layout.ContentScale.Fit else androidx.compose.ui.layout.ContentScale.Crop,
-            monogramSize = 64,
-        )
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to MuxTheme.Black)))
-        if (live) LiveBadge(Modifier.align(Alignment.TopStart).padding(16.dp))
-        Column(Modifier.align(Alignment.BottomStart).padding(22.dp)) {
-            if (subtitle != null) Text(subtitle.uppercase(), style = com.muxlume.app.ui.theme.SectionLabel, color = MuxTheme.Cream.copy(alpha = 0.8f), maxLines = 1)
-            Text(title, style = MaterialTheme.typography.displaySmall, color = MuxTheme.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (progress != null) {
-                Spacer(Modifier.height(12.dp))
-                Box(Modifier.fillMaxWidth(0.5f).height(4.dp).clip(Mux.PillShape).background(MuxTheme.Outline)) {
-                    Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(4.dp).background(MuxTheme.Orange))
+    OnMedia {
+        Box(Modifier.padding(horizontal = Mux.ScreenPadding).fillMaxWidth().aspectRatio(4f / 5f).clip(Mux.HeroShape).background(MuxTheme.Surface)) {
+            Artwork(
+                artwork, title,
+                Modifier.fillMaxWidth().aspectRatio(if (fitArt) 1.3f else 4f / 5f).padding(if (fitArt) 48.dp else 0.dp),
+                contentScale = if (fitArt) androidx.compose.ui.layout.ContentScale.Fit else androidx.compose.ui.layout.ContentScale.Crop,
+                monogramSize = 64,
+            )
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to MuxTheme.Background)))
+            if (live) LiveBadge(Modifier.align(Alignment.TopStart).padding(16.dp))
+            Column(Modifier.align(Alignment.BottomStart).padding(22.dp)) {
+                if (subtitle != null) Text(subtitle.uppercase(), style = com.muxlume.app.ui.theme.SectionLabel, color = MuxTheme.Primary.copy(alpha = 0.8f), maxLines = 1)
+                Text(title, style = MaterialTheme.typography.displaySmall, color = MuxTheme.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (progress != null) {
+                    Spacer(Modifier.height(12.dp))
+                    Box(Modifier.fillMaxWidth(0.5f).height(4.dp).clip(Mux.PillShape).background(MuxTheme.Outline)) {
+                        Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(4.dp).background(MuxTheme.Accent))
+                    }
                 }
+                Spacer(Modifier.height(16.dp))
+                PrimaryButton(action, onPlay, icon = Icons.Rounded.PlayArrow)
             }
-            Spacer(Modifier.height(16.dp))
-            PrimaryButton(action, onPlay, icon = Icons.Rounded.PlayArrow)
         }
-    }
     }
 }

@@ -57,14 +57,14 @@ private val licenses = listOf(
 /** Troubleshooting, version and licences. Project and developer links live on the Support screen. */
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
-    Column(Modifier.fillMaxSize().background(MuxTheme.Black)) {
+    Column(Modifier.fillMaxSize().background(MuxTheme.Background)) {
         TopHeader("Help & about", onSearch = null, onBack = onBack)
         Column(Modifier.verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 32.dp)) {
             Row(Modifier.padding(Mux.ScreenPadding), verticalAlignment = Alignment.CenterVertically) {
                 MuxLogo(size = 56.dp)
                 Spacer(Modifier.width(16.dp))
                 Column {
-                    Text("MUXLUME", style = MaterialTheme.typography.headlineMedium, color = MuxTheme.White)
+                    Text("MUXLUME", style = MaterialTheme.typography.headlineMedium, color = MuxTheme.TextPrimary)
                     Text("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary)
                 }
             }
@@ -81,7 +81,7 @@ fun AboutScreen(onBack: () -> Unit) {
             SectionHeader("Open-source licenses")
             licenses.forEach { (lib, lic) ->
                 Column(Modifier.padding(horizontal = Mux.ScreenPadding, vertical = 6.dp)) {
-                    Text(lib, style = MaterialTheme.typography.bodyMedium, color = MuxTheme.White)
+                    Text(lib, style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextPrimary)
                     Text(lic, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
                 }
             }
@@ -97,7 +97,7 @@ private fun Expandable(question: String, answer: String) {
             .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
             .padding(horizontal = Mux.ScreenPadding, vertical = 12.dp),
     ) {
-        Text(question, style = MaterialTheme.typography.titleMedium, color = MuxTheme.White)
+        Text(question, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary)
         if (open) {
             Spacer(Modifier.height(6.dp))
             Text(answer, style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary)

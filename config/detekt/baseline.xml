@@ -50,37 +50,6 @@
     <ID>MagicNumber:SourceRepository.kt$SourceRepository$512</ID>
     <ID>MagicNumber:SourceRepository.kt$SourceRepository$80</ID>
     <ID>MagicNumber:SourceRepository.kt$SourceRepository.Companion$12</ID>
-    <ID>MagicNumber:Theme.kt$0xB3000000</ID>
-    <ID>MagicNumber:Theme.kt$0xFF000000</ID>
-    <ID>MagicNumber:Theme.kt$0xFF0D0D10</ID>
-    <ID>MagicNumber:Theme.kt$0xFF111114</ID>
-    <ID>MagicNumber:Theme.kt$0xFF17130E</ID>
-    <ID>MagicNumber:Theme.kt$0xFF1A1A1F</ID>
-    <ID>MagicNumber:Theme.kt$0xFF1B1B20</ID>
-    <ID>MagicNumber:Theme.kt$0xFF1C1813</ID>
-    <ID>MagicNumber:Theme.kt$0xFF1FA89B</ID>
-    <ID>MagicNumber:Theme.kt$0xFF2A2A31</ID>
-    <ID>MagicNumber:Theme.kt$0xFF6B655C</ID>
-    <ID>MagicNumber:Theme.kt$0xFF7C5CFF</ID>
-    <ID>MagicNumber:Theme.kt$0xFFA4A4AC</ID>
-    <ID>MagicNumber:Theme.kt$0xFFC0392B</ID>
-    <ID>MagicNumber:Theme.kt$0xFFE2DBD0</ID>
-    <ID>MagicNumber:Theme.kt$0xFFE4454E</ID>
-    <ID>MagicNumber:Theme.kt$0xFFE65A00</ID>
-    <ID>MagicNumber:Theme.kt$0xFFE6A100</ID>
-    <ID>MagicNumber:Theme.kt$0xFFF0EBE3</ID>
-    <ID>MagicNumber:Theme.kt$0xFFFAF7F2</ID>
-    <ID>MagicNumber:Theme.kt$0xFFFF6B5E</ID>
-    <ID>MagicNumber:Theme.kt$0xFFFFF7E8</ID>
-    <ID>MagicNumber:Theme.kt$0xFFFFFFFF</ID>
-    <ID>MagicNumber:Theme.kt$MuxPalette$0xFF000000</ID>
-    <ID>MagicNumber:Theme.kt$MuxPalette$0xFF111114</ID>
-    <ID>MagicNumber:Theme.kt$MuxPalette$0xFF1B1B20</ID>
-    <ID>MagicNumber:Theme.kt$MuxPalette$0xFF2A2A31</ID>
-    <ID>MagicNumber:Theme.kt$MuxPalette$0xFFA4A4AC</ID>
-    <ID>MagicNumber:Theme.kt$MuxPalette$0xFFFF6B5E</ID>
-    <ID>MagicNumber:Theme.kt$MuxPalette$0xFFFFF7E8</ID>
-    <ID>MagicNumber:Theme.kt$MuxPalette$0xFFFFFFFF</ID>
     <ID>MagicNumber:XtreamApi.kt$XtreamApi$401</ID>
     <ID>MagicNumber:XtreamApi.kt$XtreamApi$403</ID>
     <ID>MagicNumber:XtreamApi.kt$XtreamApi.Companion$64</ID>
@@ -91,7 +60,6 @@
     <ID>MaxLineLength:AddSourceScreen.kt$"With plain HTTP, anyone on your network path (public Wi-Fi, your ISP) can see what you watch and read any username, password or token sent to the server. Use an https:// address if your provider offers one."</ID>
     <ID>MaxLineLength:AddSourceScreen.kt$AddSourceViewModel$SourceType.XTREAM -&gt; FormState(Mode.XTREAM, s.name, server = secret?.url.orEmpty(), username = secret?.username.orEmpty(), password = secret?.password.orEmpty(), httpAcknowledged = s.allowHttp)</ID>
     <ID>MaxLineLength:AddSourceScreen.kt$AddSourceViewModel$it.copy(phase = Phase.Editing, accountInfo = listOfNotNull("Account ${acc.status.lowercase()}", exp?.let { d -&gt; "expires $d" }, acc.maxConnections?.let { n -&gt; "$n connection${if (n == 1) "" else "s"}" }).joinToString(" · "))</ID>
-    <ID>MaxLineLength:AddSourceScreen.kt$Text("Credentials are encrypted with a key that never leaves this device and are only sent to this server.", style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)</ID>
     <ID>MaxLineLength:AddSourceScreen.kt$else -&gt; Form(s, vm, onPickFile = { picker.launch(arrayOf("audio/x-mpegurl", "audio/mpegurl", "application/x-mpegurl", "application/vnd.apple.mpegurl", "text/plain", "application/octet-stream")) })</ID>
     <ID>MaxLineLength:DetailScreen.kt$DetailViewModel$Extra(plot = info.plot ?: it.plot, backdrop = info.backdrop, meta = listOfNotNull(info.releaseDate?.take(4) ?: it.year, info.durationSec?.let { d -&gt; "${d / 60} min" }, info.genre, it.rating?.let { r -&gt; "★ $r" }))</ID>
     <ID>MaxLineLength:DetailScreen.kt$DetailViewModel$Extra(plot = info.plot ?: it.plot, backdrop = info.cover, episodes = info.episodes, meta = listOfNotNull(it.year, it.rating?.let { r -&gt; "★ $r" }, "${info.episodes.map { e -&gt; e.season }.distinct().size} seasons".takeIf { info.episodes.isNotEmpty() }))</ID>

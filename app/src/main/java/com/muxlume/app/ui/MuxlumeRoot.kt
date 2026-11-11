@@ -71,7 +71,7 @@ fun MuxlumeRoot() {
         val onboarded = c.settings.current().onboardingDone || c.db.sources().all().first().isNotEmpty()
         value = if (onboarded) MainRoute else WelcomeRoute
     }
-    Box(Modifier.fillMaxSize().background(MuxTheme.Black)) {
+    Box(Modifier.fillMaxSize().background(MuxTheme.Background)) {
         val startRoute = start ?: return@Box // black splash continuation while settings load (a few ms)
         val controller = rememberNavController()
         val nav = Nav(controller)

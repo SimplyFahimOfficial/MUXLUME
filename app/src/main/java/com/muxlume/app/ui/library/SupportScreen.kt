@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.muxlume.app.support.SupportConfig
 import com.muxlume.app.support.SupportIntents
@@ -74,7 +75,7 @@ fun SupportScreen(onBack: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(MuxTheme.Black)) {
+    Column(Modifier.fillMaxSize().background(MuxTheme.Background)) {
         TopHeader("Support my work", onSearch = null, onBack = onBack)
         Column(Modifier.verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 28.dp)) {
             Text(
@@ -88,7 +89,7 @@ fun SupportScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(10.dp))
 
             Column(Modifier.padding(horizontal = Mux.ScreenPadding).fillMaxWidth().clip(Mux.CardShape).background(MuxTheme.Surface).padding(18.dp)) {
-                Text("UPI", style = MaterialTheme.typography.titleLarge, color = MuxTheme.White)
+                Text("UPI", style = MaterialTheme.typography.titleLarge, color = MuxTheme.TextPrimary)
                 Text(
                     "Scan this code with any UPI app, or open one on this phone. You choose the amount.",
                     style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
@@ -106,7 +107,7 @@ fun SupportScreen(onBack: () -> Unit) {
                 }
                 Spacer(Modifier.height(16.dp))
                 Text("UPI ID", style = MaterialTheme.typography.labelMedium, color = MuxTheme.TextSecondary)
-                SelectionContainer { Text(SupportConfig.UPI_ID, style = MaterialTheme.typography.headlineSmall, color = MuxTheme.White) }
+                SelectionContainer { Text(SupportConfig.UPI_ID, style = MaterialTheme.typography.headlineSmall, color = MuxTheme.TextPrimary) }
                 Text("Payee: ${SupportConfig.UPI_PAYEE_NAME}", style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
                 Spacer(Modifier.height(16.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -151,8 +152,8 @@ fun SupportScreen(onBack: () -> Unit) {
 
 @Composable
 private fun ActionChip(icon: ImageVector, label: String, modifier: Modifier = Modifier, accent: Boolean = false, onClick: () -> Unit) {
-    val bg = if (accent) MuxTheme.Orange else MuxTheme.Raised
-    val fg = if (accent) MuxTheme.OnOrange else MuxTheme.White
+    val bg = if (accent) MuxTheme.Accent else MuxTheme.Raised
+    val fg = if (accent) MuxTheme.OnAccent else MuxTheme.TextPrimary
     Row(
         modifier.height(48.dp).clip(Mux.PillShape).background(bg).pressable(onClick, label = label).padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -160,6 +161,6 @@ private fun ActionChip(icon: ImageVector, label: String, modifier: Modifier = Mo
     ) {
         Icon(icon, null, tint = fg, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
-        Text(label, color = fg, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(label, color = fg, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

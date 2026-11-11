@@ -9,6 +9,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -58,7 +61,7 @@ import com.muxlume.app.ui.theme.SectionLabel
 @Composable
 fun MuxLogo(modifier: Modifier = Modifier, size: Dp = 32.dp) {
     // The cream frame would vanish on the light background, so light mode uses a dark-framed copy.
-    val res = if (com.muxlume.app.ui.theme.LocalMux.current.isLight) R.drawable.brand_logo_light else R.drawable.brand_logo
+    val res = if (MuxTheme.isLight) R.drawable.brand_logo_light else R.drawable.brand_logo
     Image(painterResource(res), contentDescription = null, modifier = modifier.size(size))
 }
 
@@ -67,7 +70,7 @@ fun Wordmark(modifier: Modifier = Modifier, logoSize: Dp = 30.dp) {
     Row(modifier.semantics(mergeDescendants = true) { contentDescription = "MUXLUME" }, verticalAlignment = Alignment.CenterVertically) {
         MuxLogo(size = logoSize)
         Spacer(Modifier.width(8.dp))
-        Text("MUXLUME", fontSize = (logoSize.value * 0.62f).sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = MuxTheme.White)
+        Text("MUXLUME", fontSize = (logoSize.value * 0.62f).sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = MuxTheme.TextPrimary)
     }
 }
 
@@ -105,16 +108,16 @@ fun Artwork(url: String?, title: String, modifier: Modifier = Modifier, contentS
 private fun Placeholder(title: String, size: Int) {
     val initials = title.split(' ', '-', '_').filter { it.firstOrNull()?.isLetterOrDigit() == true }.take(2).joinToString("") { it.take(1) }.uppercase()
     Box(Modifier.fillMaxSize().background(MuxTheme.Raised), contentAlignment = Alignment.Center) {
-        Text(initials.ifEmpty { "•" }, fontSize = size.sp, fontWeight = FontWeight.Black, color = MuxTheme.Cream.copy(alpha = 0.55f), letterSpacing = (-1).sp)
-        Box(Modifier.align(Alignment.BottomStart).padding(12.dp).width(22.dp).height(4.dp).clip(Mux.PillShape).background(MuxTheme.Orange))
+        Text(initials.ifEmpty { "•" }, fontSize = size.sp, fontWeight = FontWeight.Black, color = MuxTheme.Primary.copy(alpha = 0.55f), letterSpacing = (-1).sp)
+        Box(Modifier.align(Alignment.BottomStart).padding(12.dp).width(22.dp).height(4.dp).clip(Mux.PillShape).background(MuxTheme.Accent))
     }
 }
 
 @Composable
 fun Pill(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val reduced = MuxTheme.reducedMotion
-    val bg by animateColorAsState(if (selected) MuxTheme.Cream else MuxTheme.Raised, Motion.spec(Motion.SHORT, reduced), label = "pill")
-    val fg by animateColorAsState(if (selected) MuxTheme.Black else MuxTheme.White, Motion.spec(Motion.SHORT, reduced), label = "pillText")
+    val bg by animateColorAsState(if (selected) MuxTheme.Primary else MuxTheme.Raised, Motion.spec(Motion.SHORT, reduced), label = "pill")
+    val fg by animateColorAsState(if (selected) MuxTheme.OnPrimary else MuxTheme.TextPrimary, Motion.spec(Motion.SHORT, reduced), label = "pillText")
     Box(
         modifier
             .heightIn(min = 40.dp)
@@ -138,12 +141,12 @@ fun PillRow(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modif
 
 @Composable
 fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null, enabled: Boolean = true) {
-    ButtonBase(text, onClick, modifier, icon, enabled, MuxTheme.Cream, MuxTheme.Black)
+    ButtonBase(text, onClick, modifier, icon, enabled, MuxTheme.Primary, MuxTheme.OnPrimary)
 }
 
 @Composable
 fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null, enabled: Boolean = true) {
-    ButtonBase(text, onClick, modifier.border(1.dp, MuxTheme.Outline, Mux.PillShape), icon, enabled, MuxTheme.Raised, MuxTheme.White)
+    ButtonBase(text, onClick, modifier.border(1.dp, MuxTheme.Outline, Mux.PillShape), icon, enabled, MuxTheme.Raised, MuxTheme.TextPrimary)
 }
 
 @Composable
@@ -172,7 +175,7 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier, action: String? 
         Text(title.uppercase(), style = SectionLabel, color = MuxTheme.TextSecondary, modifier = Modifier.weight(1f))
         if (action != null && onAction != null) {
             Text(
-                action, color = MuxTheme.Cream, style = MaterialTheme.typography.labelLarge,
+                action, color = MuxTheme.Primary, style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.clip(Mux.PillShape).pressable(onAction).padding(horizontal = 10.dp, vertical = 8.dp),
             )
         }
@@ -182,9 +185,9 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier, action: String? 
 @Composable
 fun EmptyState(title: String, body: String, modifier: Modifier = Modifier, action: String? = null, onAction: (() -> Unit)? = null) {
     Column(modifier.fillMaxWidth().padding(Mux.ScreenPadding), horizontalAlignment = Alignment.Start) {
-        Box(Modifier.width(36.dp).height(5.dp).clip(Mux.PillShape).background(MuxTheme.Orange))
+        Box(Modifier.width(36.dp).height(5.dp).clip(Mux.PillShape).background(MuxTheme.Accent))
         Spacer(Modifier.height(16.dp))
-        Text(title, style = MaterialTheme.typography.headlineSmall, color = MuxTheme.White)
+        Text(title, style = MaterialTheme.typography.headlineSmall, color = MuxTheme.TextPrimary)
         Spacer(Modifier.height(8.dp))
         Text(body, style = MaterialTheme.typography.bodyLarge, color = MuxTheme.TextSecondary)
         if (action != null && onAction != null) {
@@ -200,7 +203,7 @@ fun PosterCard(title: String, artwork: String?, onClick: () -> Unit, modifier: M
     Column(modifier.then(if (width != null) Modifier.width(width) else Modifier).pressable(onClick, label = title).semantics(mergeDescendants = true) {}) {
         Artwork(artwork, title, Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(Mux.CardShape))
         Spacer(Modifier.height(8.dp))
-        Text(title, style = MaterialTheme.typography.titleSmall, color = MuxTheme.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(title, style = MaterialTheme.typography.titleSmall, color = MuxTheme.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
         if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary, maxLines = 1)
     }
 }
@@ -213,12 +216,12 @@ fun WideCard(title: String, subtitle: String?, artwork: String?, onClick: () -> 
             Artwork(artwork, title, Modifier.fillMaxSize(), contentScale = if (fit) ContentScale.Fit else ContentScale.Crop)
             if (progress != null) {
                 Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(MuxTheme.Scrim)) {
-                    Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(4.dp).background(MuxTheme.Orange))
+                    Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(4.dp).background(MuxTheme.Accent))
                 }
             }
         }
         Spacer(Modifier.height(8.dp))
-        Text(title, style = MaterialTheme.typography.titleSmall, color = MuxTheme.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(title, style = MaterialTheme.typography.titleSmall, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -227,8 +230,24 @@ fun WideCard(title: String, subtitle: String?, artwork: String?, onClick: () -> 
 @Composable
 fun LiveBadge(modifier: Modifier = Modifier) {
     Row(modifier.clip(Mux.PillShape).background(MuxTheme.Scrim).padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).clip(Mux.PillShape).background(MuxTheme.Orange))
+        Box(Modifier.size(8.dp).clip(Mux.PillShape).background(MuxTheme.Accent))
         Spacer(Modifier.width(6.dp))
         Text("LIVE", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, letterSpacing = 1.sp) // always on the dark scrim
+    }
+}
+
+/** A setting row with a switch; the whole row is the touch target. */
+@Composable
+fun Toggle(title: String, body: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(horizontal = Mux.ScreenPadding, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary)
+            Text(body, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
+        }
+        Spacer(Modifier.width(16.dp))
+        Switch(checked, null, colors = SwitchDefaults.colors(checkedTrackColor = MuxTheme.Accent, checkedThumbColor = MuxTheme.Primary))
     }
 }

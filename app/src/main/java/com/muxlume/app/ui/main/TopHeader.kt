@@ -34,16 +34,16 @@ fun TopHeader(title: String?, onSearch: (() -> Unit)?, modifier: Modifier = Modi
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (onBack != null) {
-            IconButton(onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = MuxTheme.White) }
+            IconButton(onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = MuxTheme.TextPrimary) }
         }
         if (title == null) {
             Wordmark(Modifier.weight(1f))
         } else {
-            Text(title, style = MaterialTheme.typography.headlineMedium, color = MuxTheme.White, modifier = Modifier.weight(1f).semantics { heading() })
+            Text(title, style = MaterialTheme.typography.headlineMedium, color = MuxTheme.TextPrimary, modifier = Modifier.weight(1f).semantics { heading() })
         }
         if (onSearch != null) {
             IconButton(onSearch, Modifier.size(48.dp).clip(Mux.PillShape).background(MuxTheme.Raised)) {
-                Icon(Icons.Rounded.Search, "Search", tint = MuxTheme.White)
+                Icon(Icons.Rounded.Search, "Search", tint = MuxTheme.TextPrimary)
             }
         }
     }

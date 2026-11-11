@@ -92,9 +92,9 @@ fun SearchScreen(nav: Nav) {
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
-    Column(Modifier.fillMaxSize().background(MuxTheme.Black).imePadding()) {
+    Column(Modifier.fillMaxSize().background(MuxTheme.Background).imePadding()) {
         Row(Modifier.windowInsetsPadding(WindowInsets.statusBars).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(nav::back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = MuxTheme.White) }
+            IconButton(nav::back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = MuxTheme.TextPrimary) }
             TextField(
                 query, { vm.query.value = it.take(100) },
                 Modifier.weight(1f).focusRequester(focus),
@@ -105,7 +105,7 @@ fun SearchScreen(nav: Nav) {
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 shape = Mux.PillShape,
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MuxTheme.Raised, unfocusedContainerColor = MuxTheme.Raised, cursorColor = MuxTheme.Orange,
+                    focusedContainerColor = MuxTheme.Raised, unfocusedContainerColor = MuxTheme.Raised, cursorColor = MuxTheme.Accent,
                     focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                 ),
             )
@@ -149,7 +149,7 @@ private fun ResultRow(item: ItemEntity, onClick: () -> Unit) {
         )
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(item.name, style = MaterialTheme.typography.titleMedium, color = MuxTheme.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(item.name, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (item.groupTitle.isNotEmpty()) Text(item.groupTitle, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary, maxLines = 1)
         }
     }

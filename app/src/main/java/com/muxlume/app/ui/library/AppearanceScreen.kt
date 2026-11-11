@@ -41,6 +41,7 @@ import com.muxlume.app.data.AppSettings
 import com.muxlume.app.data.ThemeMode
 import com.muxlume.app.ui.components.PillRow
 import com.muxlume.app.ui.components.SectionHeader
+import com.muxlume.app.ui.components.Toggle
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
@@ -61,7 +62,7 @@ fun AppearanceScreen(onBack: () -> Unit) {
     val settings by c.settings.settings.collectAsStateWithLifecycle(AppSettings())
     val scope = rememberCoroutineScope()
 
-    Column(Modifier.fillMaxSize().background(MuxTheme.Black)) {
+    Column(Modifier.fillMaxSize().background(MuxTheme.Background)) {
         TopHeader("Appearance", onSearch = null, onBack = onBack)
         Column(Modifier.verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 24.dp)) {
             SectionHeader("Theme")
@@ -71,11 +72,11 @@ fun AppearanceScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(20.dp))
             SectionHeader("Accent colour")
             Spacer(Modifier.height(12.dp))
-            Row(Modifier.padding(horizontal = Mux.ScreenPadding), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(Modifier.padding(horizontal = Mux.ScreenPadding), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 val dynamicOn = settings.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
                 Accent.entries.forEach { accent ->
                     Swatch(
-                        color = accentColor(accent, light = com.muxlume.app.ui.theme.LocalMux.current.isLight),
+                        color = accentColor(accent, light = MuxTheme.isLight),
                         selected = !dynamicOn && settings.accent == accent,
                         enabled = !dynamicOn,
                         label = accentLabels.getValue(accent),
@@ -109,14 +110,14 @@ fun AppearanceScreen(onBack: () -> Unit) {
 private fun Swatch(color: Color, selected: Boolean, enabled: Boolean, label: String, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(44.dp)
+            .size(48.dp)
             .clip(Mux.PillShape)
             .background(if (enabled) color else color.copy(alpha = 0.35f))
-            .border(if (selected) 3.dp else 0.dp, MuxTheme.White, Mux.PillShape)
+            .border(if (selected) 3.dp else 0.dp, MuxTheme.TextPrimary, Mux.PillShape)
             .selectable(selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        if (selected) Icon(Icons.Rounded.Check, null, tint = MuxTheme.OnOrange)
+        if (selected) Icon(Icons.Rounded.Check, null, tint = MuxTheme.OnAccent)
     }
 }

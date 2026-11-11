@@ -85,7 +85,7 @@ fun MainScreen(nav: Nav) {
             }
         }
     }
-    BoxWithConstraints(Modifier.fillMaxSize().background(MuxTheme.Black)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(MuxTheme.Background)) {
         if (maxWidth >= 600.dp) {
             Row(Modifier.fillMaxSize()) {
                 Rail(tab) { tab = it }
@@ -117,10 +117,10 @@ private fun BottomBar(selected: Int, modifier: Modifier, onSelect: (Int) -> Unit
         val itemWidth = maxWidth / Tab.entries.size
         // One indicator that slides between tabs instead of five that fade.
         val x by animateDpAsState(itemWidth * selected, Motion.spec(Motion.MEDIUM, reduced), label = "indicator")
-        Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(x.roundToPx(), 0) }.width(itemWidth).fillMaxHeight().padding(6.dp).clip(Mux.PillShape).background(MuxTheme.Cream))
+        Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(x.roundToPx(), 0) }.width(itemWidth).fillMaxHeight().padding(6.dp).clip(Mux.PillShape).background(MuxTheme.Primary))
         Row(Modifier.fillMaxSize().selectableGroup()) {
             Tab.entries.forEachIndexed { i, t ->
-                val color by animateColorAsState(if (i == selected) MuxTheme.Black else MuxTheme.TextSecondary, Motion.spec(Motion.SHORT, reduced), label = "tabColor")
+                val color by animateColorAsState(if (i == selected) MuxTheme.OnPrimary else MuxTheme.TextSecondary, Motion.spec(Motion.SHORT, reduced), label = "tabColor")
                 Column(
                     Modifier.weight(1f).fillMaxHeight().clip(Mux.PillShape).selectable(i == selected, role = Role.Tab) { onSelect(i) },
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -146,12 +146,12 @@ private fun Rail(selected: Int, onSelect: (Int) -> Unit) {
         Tab.entries.forEachIndexed { i, t ->
             val on = i == selected
             Column(
-                Modifier.padding(vertical = 6.dp).clip(Mux.CardShape).background(if (on) MuxTheme.Cream else MuxTheme.Surface)
+                Modifier.padding(vertical = 6.dp).clip(Mux.CardShape).background(if (on) MuxTheme.Primary else MuxTheme.Surface)
                     .selectable(on, role = Role.Tab) { onSelect(i) }.padding(horizontal = 10.dp, vertical = 10.dp).width(60.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Icon(t.icon, null, tint = if (on) MuxTheme.Black else MuxTheme.TextSecondary)
-                Text(t.label, color = if (on) MuxTheme.Black else MuxTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Icon(t.icon, null, tint = if (on) MuxTheme.OnPrimary else MuxTheme.TextSecondary)
+                Text(t.label, color = if (on) MuxTheme.OnPrimary else MuxTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
             }
         }
     }

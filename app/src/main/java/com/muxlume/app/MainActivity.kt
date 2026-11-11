@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.core.app.PictureInPictureModeChangedInfo
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -22,6 +23,8 @@ import kotlinx.coroutines.flow.StateFlow
 class MainActivity : ComponentActivity() {
 
     private val pip = MutableStateFlow(false)
+
+    @Volatile private var settingsLoaded = false
 
     /** True while the activity shows in picture-in-picture. */
     val inPictureInPicture: StateFlow<Boolean> get() = pip
@@ -47,12 +50,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge(SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         super.onCreate(savedInstanceState)
         addOnPictureInPictureModeChangedListener(pipListener)
-        var settingsLoaded = false
+        // Keep the splash until settings load, so a light-theme user never sees a dark first frame.
         splash.setKeepOnScreenCondition { !settingsLoaded }
         setContent {
             val loaded by container.settings.settings.collectAsStateWithLifecycle(null)
             val settings = loaded ?: AppSettings(onboardingDone = true)
-            settingsLoaded = loaded != null
+            SideEffect { settingsLoaded = loaded != null }
             MuxlumeTheme(
                 theme = settings.theme,
                 amoled = settings.amoled,
