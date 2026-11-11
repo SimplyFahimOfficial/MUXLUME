@@ -243,7 +243,7 @@ private const val DISABLED_ALPHA = 0.5f
 
 /** A setting row with a switch; the whole row is the touch target. */
 @Composable
-fun Toggle(title: String, body: String, checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = true) {
+fun Toggle(title: String, body: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Row(
         Modifier.fillMaxWidth().toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
             .graphicsLayer { alpha = if (enabled) 1f else DISABLED_ALPHA }

@@ -55,6 +55,9 @@ gate still runs) and GitHub's dependency-review action is skipped; set `CODE_SCA
 ## Permissions
 
 `INTERNET`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `WAKE_LOCK` (only while
-playing), and `ACCESS_NETWORK_STATE` merged from Media3. No storage, location, contacts or
-notification permission (media session notifications are exempt). A new permission fails CI until
+playing), and `ACCESS_NETWORK_STATE` merged from Media3. `POST_NOTIFICATIONS` (asked the first time you
+set a guide reminder) and `RECEIVE_BOOT_COMPLETED` (re-arms reminders after a restart; the receiver is
+not exported). No storage, location or contacts permission. Reminders use inexact alarms, so no
+exact-alarm permission. XMLTV guides are parsed with size, depth and entity limits (see
+`docs/IPTV_FORMATS.md`). A new permission fails CI until
 it's reviewed in `scripts/ci/apk_audit.py`.

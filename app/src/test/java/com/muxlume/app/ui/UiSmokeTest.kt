@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
@@ -45,7 +46,7 @@ class UiSmokeTest {
         compose.onNodeWithText("Playlist link").performTextInput("http://iptv.example/list.m3u")
         compose.onNodeWithText("This server doesn't use encryption").assertIsDisplayed()
         compose.onNodeWithText("Add and import").assertIsNotEnabled()
-        compose.onNodeWithText("I understand, allow unencrypted HTTP").performClick()
+        compose.onNodeWithText("I understand, allow unencrypted HTTP").performScrollTo().performClick()
         compose.onNodeWithText("Add and import").assertIsEnabled()
     }
 

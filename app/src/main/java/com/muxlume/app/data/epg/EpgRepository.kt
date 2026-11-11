@@ -43,10 +43,10 @@ class EpgRepository(
 
     /** Turns the guide on (and downloads it in the caller's scope via [refresh]) or off (and deletes it). */
     suspend fun setEnabled(sourceId: Long, enabled: Boolean) {
-        db.sources().setGuideEnabled(sourceId, enabled)
+        db.guide().setGuideEnabled(sourceId, enabled)
         if (!enabled) {
             dao.clear(sourceId)
-            db.sources().resetGuide(sourceId)
+            db.guide().resetGuide(sourceId)
         }
     }
 
@@ -60,10 +60,10 @@ class EpgRepository(
         } catch (e: CancellationException) {
             withContext(NonCancellable) { dao.discardPending(sourceId) }
             throw e
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) { // any failure is stored on the source, then rethrown
             withContext(NonCancellable) {
                 dao.discardPending(sourceId)
-                db.sources().setGuideError(sourceId, ErrorText.of(res, e))
+                db.guide().setGuideError(sourceId, ErrorText.of(res, e))
             }
             throw e
         }
@@ -76,36 +76,35 @@ class EpgRepository(
         val batch = ArrayList<ProgramEntity>(BATCH)
         http.newCall(request).execute().requireSuccess().use { response ->
             val body = LimitedInputStream(response.body.byteStream(), MAX_DOWNLOAD)
-            XmltvParser.open(body).use { stream ->
-                for (item in parser.parse(stream)) {
-                    when (item) {
-                        is XmltvChannel -> if (channels.size < MAX_CHANNEL_ROWS) {
-                            val names = item.names.ifEmpty { listOf(item.id) }
-                            names.forEach { channels += EpgChannelEntity(sourceId, item.id, it, pending = true) }
-                        }
-                        is XmltvProgramme -> {
-                            batch += ProgramEntity(
-                                sourceId = sourceId, channelId = item.channel, start = item.start, stop = item.stop,
-                                title = item.title, description = item.description, category = item.category, pending = true,
-                            )
-                            if (batch.size == BATCH) {
-                                currentCoroutineContext().ensureActive()
-                                dao.insertPrograms(batch)
-                                batch.clear()
-                            }
-                        }
-                    }
-                }
-            }
+            XmltvParser.open(body).use { stream -> ingest(sourceId, parser.parse(stream), channels, batch) }
         }
         dao.insertPrograms(batch)
         channels.chunked(BATCH).forEach { dao.insertChannels(it) }
         val links = linker.links(sourceId, channels)
         db.withTransaction {
             dao.commit(sourceId, links)
-            db.sources().setGuideDone(sourceId, System.currentTimeMillis(), parser.kept)
+            db.guide().setGuideDone(sourceId, System.currentTimeMillis(), parser.kept)
         }
         return parser.kept
+    }
+
+    /** Reads the parsed items, writing programmes in batches so memory stays flat. */
+    private suspend fun ingest(sourceId: Long, items: Sequence<XmltvItem>, channels: MutableList<EpgChannelEntity>, batch: MutableList<ProgramEntity>) {
+        for (item in items) {
+            if (item is XmltvChannel && channels.size < MAX_CHANNEL_ROWS) {
+                item.names.ifEmpty { listOf(item.id) }.mapTo(channels) { EpgChannelEntity(sourceId, item.id, it, pending = true) }
+            }
+            if (item !is XmltvProgramme) continue
+            batch += ProgramEntity(
+                sourceId = sourceId, channelId = item.channel, start = item.start, stop = item.stop,
+                title = item.title, description = item.description, category = item.category, pending = true,
+            )
+            if (batch.size == BATCH) {
+                currentCoroutineContext().ensureActive()
+                dao.insertPrograms(batch)
+                batch.clear()
+            }
+        }
     }
 
     suspend fun nowNext(sourceId: Long, stableKey: String, at: Long = nowSeconds()): NowNext {
@@ -130,16 +129,16 @@ class EpgRepository(
 
     /** Saves a reminder for [program] on a channel (the existing one if there is one), or returns null if the programme has started already. */
     suspend fun addReminder(sourceId: Long, stableKey: String, channelName: String, program: ProgramEntity): ReminderEntity? {
-        dao.findReminder(sourceId, stableKey, program.start)?.let { return it }
+        db.reminders().findReminder(sourceId, stableKey, program.start)?.let { return it }
         val notifyAt = ReminderPlanner.notifyAt(program.start, nowSeconds()) ?: return null
         val draft = ReminderEntity(
             sourceId = sourceId, stableKey = stableKey, channelName = channelName.take(MAX_NAME),
             title = program.title, startAt = program.start, notifyAt = notifyAt,
         )
-        return draft.copy(id = dao.insertReminder(draft))
+        return draft.copy(id = db.reminders().insertReminder(draft))
     }
 
-    suspend fun removeReminder(id: Long) = dao.deleteReminder(id)
+    suspend fun removeReminder(id: Long) = db.reminders().deleteReminder(id)
 
     private companion object {
         const val BATCH = 2000

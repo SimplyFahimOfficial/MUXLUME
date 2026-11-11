@@ -20,4 +20,4 @@ MUXLUME is a modern, privacy-conscious IPTV player with a cinematic interface.
 <li>Unencrypted HTTP servers are blocked until you explicitly allow them</li>
 </ul>
 
-Not yet available: electronic program guide (XMLTV), catch-up, recording, Android TV layout, backup/restore and parental controls. They are planned and listed in the project's documentation.
+TV guide (XMLTV) with now/next, a timeline and reminders is off until you enable it per playlist. Not yet available: catch-up, recording, Android TV layout, backup/restore and parental controls. They are planned and listed in the project's documentation.

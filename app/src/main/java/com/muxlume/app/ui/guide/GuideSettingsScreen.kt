@@ -72,7 +72,7 @@ class GuideSettingsViewModel(private val c: AppContainer) : ViewModel() {
 
     val refreshing = MutableStateFlow<Set<Long>>(emptySet())
 
-    val reminders: StateFlow<List<ReminderEntity>> = c.db.epg().upcomingReminders(System.currentTimeMillis() / MILLIS)
+    val reminders: StateFlow<List<ReminderEntity>> = c.db.reminders().upcomingReminders(System.currentTimeMillis() / MILLIS)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Runs in the app scope, so leaving the screen doesn't abort a download. */
@@ -91,7 +91,7 @@ class GuideSettingsViewModel(private val c: AppContainer) : ViewModel() {
                 c.epg.refresh(id)
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught", "SwallowedException") ignored: Exception) {
                 // Stored on the source (epgError) and shown on its card.
             } finally {
                 refreshing.update { it - id }
@@ -144,7 +144,7 @@ fun GuideSettingsScreen(nav: Nav) {
 
             Spacer(Modifier.height(12.dp))
             SectionHeader(stringResource(R.string.guide_background_updates))
-            Toggle(stringResource(R.string.guide_wifi_only), stringResource(R.string.guide_wifi_only_body), settings.guideWifiOnly, { scope.launch { c.settings.setGuideWifiOnly(it) } })
+            Toggle(stringResource(R.string.guide_wifi_only), stringResource(R.string.guide_wifi_only_body), settings.guideWifiOnly) { scope.launch { c.settings.setGuideWifiOnly(it) } }
 
             Spacer(Modifier.height(12.dp))
             SectionHeader(stringResource(R.string.guide_reminders))
@@ -157,9 +157,15 @@ fun GuideSettingsScreen(nav: Nav) {
 }
 
 @Composable
-private fun SourceGuideCard(s: SourceEntity, hasLink: Boolean, refreshing: Boolean, onToggle: (Boolean) -> Unit, onRefresh: () -> Unit, onMatch: () -> Unit) {
+private fun SourceGuideCard(
+    s: SourceEntity, hasLink: Boolean, refreshing: Boolean,
+    onToggle: (Boolean) -> Unit, onRefresh: () -> Unit, onMatch: () -> Unit,
+) {
     Column(Modifier.padding(horizontal = Mux.ScreenPadding, vertical = 6.dp).fillMaxWidth().clip(Mux.CardShape).background(MuxTheme.Surface)) {
-        Text(s.name, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 16.dp, top = 14.dp, end = 16.dp))
+        Text(
+            s.name, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 16.dp, top = 14.dp, end = 16.dp),
+        )
         val (status, isError) = when {
             !hasLink -> stringResource(R.string.guide_no_link) to false
             s.epgError != null && s.guideEnabled -> s.epgError to true
@@ -171,7 +177,7 @@ private fun SourceGuideCard(s: SourceEntity, hasLink: Boolean, refreshing: Boole
             ) to false
         }
         Text(status!!, style = MaterialTheme.typography.bodySmall, color = if (isError) MuxTheme.Error else MuxTheme.TextSecondary, modifier = Modifier.padding(horizontal = 16.dp))
-        Toggle(stringResource(R.string.guide_download), stringResource(R.string.guide_download_body), s.guideEnabled, onToggle, enabled = hasLink)
+        Toggle(stringResource(R.string.guide_download), stringResource(R.string.guide_download_body), s.guideEnabled, enabled = hasLink, onChange = onToggle)
         if (s.guideEnabled) {
             Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (refreshing) {
@@ -187,10 +193,16 @@ private fun SourceGuideCard(s: SourceEntity, hasLink: Boolean, refreshing: Boole
 
 @Composable
 private fun ReminderRow(r: ReminderEntity, onDelete: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(start = Mux.ScreenPadding, end = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = Mux.ScreenPadding, end = 8.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Column(Modifier.weight(1f)) {
             Text(r.title, style = MaterialTheme.typography.titleSmall, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${r.channelName} · ${EpgTime.date(r.startAt)} ${EpgTime.time(r.startAt)}", style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                "${r.channelName} · ${EpgTime.date(r.startAt)} ${EpgTime.time(r.startAt)}",
+                style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
         }
         IconButton(onDelete) { Icon(Icons.Rounded.Close, stringResource(R.string.guide_delete_reminder, r.title), tint = MuxTheme.TextSecondary) }
     }

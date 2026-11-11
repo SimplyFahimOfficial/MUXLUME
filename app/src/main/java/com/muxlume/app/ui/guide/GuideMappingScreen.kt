@@ -66,9 +66,9 @@ fun GuideMappingScreen(sourceId: Long, onBack: () -> Unit) {
     val c = context.container
     val scope = rememberCoroutineScope()
     var tab by remember { mutableIntStateOf(0) }
-    val unmatchedCount by c.db.epg().unmatchedCount(sourceId).collectAsStateWithLifecycle(0)
+    val unmatchedCount by c.db.guide().unmatchedCount(sourceId).collectAsStateWithLifecycle(0)
     val pager = remember(sourceId, tab) {
-        Pager(PagingConfig(pageSize = PAGE_SIZE)) { if (tab == 0) c.db.epg().unmatchedPage(sourceId) else c.db.epg().manualPage(sourceId) }.flow
+        Pager(PagingConfig(pageSize = PAGE_SIZE)) { if (tab == 0) c.db.guide().unmatchedPage(sourceId) else c.db.guide().manualPage(sourceId) }.flow
     }
     val items = pager.collectAsLazyPagingItems()
     var picking by remember { mutableStateOf<ItemEntity?>(null) }
@@ -114,7 +114,7 @@ fun GuideMappingScreen(sourceId: Long, onBack: () -> Unit) {
 @Composable
 private fun MappingRow(item: ItemEntity, manual: Boolean, onChoose: () -> Unit, onUnlink: () -> Unit) {
     val c = LocalContext.current.container
-    val guideChannel by c.db.epg().manualChannel(item.sourceId, item.stableKey).collectAsStateWithLifecycle(null)
+    val guideChannel by c.db.guide().manualChannel(item.sourceId, item.stableKey).collectAsStateWithLifecycle(null)
     Row(
         Modifier.fillMaxWidth().padding(start = Mux.ScreenPadding, end = 8.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -161,7 +161,7 @@ private fun GuideChannelPicker(sourceId: Long, forChannel: String, onDismiss: ()
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onDismiss) { Text(stringResource(R.string.live_cancel), color = MuxTheme.Primary) } },
+        dismissButton = { TextButton(onDismiss) { Text(stringResource(R.string.settings_cancel), color = MuxTheme.Primary) } },
     )
 }
 

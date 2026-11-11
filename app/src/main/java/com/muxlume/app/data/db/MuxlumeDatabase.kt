@@ -45,18 +45,6 @@ interface SourceDao {
 
     @Query("SELECT * FROM sources")
     suspend fun allNow(): List<SourceEntity>
-
-    @Query("UPDATE sources SET guideEnabled = :enabled WHERE id = :id")
-    suspend fun setGuideEnabled(id: Long, enabled: Boolean)
-
-    @Query("UPDATE sources SET epgRefreshedAt = :at, epgError = NULL, epgPrograms = :programs WHERE id = :id")
-    suspend fun setGuideDone(id: Long, at: Long, programs: Int)
-
-    @Query("UPDATE sources SET epgError = :error WHERE id = :id")
-    suspend fun setGuideError(id: Long, error: String?)
-
-    @Query("UPDATE sources SET epgRefreshedAt = NULL, epgError = NULL, epgPrograms = 0 WHERE id = :id")
-    suspend fun resetGuide(id: Long)
 }
 
 @Dao
@@ -234,6 +222,10 @@ abstract class MuxlumeDatabase : RoomDatabase() {
     abstract fun favorites(): FavoriteDao
     abstract fun history(): HistoryDao
     abstract fun epg(): EpgDao
+
+    abstract fun guide(): GuideDao
+
+    abstract fun reminders(): ReminderDao
 
     /** v2: staged imports (`items.pending`) and the full-text index, filled from existing rows. */
     class Migration1To2 : AutoMigrationSpec {

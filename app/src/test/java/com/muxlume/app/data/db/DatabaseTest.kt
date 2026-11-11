@@ -135,7 +135,7 @@ class DatabaseTest {
             val source = runBlocking { migrated.sources().get(1) }!!
             assertThat(source.guideEnabled).isFalse()
             assertThat(source.epgPrograms).isEqualTo(0)
-            assertThat(runBlocking { migrated.epg().remindersAfter(0) }).isEmpty()
+            assertThat(runBlocking { migrated.reminders().remindersAfter(0) }).isEmpty()
         } finally {
             migrated.close()
         }

@@ -29,8 +29,8 @@ class EpgRefreshWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 c.epg.refresh(source.id)
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
-                // Already stored on the source by refresh(); continue with the next one.
+            } catch (@Suppress("TooGenericExceptionCaught", "SwallowedException") ignored: Exception) {
+                // Already stored on the source by refresh(); one bad guide must not stop the others.
             }
         }
         return Result.success()
@@ -43,9 +43,10 @@ class EpgRefreshWorker(context: Context, params: WorkerParameters) : CoroutineWo
 
 object EpgWork {
     private const val NAME = "epg-refresh"
+    private const val REFRESH_HOURS = 12L
 
     fun schedule(context: Context, unmeteredOnly: Boolean) {
-        val request = PeriodicWorkRequestBuilder<EpgRefreshWorker>(12, TimeUnit.HOURS)
+        val request = PeriodicWorkRequestBuilder<EpgRefreshWorker>(REFRESH_HOURS, TimeUnit.HOURS)
             .setConstraints(
                 Constraints.Builder()
                     .setRequiredNetworkType(if (unmeteredOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)

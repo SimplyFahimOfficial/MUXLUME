@@ -10,7 +10,9 @@ core/security/SecretBox.kt     Keystore AES-GCM for source secrets
 data/m3u/M3uParser.kt          streaming, bounded M3U parser (Iterator)
 data/xtream/XtreamApi.kt       Xtream Codes-compatible player_api client, lenient JSON, streamed lists
 data/SourceRepository.kt       add/edit/remove sources, transactional import (refresh)
-data/db/                       Room: sources, items, favorites, history
+data/db/                       Room: sources, items, favorites, history, guide channels/programmes/links, reminders
+data/epg/                      XMLTV parser, channel matching, guide refresh (WorkManager, 12 h)
+reminders/                     inexact alarms, boot re-arm, notification
 data/Settings.kt               DataStore preferences
 playback/PlaybackService.kt    Media3 MediaSessionService owning ExoPlayer; resolves ids to URLs
 playback/MediaIds.kt           "<sourceId>|<stableKey>" playback ids

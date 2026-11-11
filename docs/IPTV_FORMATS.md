@@ -4,7 +4,7 @@
 
 Supported:
 
-- `#EXTM3U` header with `url-tvg` / `x-tvg-url` (the first valid URL is stored for the future EPG).
+- `#EXTM3U` header with `url-tvg` / `x-tvg-url` (the first valid URL is kept, encrypted, as the playlist's guide link; see XMLTV below).
 - `#EXTINF:<duration> key="value" …,Title` with `tvg-id`, `tvg-name`, `tvg-logo`, `tvg-chno`,
   `group-title`; quoted values may contain commas. Titles after the first unquoted comma.
 - `#EXTGRP:` when no `group-title` is given.
@@ -36,8 +36,19 @@ Stream URLs: `/live|movie|series/<user>/<pass>/<id>.<ext>`. Live uses `m3u8` whe
 it, otherwise `ts`. Numbers sent as strings (and the reverse), `{}`/`null` instead of empty lists and
 episode lists keyed by season or flat are all accepted.
 
-Not supported: portal/MAC (Stalker) logins, device impersonation or any unauthorized access, and the
-provider XMLTV guide (planned with the EPG).
+Not supported: portal/MAC (Stalker) logins, device impersonation or any unauthorized access, and a
+custom guide link for Xtream sources (they use the provider's own `xmltv.php`).
+
+## XMLTV guide
+
+- Plain or gzip (detected by magic bytes). Times like `20261110200000 +0100`; programmes without a
+  `stop` are skipped and counted.
+- Stored window: 1 day back to 7 days ahead. Limits: 2 million programmes, 512 MB decompressed,
+  nesting depth 32, bounded text fields.
+- `<!DOCTYPE tv SYSTEM "xmltv.dtd">` is accepted and ignored; a DOCTYPE with an internal subset is
+  rejected. Undefined entities are dropped by the Android parser, never expanded.
+- Channels are matched to guide channels by `tvg-id`, then by normalized name, then by hand
+  (Settings → TV guide → Match channels).
 
 ## Playback engine
 

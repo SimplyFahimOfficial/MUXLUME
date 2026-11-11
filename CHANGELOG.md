@@ -5,6 +5,17 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 
 ## [Unreleased]
 
+### Added
+- TV guide (XMLTV), off until enabled per playlist: guide link on the playlist form or the one the
+  playlist announces, matching by id, name or by hand, now/next in Live TV and the player, a timeline
+  guide with programme details, a 12-hourly Wi-Fi-only background refresh, and reminders (a
+  notification 5 minutes before; inexact timing; needs notification permission on Android 13+).
+- Support: highlighted entry, a separate "More ways to pay" card, tap the QR code to enlarge it with
+  the payee name and UPI ID, and a link to the project's GitHub repository.
+
+### Removed
+- Personal GitHub and Instagram links from the Support screen.
+
 ### Changed
 - HTTP permission is now per source: one source allowing HTTP no longer lets other sources use it.
 - Imports no longer block the app: new lists are staged and swapped in at the end.

@@ -11,10 +11,13 @@ import java.io.InputStream
 import java.time.DateTimeException
 import java.time.LocalDateTime
 import java.time.ZoneOffset
+import java.time.format.DateTimeFormatterBuilder
+import java.time.format.ResolverStyle
+import java.time.temporal.ChronoField
 import java.util.zip.GZIPInputStream
 
 /** The file isn't XMLTV, is malformed, or breaks one of the safety limits. */
-class EpgFormatException(message: String) : IOException(message)
+class EpgFormatException(message: String, cause: Throwable? = null) : IOException(message, cause)
 
 sealed interface XmltvItem
 data class XmltvChannel(val id: String, val names: List<String>) : XmltvItem
@@ -59,18 +62,16 @@ class XmltvParser(
             val p = newParser(input)
             readProlog(p)
             if (p.name != "tv") throw EpgFormatException("Not an XMLTV guide")
-            while (true) {
-                val event = p.next()
-                if (event == XmlPullParser.END_DOCUMENT || (event == XmlPullParser.END_TAG && p.name == "tv")) break
-                if (event != XmlPullParser.START_TAG) continue
-                when (p.name) {
+            children(p) { name ->
+                when (name) {
                     "channel" -> readChannel(p)?.let { yield(it) }
                     "programme" -> readProgramme(p)?.let { yield(it) }
-                    else -> skipElement(p)
+                    else -> return@children false
                 }
+                true
             }
         } catch (e: XmlPullParserException) {
-            throw EpgFormatException("The guide file is malformed")
+            throw EpgFormatException(MALFORMED, e)
         }
     }
 
@@ -85,19 +86,23 @@ class XmltvParser(
         }
     }
 
+    /** Walks the children of the current element; [onChild] returns true if it consumed the child, else the child is skipped. */
+    private inline fun children(p: XmlPullParser, onChild: (String) -> Boolean) {
+        while (true) {
+            when (p.next()) {
+                XmlPullParser.START_TAG -> if (!onChild(p.name)) skipElement(p)
+                XmlPullParser.END_TAG -> return
+                XmlPullParser.END_DOCUMENT -> throw EpgFormatException(ENDS)
+            }
+        }
+    }
+
     private fun readChannel(p: XmlPullParser): XmltvChannel? {
         val id = p.getAttributeValue(null, "id")?.trim()?.take(MAX_ID)
         val names = ArrayList<String>(2)
-        var depth = 1
-        while (depth > 0) {
-            when (p.next()) {
-                XmlPullParser.START_TAG -> {
-                    if (p.name == "display-name" && depth == 1) text(p, MAX_NAME)?.let { if (names.size < MAX_NAMES) names += it }
-                    else { depth++; limitDepth(depth) }
-                }
-                XmlPullParser.END_TAG -> depth--
-                XmlPullParser.END_DOCUMENT -> throw EpgFormatException("The guide file ends unexpectedly")
-            }
+        children(p) { name ->
+            if (name == "display-name") text(p, MAX_NAME)?.takeIf { names.size < MAX_NAMES }?.let(names::add)
+            name == "display-name"
         }
         return if (id.isNullOrEmpty()) null else XmltvChannel(id, names)
     }
@@ -109,38 +114,40 @@ class XmltvParser(
         var title: String? = null
         var description: String? = null
         var category: String? = null
-        var depth = 1
-        while (depth > 0) {
-            when (p.next()) {
-                XmlPullParser.START_TAG -> {
-                    if (depth != 1) { depth++; limitDepth(depth); continue }
-                    when (p.name) {
-                        "title" -> text(p, MAX_TITLE).let { if (title == null) title = it }
-                        "desc" -> text(p, MAX_DESCRIPTION).let { if (description == null) description = it }
-                        "category" -> text(p, MAX_CATEGORY).let { if (category == null) category = it }
-                        else -> { depth++; limitDepth(depth) }
-                    }
-                }
-                XmlPullParser.END_TAG -> depth--
-                XmlPullParser.END_DOCUMENT -> throw EpgFormatException("The guide file ends unexpectedly")
+        // The first of each wins; text() runs every time so the element is always consumed.
+        children(p) { name ->
+            when (name) {
+                "title" -> text(p, MAX_TITLE).let { title = title ?: it }
+                "desc" -> text(p, MAX_DESCRIPTION).let { description = description ?: it }
+                "category" -> text(p, MAX_CATEGORY).let { category = category ?: it }
+                else -> return@children false
             }
+            true
         }
-        if (channel.isNullOrEmpty() || title.isNullOrEmpty() || start == null || stop == null || stop <= start) {
-            skipped++
-            return null
-        }
-        if (stop <= nowSeconds - keepBehindSeconds || start >= nowSeconds + keepAheadSeconds) {
+        val range = if (start != null && stop != null && stop > start) start..stop else return skip()
+        if (channel.isNullOrEmpty() || title.isNullOrEmpty()) return skip()
+        return admit(XmltvProgramme(channel, range.first, range.last, title, description, category))
+    }
+
+    /** The programme if it is inside the window and the limit; counted as outside otherwise. */
+    private fun admit(programme: XmltvProgramme): XmltvProgramme? {
+        if (programme.stop <= nowSeconds - keepBehindSeconds || programme.start >= nowSeconds + keepAheadSeconds) {
             outsideWindow++
             return null
         }
         if (kept >= maxProgrammes) throw EpgFormatException("The guide has too many programmes")
         kept++
-        return XmltvProgramme(channel, start, stop, title!!, description, category)
+        return programme
+    }
+
+    private fun skip(): XmltvProgramme? {
+        skipped++
+        return null
     }
 
     /** Text of the current element (consumes its end tag), whitespace collapsed and cut to [max]; null if empty. */
     private fun text(p: XmlPullParser, max: Int): String? {
-        val raw = try { p.nextText() } catch (e: XmlPullParserException) { throw EpgFormatException("The guide file is malformed") }
+        val raw = try { p.nextText() } catch (e: XmlPullParserException) { throw EpgFormatException(MALFORMED, e) }
         return raw.trim().replace(WHITESPACE, " ").take(max).ifEmpty { null }
     }
 
@@ -150,7 +157,7 @@ class XmltvParser(
             when (p.next()) {
                 XmlPullParser.START_TAG -> { depth++; limitDepth(depth) }
                 XmlPullParser.END_TAG -> depth--
-                XmlPullParser.END_DOCUMENT -> throw EpgFormatException("The guide file ends unexpectedly")
+                XmlPullParser.END_DOCUMENT -> throw EpgFormatException(ENDS)
             }
         }
     }
@@ -164,7 +171,12 @@ class XmltvParser(
         const val KEEP_AHEAD = 7L * 24 * 3600
         const val MAX_PROGRAMMES = 2_000_000
         const val MAX_DECOMPRESSED = 512L * 1024 * 1024
+        private const val MALFORMED = "The guide file is malformed"
+        private const val ENDS = "The guide file ends unexpectedly"
         private const val MAX_DEPTH = 32
+        private const val SECONDS_PER_MINUTE = 60
+        private const val SECONDS_PER_HOUR = 3600
+        const val MAX_TEXT_RUN = 256 * 1024
         private const val MAX_ID = 200
         private const val MAX_NAME = 200
         private const val MAX_NAMES = 8
@@ -199,23 +211,28 @@ class XmltvParser(
         }
 
         // 20261110213000 +0100, 202611102130 Z, 20261110213000, 20261110213000 +01:00
-        private val TIME = Regex("""^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?\s*(Z|[+-]\d{2}:?\d{2})?$""")
+        private val TIME = Regex("""^(\d{12}|\d{14})\s*(Z|[+-]\d{2}:?\d{2})?$""")
+        // Fixed-width fields: a pattern like "uuuuMMdd..." parses the year greedily on some JDKs.
+        private val DATE_TIME = DateTimeFormatterBuilder()
+            .appendValue(ChronoField.YEAR, 4).appendValue(ChronoField.MONTH_OF_YEAR, 2).appendValue(ChronoField.DAY_OF_MONTH, 2)
+            .appendValue(ChronoField.HOUR_OF_DAY, 2).appendValue(ChronoField.MINUTE_OF_HOUR, 2)
+            .optionalStart().appendValue(ChronoField.SECOND_OF_MINUTE, 2).optionalEnd()
+            .toFormatter().withResolverStyle(ResolverStyle.STRICT)
 
         /** XMLTV time to epoch seconds; no offset means UTC. Null if it isn't a valid time. */
         fun parseXmltvTime(value: String?): Long? {
-            val g = TIME.matchEntire(value?.trim() ?: return null)?.groupValues ?: return null
-            val zone = g[7]
+            val (date, zone) = TIME.matchEntire(value?.trim() ?: return null)?.destructured ?: return null
             return try {
                 val offset = when {
                     zone.isEmpty() || zone == "Z" -> ZoneOffset.UTC
                     else -> {
                         val digits = zone.drop(1).replace(":", "")
-                        val total = digits.take(2).toInt() * 3600 + digits.drop(2).toInt() * 60
+                        val total = digits.take(2).toInt() * SECONDS_PER_HOUR + digits.drop(2).toInt() * SECONDS_PER_MINUTE
                         ZoneOffset.ofTotalSeconds(if (zone[0] == '-') -total else total)
                     }
                 }
-                LocalDateTime.of(g[1].toInt(), g[2].toInt(), g[3].toInt(), g[4].toInt(), g[5].toInt(), g[6].ifEmpty { "0" }.toInt()).toEpochSecond(offset)
-            } catch (e: DateTimeException) {
+                LocalDateTime.parse(date, DATE_TIME).toEpochSecond(offset)
+            } catch (ignored: DateTimeException) {
                 null
             }
         }
@@ -223,7 +240,7 @@ class XmltvParser(
 }
 
 /** Refuses input where more than [maxRun] bytes pass without a `<`. */
-internal class MarkupGuardStream(input: InputStream, private val maxRun: Int = 256 * 1024) : FilterInputStream(input) {
+internal class MarkupGuardStream(input: InputStream, private val maxRun: Int = XmltvParser.MAX_TEXT_RUN) : FilterInputStream(input) {
     private var run = 0
 
     override fun read(): Int = super.read().also { if (it >= 0) track(it) }

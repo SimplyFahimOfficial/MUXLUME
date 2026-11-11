@@ -53,7 +53,7 @@ fun ProgramSheet(item: ItemEntity, program: ProgramEntity, onWatch: () -> Unit, 
     val res = LocalResources.current
     val c = context.container
     val scope = rememberCoroutineScope()
-    val reminder by c.db.epg().reminderFor(item.sourceId, item.stableKey, program.start).collectAsStateWithLifecycle(null)
+    val reminder by c.db.reminders().reminderFor(item.sourceId, item.stableKey, program.start).collectAsStateWithLifecycle(null)
     val canRemind = remember(program) { program.start > System.currentTimeMillis() / MILLIS }
 
     fun toast(id: Int, vararg args: Any) = Toast.makeText(context, res.getString(id, *args), Toast.LENGTH_SHORT).show()

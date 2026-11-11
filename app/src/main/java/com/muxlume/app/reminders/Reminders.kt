@@ -59,7 +59,7 @@ class ReminderReceiver : BroadcastReceiver() {
         val pending = goAsync()
         container.appScope.launch(Dispatchers.IO) {
             try {
-                val dao = container.db.epg()
+                val dao = container.db.reminders()
                 when (intent.action) {
                     ReminderScheduler.ACTION_FIRE -> {
                         val id = intent.getLongExtra(ReminderScheduler.EXTRA_ID, -1)

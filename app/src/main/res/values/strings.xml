@@ -44,7 +44,7 @@
     <string name="about_which_formats_work">Which formats work?</string>
     <string name="about_hls_m3u8_mpeg_dash_mpd">HLS (.m3u8), MPEG-DASH (.mpd), RTSP and progressive files such as MPEG-TS, MP4 and MKV, as far as this device\'s decoders support the codecs. DRM-protected streams and RTMP are not supported.</string>
     <string name="about_where_is_the_tv_guide">Where is the TV guide?</string>
-    <string name="about_the_electronic_program_guide_xmltv">The electronic program guide (XMLTV) is in development and not available in this version.</string>
+    <string name="about_the_electronic_program_guide_xmltv">Open Live TV and tap the calendar icon. The guide is off until you turn it on for a playlist (when adding it, or in Settings → TV guide). It needs a guide link: yours, or the one your playlist announces. Xtream playlists use the provider\'s own guide. Reminders need notification permission.</string>
     <string name="about_androidx_compose_media3_exoplayer_room">AndroidX (Compose, Media3/ExoPlayer, Room, DataStore, Navigation, Lifecycle)</string>
     <string name="about_apache_license_2_0">Apache License 2.0</string>
     <string name="about_kotlin_and_kotlinx_coroutines_serialization">Kotlin and kotlinx (coroutines, serialization)</string>
@@ -344,10 +344,70 @@
     <string name="support_enlarge_the_qr_code">Enlarge the QR code</string>
     <string name="support_close">Close</string>
 
-    <!-- TV guide -->
+    <string name="add_source_guide_link">TV guide link (optional)</string>
+    <string name="add_source_guide_link_invalid">The TV guide link must start with http:// or https://.</string>
+    <string name="add_source_use_the_tv_guide">Use the TV guide</string>
+    <string name="add_source_use_the_tv_guide_body">Download programme data now and about every 12 hours on Wi-Fi.</string>
     <string name="error_no_guide_link">This source has no TV guide link.</string>
     <string name="error_guide_format">The TV guide file isn\'t valid or is too large to read.</string>
     <string name="reminders_channel_name">Programme reminders</string>
     <string name="reminders_starting_soon">Starting soon: %1$s</string>
     <string name="reminders_channel_at">%1$s · %2$s</string>
+
+    <!-- TV guide -->
+    <string name="guide_title">TV guide</string>
+    <string name="guide_settings_title">TV guide</string>
+    <string name="guide_settings_summary">Guide links, updates, channel matching and reminders</string>
+    <string name="guide_settings_intro">The guide is downloaded only for playlists where you switch it on, from the guide link you provided or the one your playlist announces.</string>
+    <string name="guide_playlists">Playlists</string>
+    <string name="guide_no_playlists">Add a playlist first.</string>
+    <string name="guide_no_link">No guide link. Edit the playlist to add one.</string>
+    <string name="guide_off">Guide is off for this playlist.</string>
+    <string name="guide_not_downloaded">Not downloaded yet.</string>
+    <string name="guide_status">%1$s, updated %2$s</string>
+    <string name="guide_download">Download guide</string>
+    <string name="guide_download_body">Fetch programme data from the guide link.</string>
+    <string name="guide_refresh_now">Refresh now</string>
+    <string name="guide_match_channels">Match channels</string>
+    <string name="guide_background_updates">Background updates</string>
+    <string name="guide_wifi_only">Wi-Fi only</string>
+    <string name="guide_wifi_only_body">Refresh the guide about every 12 hours, only on Wi-Fi.</string>
+    <string name="guide_reminders">Reminders</string>
+    <string name="guide_no_reminders">No reminders set.</string>
+    <string name="guide_delete_reminder">Delete reminder for %1$s</string>
+    <string name="guide_none_title">No guide yet</string>
+    <string name="guide_none_body">Turn on the guide for a playlist to see what is on.</string>
+    <string name="guide_none_action">Guide settings</string>
+    <string name="guide_empty_title">Nothing to show</string>
+    <string name="guide_empty_body">No channels here are matched to the guide yet.</string>
+    <string name="guide_stale">Guide updated %1$s</string>
+    <string name="guide_today">Today</string>
+    <string name="guide_tomorrow">Tomorrow</string>
+    <string name="guide_already_started">This programme has already started.</string>
+    <string name="guide_notifications_off">Notifications are turned off for MUXLUME. Turn them on in system settings.</string>
+    <string name="guide_notifications_denied">Notifications were not allowed, so no reminder was set.</string>
+    <string name="guide_reminder_set">Reminder set for %1$s</string>
+    <string name="guide_reminder_removed">Reminder removed</string>
+    <string name="guide_watch_channel">Watch channel</string>
+    <string name="guide_remind_me">Remind me</string>
+    <string name="guide_remove_reminder">Remove reminder</string>
+    <string name="guide_mapping_title">Match channels</string>
+    <string name="guide_unmatched">Unmatched</string>
+    <string name="guide_matched_by_you">Matched by you</string>
+    <string name="guide_nothing_unmatched">Every channel is matched.</string>
+    <string name="guide_nothing_manual">You have not matched any channels by hand.</string>
+    <string name="guide_unlink">Unlink %1$s</string>
+    <string name="guide_choose">Choose</string>
+    <string name="guide_choose_for">Guide channel for %1$s</string>
+    <string name="guide_search_channels">Search guide channels</string>
+    <string name="guide_no_results">No guide channels found.</string>
+    <string name="guide_next">Next: %1$s</string>
+    <plurals name="guide_programmes">
+        <item quantity="one">%1$d programme</item>
+        <item quantity="other">%1$d programmes</item>
+    </plurals>
+    <plurals name="guide_unmatched_count">
+        <item quantity="one">%1$d channel unmatched</item>
+        <item quantity="other">%1$d channels unmatched</item>
+    </plurals>
 </resources>

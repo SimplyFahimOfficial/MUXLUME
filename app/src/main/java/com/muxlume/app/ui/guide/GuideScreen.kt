@@ -43,6 +43,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -94,7 +95,6 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.TextStyle
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 private val HOUR_WIDTH = 180.dp
@@ -124,7 +124,7 @@ class GuideViewModel(private val c: AppContainer) : ViewModel() {
 
     /** Live channels that have guide data, a page at a time. */
     val channels: Flow<PagingData<ItemEntity>> = combine(sourceId, group) { id, g -> id to g }.flatMapLatest { (id, g) ->
-        if (id == null) flowOf(PagingData.empty()) else Pager(PagingConfig(pageSize = PAGE_SIZE)) { c.db.epg().linkedPage(id, g) }.flow
+        if (id == null) flowOf(PagingData.empty()) else Pager(PagingConfig(pageSize = PAGE_SIZE)) { c.db.guide().linkedPage(id, g) }.flow
     }.cachedIn(viewModelScope)
 
     fun pick(id: Long) { picked.value = id; group.value = null }
@@ -229,13 +229,13 @@ fun GuideScreen(nav: Nav) {
 }
 
 @Composable
-private fun dayLabels(today: LocalDate): List<String> = (0 until DAYS).map { i ->
+private fun dayLabels(today: LocalDate): List<String> = LocalLocale.current.platformLocale.let { locale -> (0 until DAYS).map { i ->
     when (i) {
         0 -> stringResource(R.string.guide_today)
         1 -> stringResource(R.string.guide_tomorrow)
-        else -> today.plusDays(i.toLong()).let { "${it.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())} ${it.dayOfMonth}" }
+        else -> today.plusDays(i.toLong()).let { "${it.dayOfWeek.getDisplayName(TextStyle.SHORT, locale)} ${it.dayOfMonth}" }
     }
-}
+} }
 
 /** Hour marks across the top, in local clock time (so a daylight-saving day skips or repeats an hour). */
 @Composable

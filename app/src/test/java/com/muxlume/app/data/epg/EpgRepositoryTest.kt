@@ -212,11 +212,11 @@ class EpgRepositoryTest {
         val r = epg.addReminder(id, k, "BBC One", next)!!
         assertThat(r.notifyAt).isEqualTo(next.start - 5 * 60)
         assertThat(epg.addReminder(id, k, "BBC One", next)!!.id).isEqualTo(r.id) // again: the same reminder, not a duplicate
-        assertThat(db.epg().remindersAfter(0)).hasSize(1)
+        assertThat(db.reminders().remindersAfter(0)).hasSize(1)
 
         assertThat(epg.addReminder(id, k, "BBC One", epg.nowNext(id, k).now!!)).isNull()
         epg.removeReminder(r.id)
-        assertThat(db.epg().remindersAfter(0)).isEmpty()
+        assertThat(db.reminders().remindersAfter(0)).isEmpty()
     }
 
     @Test

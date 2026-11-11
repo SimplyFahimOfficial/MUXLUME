@@ -120,59 +120,6 @@ abstract class EpgDao {
     )
     abstract suspend fun upcoming(sourceId: Long, stableKey: String, now: Long, limit: Int): List<ProgramEntity>
 
-    /** Live channels that have guide data, in provider order. */
-    @Query(
-        """SELECT i.* FROM items i JOIN epg_links l ON l.sourceId = i.sourceId AND l.stableKey = i.stableKey
-           WHERE i.sourceId = :sourceId AND i.kind = 'LIVE' AND i.pending = 0 AND (:group IS NULL OR i.groupTitle = :group)
-           ORDER BY i.position""",
-    )
-    abstract fun linkedPage(sourceId: Long, group: String?): PagingSource<Int, ItemEntity>
-
-    @Query(
-        """SELECT * FROM items WHERE sourceId = :sourceId AND kind = 'LIVE' AND pending = 0
-           AND NOT EXISTS (SELECT 1 FROM epg_links l WHERE l.sourceId = items.sourceId AND l.stableKey = items.stableKey)
-           ORDER BY position""",
-    )
-    abstract fun unmatchedPage(sourceId: Long): PagingSource<Int, ItemEntity>
-
-    @Query(
-        """SELECT i.* FROM items i JOIN epg_links l ON l.sourceId = i.sourceId AND l.stableKey = i.stableKey
-           WHERE l.sourceId = :sourceId AND l.manual = 1 AND i.kind = 'LIVE' AND i.pending = 0 ORDER BY i.position""",
-    )
-    abstract fun manualPage(sourceId: Long): PagingSource<Int, ItemEntity>
-
-    @Query(
-        """SELECT COUNT(*) FROM items WHERE sourceId = :sourceId AND kind = 'LIVE' AND pending = 0
-           AND NOT EXISTS (SELECT 1 FROM epg_links l WHERE l.sourceId = items.sourceId AND l.stableKey = items.stableKey)""",
-    )
-    abstract fun unmatchedCount(sourceId: Long): Flow<Int>
-
-    @Query("SELECT channelId FROM epg_links WHERE sourceId = :sourceId AND stableKey = :stableKey AND manual = 1")
-    abstract fun manualChannel(sourceId: Long, stableKey: String): Flow<String?>
-
-    // ---- Reminders
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    abstract suspend fun insertReminder(reminder: ReminderEntity): Long
-
-    @Query("DELETE FROM reminders WHERE id = :id")
-    abstract suspend fun deleteReminder(id: Long)
-
-    @Query("SELECT * FROM reminders WHERE id = :id")
-    abstract suspend fun reminder(id: Long): ReminderEntity?
-
-    @Query("SELECT * FROM reminders WHERE sourceId = :sourceId AND stableKey = :stableKey AND startAt = :startAt")
-    abstract suspend fun findReminder(sourceId: Long, stableKey: String, startAt: Long): ReminderEntity?
-
-    @Query("SELECT * FROM reminders WHERE sourceId = :sourceId AND stableKey = :stableKey AND startAt = :startAt")
-    abstract fun reminderFor(sourceId: Long, stableKey: String, startAt: Long): Flow<ReminderEntity?>
-
-    @Query("SELECT * FROM reminders WHERE notifyAt > :now ORDER BY notifyAt")
-    abstract fun upcomingReminders(now: Long): Flow<List<ReminderEntity>>
-
-    @Query("SELECT * FROM reminders WHERE notifyAt > :now")
-    abstract suspend fun remindersAfter(now: Long): List<ReminderEntity>
-
     companion object {
         private const val LINK_BATCH = 500
 
