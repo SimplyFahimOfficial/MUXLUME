@@ -18,6 +18,14 @@ val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
+/** How much of a stream the player buffers ahead: more rides out a weak connection, less starts and switches faster. */
+@Suppress("MagicNumber") // buffer durations in milliseconds
+enum class BufferMode(val minMs: Int, val maxMs: Int, val startMs: Int, val resumeMs: Int) {
+    NORMAL(50_000, 50_000, 2_500, 5_000),
+    LARGE(30_000, 120_000, 5_000, 10_000),
+    SMALL(5_000, 15_000, 1_000, 2_000),
+}
+
 /** Highlight colour; maps to a [androidx.compose.ui.graphics.Color] in the theme. */
 enum class Accent { ORANGE, AMBER, CRIMSON, TEAL, VIOLET }
 
@@ -35,6 +43,7 @@ data class AppSettings(
     val dynamicColor: Boolean = false,
     /** Refresh the TV guide in the background only on an unmetered (Wi-Fi) network. */
     val guideWifiOnly: Boolean = true,
+    val buffer: BufferMode = BufferMode.NORMAL,
 )
 
 class SettingsRepository(private val store: DataStore<Preferences>) {
@@ -47,6 +56,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val accent = stringPreferencesKey("accent")
         val dynamicColor = booleanPreferencesKey("dynamic_color")
         val guideWifiOnly = booleanPreferencesKey("guide_wifi_only")
+        val buffer = stringPreferencesKey("buffer")
     }
 
     val settings: Flow<AppSettings> = store.data
@@ -61,6 +71,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
             accent = it[Keys.accent]?.let(::accentOf) ?: Accent.ORANGE,
             dynamicColor = it[Keys.dynamicColor] ?: false,
             guideWifiOnly = it[Keys.guideWifiOnly] ?: true,
+            buffer = BufferMode.entries.firstOrNull { m -> m.name == it[Keys.buffer] } ?: BufferMode.NORMAL,
         )
     }
 
@@ -74,6 +85,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
     suspend fun setAccent(accent: Accent) = store.edit { it[Keys.accent] = accent.name }
     suspend fun setDynamicColor(on: Boolean) = store.edit { it[Keys.dynamicColor] = on }
     suspend fun setGuideWifiOnly(on: Boolean) = store.edit { it[Keys.guideWifiOnly] = on }
+    suspend fun setBuffer(mode: BufferMode) = store.edit { it[Keys.buffer] = mode.name }
 
     private fun themeOf(name: String) = runCatching { ThemeMode.valueOf(name) }.getOrDefault(ThemeMode.DARK)
     private fun accentOf(name: String) = runCatching { Accent.valueOf(name) }.getOrDefault(Accent.ORANGE)

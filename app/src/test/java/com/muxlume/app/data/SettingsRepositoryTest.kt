@@ -30,11 +30,13 @@ class SettingsRepositoryTest {
         r.setAccent(Accent.TEAL)
         r.setAmoled(true)
         r.setDynamicColor(true)
+        r.setBuffer(BufferMode.LARGE)
         val s = r.current()
         assertThat(s.theme).isEqualTo(ThemeMode.LIGHT)
         assertThat(s.accent).isEqualTo(Accent.TEAL)
         assertThat(s.amoled).isTrue()
         assertThat(s.dynamicColor).isTrue()
+        assertThat(s.buffer).isEqualTo(BufferMode.LARGE)
     }
 
     @Test

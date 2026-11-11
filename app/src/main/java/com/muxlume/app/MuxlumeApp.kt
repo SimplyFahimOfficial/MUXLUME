@@ -15,6 +15,7 @@ import com.muxlume.app.core.net.CleartextGate
 import com.muxlume.app.core.net.Http
 import com.muxlume.app.core.security.SecretBox
 import com.muxlume.app.data.SettingsRepository
+import com.muxlume.app.playback.SleepTimer
 import com.muxlume.app.data.SourceRepository
 import com.muxlume.app.data.epg.EpgLinker
 import com.muxlume.app.data.epg.EpgRepository
@@ -48,6 +49,7 @@ class AppContainer(context: Context) {
     private val linker by lazy { EpgLinker(db) }
     val sources by lazy { SourceRepository(db, http, SecretBox(), app.contentResolver, app.resources, linker) }
     val epg by lazy { EpgRepository(db, sources, linker, http, app.resources) }
+    val sleepTimer by lazy { SleepTimer(appScope) { player().pause() } }
     val reminders by lazy { ReminderScheduler(app) }
 
     private val controllerLock = Mutex()

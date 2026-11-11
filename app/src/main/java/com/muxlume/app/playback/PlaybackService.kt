@@ -15,6 +15,7 @@ import androidx.media3.common.Player
 import androidx.media3.datasource.DataSourceBitmapLoader
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
@@ -36,6 +37,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.guava.future
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import okhttp3.Call
 
 /**
@@ -68,7 +70,10 @@ class PlaybackService : MediaSessionService() {
         http = OkHttpDataSource.Factory(
             Call.Factory { req -> container.http.newCall(req.newBuilder().tag(HttpPolicy::class.java, currentPolicy).build()) },
         )
+        // One small read at start-up; the load control cannot change once the player exists.
+        val buffer = runBlocking { container.settings.current().buffer }
         val exo = ExoPlayer.Builder(this)
+            .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(buffer.minMs, buffer.maxMs, buffer.startMs, buffer.resumeMs).build())
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this, http)))
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
             .setHandleAudioBecomingNoisy(true)

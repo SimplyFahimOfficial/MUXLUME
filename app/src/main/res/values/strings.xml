@@ -354,6 +354,15 @@
     <string name="reminders_starting_soon">Starting soon: %1$s</string>
     <string name="reminders_channel_at">%1$s · %2$s</string>
 
+    <string name="settings_buffering">Buffering</string>
+    <string name="settings_buffering_body">More buffering rides out a weak connection; less starts and switches channels faster. Applies the next time the app starts playback after being closed.</string>
+    <string name="settings_buffer_normal">Normal</string>
+    <string name="settings_buffer_large">More</string>
+    <string name="settings_buffer_small">Less</string>
+    <string name="player_sleep_timer">Sleep timer</string>
+    <string name="player_sleep_off">Off</string>
+    <string name="player_sleep_minutes">%1$d min</string>
+    <string name="player_sleep_stops_at">Pauses at %1$s</string>
     <!-- TV guide -->
     <string name="guide_title">TV guide</string>
     <string name="guide_settings_title">TV guide</string>
