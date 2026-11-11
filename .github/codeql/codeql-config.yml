@@ -1,0 +1,15 @@
+# CodeQL configuration for .github/workflows/codeql.yml.
+# Exclusions here are reviewed security exceptions; each one is also listed in SECURITY.md.
+name: MUXLUME CodeQL config
+
+queries:
+  - uses: security-extended
+
+paths:
+  - app/src/main
+paths-ignore:
+  - app/src/test
+  - "**/build/**"
+
+# No reviewed exclusions. (allowBackup is false; cleartext is a documented exception gated in-app,
+# see SECURITY.md.) Add exclusions only with a justification here and in SECURITY.md.

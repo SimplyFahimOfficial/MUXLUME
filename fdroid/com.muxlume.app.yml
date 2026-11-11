@@ -1,0 +1,30 @@
+# Template for the fdroiddata merge request (https://gitlab.com/fdroid/fdroiddata), not used by this
+# repository's builds. Before submitting: the repository must be public, a LICENSE must exist (set
+# License below to its SPDX id), and a release tag must exist. See docs/FDROID.md.
+Categories:
+  - Multimedia
+License: TODO-SPDX-ID
+AuthorName: SimplyFahim
+WebSite: https://simplyfahim.pages.dev/Muxlume
+SourceCode: https://github.com/SimplyFahimOfficial/MUXLUME
+IssueTracker: https://github.com/SimplyFahimOfficial/MUXLUME/issues
+Changelog: https://github.com/SimplyFahimOfficial/MUXLUME/blob/main/CHANGELOG.md
+Donate: https://simplyfahim.pages.dev/pay-options
+
+AutoName: MUXLUME
+
+RepoType: git
+Repo: https://github.com/SimplyFahimOfficial/MUXLUME.git
+
+Builds:
+  - versionName: 0.1.0
+    versionCode: 1
+    commit: v0.1.0
+    subdir: app
+    gradle:
+      - yes
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$
+CurrentVersion: 0.1.0
+CurrentVersionCode: 1

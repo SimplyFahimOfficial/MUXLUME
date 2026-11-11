@@ -1,0 +1,50 @@
+# Dependabot version updates
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Security (Dependabot) *alerts* and automatic *security* update PRs are enabled
+# separately in the GitHub UI (Settings -> Code security). This file only
+# controls scheduled *version* update PRs.
+version: 2
+updates:
+  # Gradle / Android dependencies declared via the version catalog
+  # (gradle/libs.versions.toml) and the build.gradle.kts files.
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "android"
+    # Wait a week (two for major versions) after a release before proposing it: most compromised or broken releases
+    # are found and pulled within that window. Security updates are not delayed by this.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    # Group all non-major Gradle bumps into a single PR to reduce noise.
+    groups:
+      gradle-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions used by the workflows under .github/workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+    # Wait a week after a release before proposing it: most compromised or broken releases are found and pulled
+    # within that window. Security updates are not delayed by this. (Dependabot supports only default-days for
+    # GitHub Actions; per-SemVer cooldowns are rejected for this ecosystem.)
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns:
+          - "*"

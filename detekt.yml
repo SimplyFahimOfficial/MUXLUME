@@ -1,0 +1,53 @@
+# detekt rules for MUXLUME (adapted from Daysemble).
+# Only differences from detekt's defaults are listed. They follow Jetpack Compose conventions
+# (https://detekt.dev/docs/introduction/compose/): composables are PascalCase, take many optional
+# parameters and lay out UI in one function. Logic code keeps the default limits.
+
+comments:
+  # An app module, not a library: KDoc is written where it explains something, not on every
+  # public symbol (Compose screens, test tags, view-model functions).
+  UndocumentedPublicClass:
+    active: false
+  UndocumentedPublicFunction:
+    active: false
+  UndocumentedPublicProperty:
+    active: false
+
+naming:
+  FunctionNaming:
+    ignoreAnnotated: ['Composable']
+  # Files hold a screen plus its small helpers (test-tag objects, state classes).
+  MatchingDeclarationName:
+    active: false
+
+complexity:
+  LongParameterList:
+    ignoreDefaultParameters: true
+    ignoreAnnotated: ['Composable']
+  LongMethod:
+    ignoreAnnotated: ['Composable']
+    excludes: ['**/test/**']
+  CyclomaticComplexMethod:
+    ignoreAnnotated: ['Composable']
+    ignoreSimpleWhenEntries: true
+  TooManyFunctions:
+    excludes: ['**/test/**']
+    thresholdInFiles: 25
+    thresholdInClasses: 25
+    ignorePrivate: true
+
+style:
+  MagicNumber:
+    excludes: ['**/test/**']
+    ignoreAnnotated: ['Composable', 'Preview']
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+    ignoreNamedArgument: true
+  MaxLineLength:
+    maxLineLength: 200
+    excludes: ['**/test/**']
+  ReturnCount:
+    max: 4
+    excludeGuardClauses: true
+  UnusedPrivateMember:
+    ignoreAnnotated: ['Preview']

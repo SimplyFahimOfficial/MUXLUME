@@ -1,0 +1,352 @@
+# GitHub release from a SemVer tag (v1.2.3, or v1.2.3-rc.1 for a pre-release).
+#
+#   validate → build (unsigned, no secrets) → sign (protected `release` environment)
+#            → smoke (emulator) → publish (GitHub release) → attest (public repos)
+#
+# Never publishes anything that did not pass CI and the security checks on the tagged commit.
+# See docs/RELEASE.md for the one-time setup (environment, secrets, certificate fingerprint).
+name: Release (GitHub)
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release (for example v0.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  APP_ID: com.muxlume.app
+  BUILD_TOOLS_VERSION: "36.0.0"
+
+jobs:
+  validate:
+    name: Validate tag, version, changelog and checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read # reads workflow runs for the tagged commit
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      sha: ${{ steps.tag.outputs.sha }}
+      version_name: ${{ steps.version.outputs.version_name }}
+      version_code: ${{ steps.version.outputs.version_code }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          tag="${INPUT_TAG:-$GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error title=Release::'$tag' is not a vMAJOR.MINOR.PATCH[-prerelease] tag"; exit 1
+          fi
+          sha="$(git rev-parse --verify "refs/tags/$tag^{commit}")" || { echo "::error title=Release::tag $tag does not exist"; exit 1; }
+          git checkout --quiet "$sha"
+          if ! git merge-base --is-ancestor "$sha" origin/main; then
+            echo "::error title=Release::$tag ($sha) is not on main. Tag a commit that has been merged to main."; exit 1
+          fi
+          { echo "tag=$tag"; echo "sha=$sha"; } >> "$GITHUB_OUTPUT"
+
+      - name: Version matches the tag
+        id: version
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          SHA: ${{ steps.tag.outputs.sha }}
+        run: |
+          prev="$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$SHA^" 2>/dev/null || true)"
+          args=()
+          if [ -n "$prev" ]; then
+            git show "$prev:app/build.gradle.kts" > "$RUNNER_TEMP/previous.gradle.kts"
+            args=(--previous-build-file "$RUNNER_TEMP/previous.gradle.kts")
+          fi
+          python3 scripts/ci/release_version.py "$TAG" "${args[@]}"
+
+      - name: Changelog has an entry for this version
+        env:
+          VERSION: ${{ steps.version.outputs.version_name }}
+        run: |
+          if ! grep -qE "^## \[${VERSION//./\\.}\]" CHANGELOG.md; then
+            echo "::error title=Release::CHANGELOG.md has no '## [$VERSION]' section"; exit 1
+          fi
+
+      - name: CI and security checks passed on the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.tag.outputs.sha }}
+        run: |
+          for wf in android-ci.yml security.yml codeql.yml; do
+            count="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$wf/runs?head_sha=$SHA&status=success&per_page=1" --jq '.total_count')"
+            if [ "$count" -lt 1 ]; then
+              echo "::error title=Release::no successful $wf run for $SHA. Wait for the checks on main, then re-run."; exit 1
+            fi
+          done
+
+  build:
+    name: Build unsigned release
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.validate.outputs.version_name }}
+      VERSION_CODE: ${{ needs.validate.outputs.version_code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.sha }}
+
+      - uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Android platform 37 and build tools
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;${BUILD_TOOLS_VERSION}" > /dev/null
+
+      # No cache: a release is built from scratch, so nothing a pull request wrote to a cache ends up in it.
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-disabled: true
+
+      - name: Release build (R8) and SBOM
+        run: ./gradlew --no-build-cache assembleRelease bundleRelease :app:cyclonedxDirectBom --stacktrace
+
+      - name: Audit the unsigned APK
+        run: |
+          apk=app/build/outputs/apk/release/app-release-unsigned.apk
+          bt="$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION"
+          "$bt/zipalign" -c -P 16 4 "$apk"
+          python3 scripts/ci/apk_audit.py --apk "$apk" --package "$APP_ID" --version-name "$VERSION" --version-code "$VERSION_CODE" --build-tools "$bt"
+
+      - name: Collect unsigned files
+        run: |
+          mkdir -p unsigned
+          cp app/build/outputs/apk/release/app-release-unsigned.apk unsigned/
+          cp app/build/outputs/bundle/release/app-release.aab unsigned/app-release-unsigned.aab
+          cp app/build/reports/sbom/muxlume-bom.json "unsigned/muxlume-$VERSION-sbom.cdx.json"
+          cp app/build/outputs/mapping/release/mapping.txt "unsigned/muxlume-$VERSION-mapping.txt"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned
+          path: unsigned/
+          retention-days: 7
+          if-no-files-found: error
+
+  sign:
+    name: Sign (protected environment)
+    needs: [validate, build]
+    # Holds the signing secrets. Configure it to allow only v* tags and to require a reviewer.
+    environment: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions: {}
+    env:
+      VERSION: ${{ needs.validate.outputs.version_name }}
+    steps:
+      - name: Check for signing secrets
+        env:
+          MUXLUME_KEYSTORE_BASE64: ${{ secrets.MUXLUME_KEYSTORE_BASE64 }}
+          MUXLUME_KEYSTORE_PASSWORD: ${{ secrets.MUXLUME_KEYSTORE_PASSWORD }}
+          MUXLUME_KEY_ALIAS: ${{ secrets.MUXLUME_KEY_ALIAS }}
+          MUXLUME_KEY_PASSWORD: ${{ secrets.MUXLUME_KEY_PASSWORD }}
+          RELEASE_CERT_SHA256: ${{ vars.RELEASE_CERT_SHA256 }}
+        run: |
+          missing=()
+          for name in MUXLUME_KEYSTORE_BASE64 MUXLUME_KEYSTORE_PASSWORD MUXLUME_KEY_ALIAS MUXLUME_KEY_PASSWORD RELEASE_CERT_SHA256; do
+            if [ -z "${!name}" ]; then missing+=("$name"); fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error title=Release::missing in the release environment: ${missing[*]}. See docs/RELEASE.md."; exit 1
+          fi
+
+      # Only the compiled artifacts are present here: no source checkout, no build, no third-party actions besides artifact transfer.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: unsigned
+          path: unsigned
+
+      - name: Install build tools
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;${BUILD_TOOLS_VERSION}" > /dev/null
+
+      - name: Sign APK and AAB
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MUXLUME_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.MUXLUME_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.MUXLUME_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.MUXLUME_KEY_PASSWORD }}
+        run: |
+          ks="$RUNNER_TEMP/release.jks"
+          trap 'rm -f "$ks"' EXIT
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$ks"
+          mkdir -p dist
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner" sign --ks "$ks" --ks-pass env:KS_PASS --ks-key-alias "$KEY_ALIAS" \
+            --key-pass env:KEY_PASS --out "dist/muxlume-$VERSION.apk" unsigned/app-release-unsigned.apk
+          cp unsigned/app-release-unsigned.aab "dist/muxlume-$VERSION.aab"
+          jarsigner -keystore "$ks" -storepass:env KS_PASS -keypass:env KEY_PASS -sigalg SHA256withRSA -digestalg SHA-256 \
+            "dist/muxlume-$VERSION.aab" "$KEY_ALIAS" > /dev/null
+          cp unsigned/muxlume-*-sbom.cdx.json unsigned/muxlume-*-mapping.txt dist/
+
+      - name: Verify signatures and signing certificate
+        env:
+          EXPECTED_CERT: ${{ vars.RELEASE_CERT_SHA256 }}
+        run: |
+          apk="dist/muxlume-$VERSION.apk"; aab="dist/muxlume-$VERSION.aab"
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner" verify --verbose --print-certs "$apk" > "$RUNNER_TEMP/apksigner.txt"
+          grep -qE "Verified using v(2|3) scheme .*: true" "$RUNNER_TEMP/apksigner.txt" || { echo "::error title=Release::APK not signed with scheme v2/v3"; exit 1; }
+          signers="$(grep -c '^Signer #[0-9]* certificate SHA-256 digest' "$RUNNER_TEMP/apksigner.txt")"
+          actual="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/apksigner.txt")"
+          expected="$(echo "$EXPECTED_CERT" | tr -d ': ' | tr '[:upper:]' '[:lower:]')"
+          if [ "$signers" -ne 1 ] || [ "${#expected}" -ne 64 ] || [ "$actual" != "$expected" ]; then
+            echo "::error title=Release::signing certificate $actual ($signers signer(s)) is not the expected release certificate."; exit 1
+          fi
+          jarsigner -verify "$aab" | grep -qi 'jar verified.' || { echo "::error title=Release::AAB signature did not verify"; exit 1; }
+          aab_cert="$(keytool -printcert -jarfile "$aab" | sed -n 's/^[[:space:]]*SHA256: //p' | head -n1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          [ "$aab_cert" = "$actual" ] || { echo "::error title=Release::APK and AAB signed by different certificates"; exit 1; }
+          echo "$actual" > dist/signing-cert-sha256.txt
+          (cd dist && sha256sum -- *.apk *.aab *.json *.txt > SHA256SUMS.txt)
+          { echo "## Release files"; echo '```'; cat dist/SHA256SUMS.txt; echo '```'; echo "Signing certificate SHA-256: \`$actual\`"; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-files
+          path: dist/
+          retention-days: 30
+          if-no-files-found: error
+
+  smoke:
+    name: Signed APK smoke test (emulator)
+    needs: [validate, sign]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.validate.outputs.version_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.sha }}
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: dist
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules > /dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Launch on emulator
+        env:
+          SMOKE_OUT: build/emulator-smoke
+        run: |
+          (cd dist && sha256sum --check --strict SHA256SUMS.txt)
+          scripts/ci/emulator-smoke.sh "dist/muxlume-$VERSION.apk" "$APP_ID"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: emulator-smoke
+          path: build/emulator-smoke/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  publish:
+    name: Publish GitHub release
+    needs: [validate, sign, smoke]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # creates the release and uploads its files
+    env:
+      VERSION: ${{ needs.validate.outputs.version_name }}
+      PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+      TAG: ${{ needs.validate.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.sha }}
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: dist
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          (cd dist && sha256sum --check --strict SHA256SUMS.txt)
+          cert="$(cat dist/signing-cert-sha256.txt)"
+          # Release notes: this version's CHANGELOG.md section, then verification instructions.
+          awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on {print}' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          {
+            echo
+            echo "## Verify this release"
+            echo
+            echo "- Signing certificate SHA-256: \`$cert\`"
+            echo
+            echo '```sh'
+            echo 'sha256sum --check SHA256SUMS.txt --ignore-missing'
+            echo "apksigner verify --print-certs muxlume-$VERSION.apk"
+            echo '```'
+            echo
+            echo "Built by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID from commit $(git rev-parse HEAD)."
+          } >> "$RUNNER_TEMP/notes.md"
+          flags=()
+          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "MUXLUME $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}" \
+            "dist/muxlume-$VERSION.apk" "dist/muxlume-$VERSION.aab" "dist/muxlume-$VERSION-sbom.cdx.json" \
+            "dist/muxlume-$VERSION-mapping.txt" dist/SHA256SUMS.txt
+          echo "Published $TAG." >> "$GITHUB_STEP_SUMMARY"
+
+  # Build provenance (SLSA, Sigstore). Needs a public repository (or GitHub Enterprise Cloud).
+  attest:
+    name: Build provenance attestation
+    needs: [validate, publish]
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: dist
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/muxlume-*.apk
+            dist/muxlume-*.aab
+            dist/muxlume-*-sbom.cdx.json

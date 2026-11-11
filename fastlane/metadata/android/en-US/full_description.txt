@@ -1,0 +1,23 @@
+MUXLUME is a modern, privacy-conscious IPTV player with a cinematic interface.
+
+<b>MUXLUME is only a player.</b> It does not include or sell channels, subscriptions or any media. You add playlists and provider accounts you are authorized to use.
+
+<b>What it does</b>
+<ul>
+<li>Import M3U/M3U8 playlists from a link or a local file, including large playlists, with progress and cancellation</li>
+<li>Sign in to Xtream Codes-compatible services you subscribe to: live TV, movies and series</li>
+<li>Live TV by group, favorites, recently watched, A–Z sorting and search</li>
+<li>Movie and series pages with provider artwork and metadata, seasons, episodes and resume</li>
+<li>Playback with AndroidX Media3: HLS, DASH, RTSP and progressive streams; audio and subtitle selection; picture-in-picture; optional background audio; system media controls</li>
+<li>Automatic reconnect after network drops, clear error explanations and copyable playback info without links or credentials</li>
+</ul>
+
+<b>Privacy</b>
+<ul>
+<li>No account, ads, analytics or trackers</li>
+<li>Connects only to the playlists, servers and artwork you add</li>
+<li>Playlist links and passwords are encrypted with a key kept in Android's secure key store and are never included in backups</li>
+<li>Unencrypted HTTP servers are blocked until you explicitly allow them</li>
+</ul>
+
+Not yet available: electronic program guide (XMLTV), catch-up, recording, Android TV layout, backup/restore and parental controls. They are planned and listed in the project's documentation.

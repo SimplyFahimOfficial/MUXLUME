@@ -1,0 +1,115 @@
+# Dependency review for pull requests: which shipped (release runtime) dependencies the pull
+# request adds or changes, whether any of those has a known high or critical vulnerability, and
+# whether its licence is allowed. Vulnerabilities in dependencies the pull request does not touch
+# are reported but do not block it; security.yml catches those on main and weekly.
+#
+# GitHub's own dependency-review-action needs the dependency graph and, on private repositories,
+# GitHub Code Security. It runs only when the repository variable DEPENDENCY_REVIEW_ENABLED is
+# 'true' (see SECURITY.md). The SBOM-based job below works on any repository.
+name: Dependency review
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  shipped-dependencies:
+    name: Shipped dependency changes (OSV, licences)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      OSV_VERSION: "2.7.0"
+      OSV_SHA256: 160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Android platform 37
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" > /dev/null
+
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-provider: basic
+          cache-read-only: true
+
+      - name: SBOM of the pull request
+        run: |
+          ./gradlew :app:cyclonedxDirectBom
+          mkdir -p build/reports/deps
+          cp app/build/reports/sbom/muxlume-bom.json build/reports/deps/head.cdx.json
+
+      # The base branch is trusted code (already merged). If it predates the SBOM task, every
+      # dependency counts as added and is checked.
+      - name: SBOM of the base branch
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/base" "$BASE_SHA"
+          if grep -q cyclonedxDirectBom "$RUNNER_TEMP/base/app/build.gradle.kts"; then
+            # The base branch's own wrapper, in case the pull request changes the Gradle version.
+            (cd "$RUNNER_TEMP/base" && ./gradlew :app:cyclonedxDirectBom)
+            cp "$RUNNER_TEMP/base/app/build/reports/sbom/muxlume-bom.json" build/reports/deps/base.cdx.json
+          else
+            echo "::notice title=Dependency review::the base branch has no SBOM task; all shipped dependencies are treated as added."
+            echo '{"components": []}' > build/reports/deps/base.cdx.json
+          fi
+
+      - name: Changed dependencies
+        run: python3 scripts/ci/deps_check.py diff --base build/reports/deps/base.cdx.json --head build/reports/deps/head.cdx.json --out build/reports/deps/changed.txt
+
+      - name: Download OSV-Scanner
+        run: |
+          scripts/ci/fetch-tool.sh "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64" "$OSV_SHA256" "$RUNNER_TEMP/osv-scanner"
+          chmod +x "$RUNNER_TEMP/osv-scanner"
+
+      - name: Known vulnerabilities (added or changed, high and critical block)
+        run: |
+          set +e
+          "$RUNNER_TEMP/osv-scanner" scan source -L build/reports/deps/head.cdx.json --format json > build/reports/deps/osv.json
+          rc=$?
+          set -e
+          if [ "$rc" -gt 1 ]; then echo "::error title=OSV-Scanner::scanner failed (exit $rc)"; exit "$rc"; fi
+          python3 scripts/ci/deps_check.py vulns --osv build/reports/deps/osv.json --only build/reports/deps/changed.txt --fail-at high
+
+      - name: Licences of added or changed dependencies
+        if: always()
+        run: python3 scripts/ci/deps_check.py licenses --sbom build/reports/deps/head.cdx.json --only build/reports/deps/changed.txt
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: dependency-review
+          path: build/reports/deps/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  github-dependency-review:
+    name: GitHub dependency review
+    if: vars.DEPENDENCY_REVIEW_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          # Covers build tooling and GitHub Actions too (the dependency graph), so it complements
+          # the shipped-dependency job above. Comments are off: results go to the job summary.
+          comment-summary-in-pr: never

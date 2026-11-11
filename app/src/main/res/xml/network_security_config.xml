@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  IPTV servers are user-defined at runtime, so no domain list is possible and the platform has to
+  permit cleartext. The actual control is in-app: core/net/Http.kt (CleartextGate) refuses every
+  plain-HTTP request unless the user explicitly allowed HTTP for one of their sources. Only system
+  CAs are trusted (no user-installed CAs), and certificate validation is never disabled.
+  Reviewed exception: see docs/SECURITY.md, "Cleartext HTTP".
+-->
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <base-config cleartextTrafficPermitted="true" tools:ignore="InsecureBaseConfiguration">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

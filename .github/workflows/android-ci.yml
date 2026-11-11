@@ -1,0 +1,195 @@
+# Android CI for pull requests and main: wrapper validation, compile, unit/Robolectric tests,
+# Android Lint, detekt, a whitespace/format check, debug + unsigned R8 release builds, an audit of
+# the release APK, and an emulator launch of the R8 build. Uses no secrets.
+name: Android CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  BUILD_TOOLS_VERSION: "36.0.0"
+  APP_ID: com.muxlume.app
+
+jobs:
+  build:
+    name: Build, tests, lint, APK audit
+    # Pinned image instead of ubuntu-latest; move deliberately once a newer image is verified.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The wrapper JAR runs before anything else in the build; make sure it is an official one.
+      - uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Android platform 37 and build tools
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;${BUILD_TOOLS_VERSION}" > /dev/null
+
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          # MIT-licensed caching (the default provider is proprietary). Only main writes the cache.
+          cache-provider: basic
+
+      - name: Debug build, unit tests and lint
+        run: ./gradlew assembleDebug testDebugUnitTest lintDebug --stacktrace
+
+      - name: Release build (R8, unsigned) and SBOM
+        run: ./gradlew assembleRelease bundleRelease :app:cyclonedxDirectBom --stacktrace
+
+      - name: Audit the release APK
+        run: |
+          apk=app/build/outputs/apk/release/app-release-unsigned.apk
+          python3 scripts/ci/apk_audit.py --apk "$apk" --package "$APP_ID" --build-tools "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION"
+          # 16 KB page-size alignment of native libraries (Android 15+ devices with 16 KB pages).
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/zipalign" -c -P 16 4 "$apk"
+          echo "zipalign: 4-byte aligned, native libraries 16 KB aligned" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Test summary
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob, xml.etree.ElementTree as ET
+          t = f = e = s = 0
+          for p in glob.glob("app/build/test-results/**/*.xml", recursive=True):
+              r = ET.parse(p).getroot()
+              t += int(r.get("tests", 0)); f += int(r.get("failures", 0)); e += int(r.get("errors", 0)); s += int(r.get("skipped", 0))
+          print(f"## Unit tests\n\n{t} tests, {f} failures, {e} errors, {s} skipped\n")
+          PY
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          retention-days: 7
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: muxlume-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
+      # Unsigned: not installable as is. Used by the smoke test job below.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: muxlume-release-unsigned
+          path: |
+            app/build/outputs/apk/release/app-release-unsigned.apk
+            app/build/outputs/mapping/release/mapping.txt
+            app/build/reports/sbom/muxlume-bom.json
+          retention-days: 7
+
+  static:
+    name: detekt and format check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      DETEKT_VERSION: "1.23.8"
+      DETEKT_SHA256: 3afe89a11120303c73c9bdda3d8fe558dd9070a6937d27819ddc04b275381245
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Whitespace and line endings (.editorconfig)
+        run: |
+          if git grep -nIP '[ \t]+$|\r$' -- '*.kt' '*.kts' '*.xml' '*.yml' '*.toml' '*.py' '*.sh'; then
+            echo "::error title=Format::trailing whitespace or CRLF line endings (see .editorconfig)"
+            exit 1
+          fi
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # The detekt CLI, not the Gradle plugin (detekt 1.23's plugin doesn't support this Kotlin version).
+      # Findings already in config/detekt/baseline.xml are tolerated; new ones fail.
+      - name: Download detekt CLI
+        run: scripts/ci/fetch-tool.sh "https://repo.maven.apache.org/maven2/io/gitlab/arturbosch/detekt/detekt-cli/${DETEKT_VERSION}/detekt-cli-${DETEKT_VERSION}-all.jar" "$DETEKT_SHA256" "$RUNNER_TEMP/detekt.jar"
+
+      - name: Run detekt
+        run: |
+          mkdir -p build/reports/detekt
+          java -jar "$RUNNER_TEMP/detekt.jar" --config detekt.yml --build-upon-default-config \
+            --input app/src/main/java,app/src/test/java --baseline config/detekt/baseline.xml \
+            --report md:build/reports/detekt/detekt.md --report sarif:build/reports/detekt/detekt.sarif
+
+      - name: Detekt summary
+        if: always()
+        run: |
+          if [ -f build/reports/detekt/detekt.md ]; then cat build/reports/detekt/detekt.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+  release-smoke:
+    name: Release APK smoke test (emulator)
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: muxlume-release-unsigned
+          path: ${{ runner.temp }}/release
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules > /dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install the build tools for signing
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;${BUILD_TOOLS_VERSION}" > /dev/null
+
+      # A throwaway key generated in this job so the R8 build can be installed. Not the release key.
+      - name: Sign with a throwaway key
+        run: |
+          rel="$RUNNER_TEMP/release"
+          pass="$(openssl rand -hex 16)"
+          keytool -genkeypair -keystore "$rel/smoke.jks" -storepass "$pass" -keypass "$pass" -alias smoke \
+            -keyalg RSA -keysize 2048 -validity 1 -dname "CN=MUXLUME CI smoke test" > /dev/null 2>&1
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/apksigner" sign --ks "$rel/smoke.jks" --ks-pass "pass:$pass" \
+            --out "$rel/smoke.apk" "$rel/outputs/apk/release/app-release-unsigned.apk"
+          rm -f "$rel/smoke.jks"
+
+      - name: Launch on emulator
+        env:
+          SMOKE_OUT: build/emulator-smoke
+        run: scripts/ci/emulator-smoke.sh "$RUNNER_TEMP/release/smoke.apk" "$APP_ID"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: emulator-smoke
+          path: build/emulator-smoke/
+          retention-days: 7
+          if-no-files-found: ignore

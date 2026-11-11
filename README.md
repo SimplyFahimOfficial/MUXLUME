@@ -1,2 +1,62 @@
-# MUXLUME
-Modern Android IPTV player with M3U, Xtream Codes, live TV, VOD, EPG, and a beautifully crafted interface.
+<p align="center">
+  <img src="brand/muxlume-wordmark.png" alt="MUXLUME" width="560">
+</p>
+
+<p align="center">A cinematic, privacy-conscious IPTV player for Android.<br>
+Bring your own M3U playlists and Xtream Codes-compatible accounts.</p>
+
+---
+
+> **MUXLUME is only a player.** It does not include, sell or link to TV channels, subscriptions or
+> copyrighted media, and is not affiliated with any provider. Add only content you are legally
+> allowed to watch.
+
+## Status
+
+Early development, version **0.1.0** (not released yet). The table lists what is in the code today;
+everything else is planned.
+
+| Area | Implemented | Planned |
+|---|---|---|
+| Sources | M3U/M3U8 from a link or a local file (SAF), Xtream Codes-compatible login with connection test, edit, refresh, remove, multiple sources | Periodic background refresh, other provider formats |
+| Live TV | Groups, favorites, recently watched, A–Z sort, search, channel up/down in the player | Hidden channels, custom order, now/next |
+| Movies and series | Poster grids by category, detail pages with provider metadata, seasons and episodes, watchlist, resume, continue watching, next episode | Optional third-party metadata |
+| Playback | Media3 ExoPlayer: HLS, DASH, RTSP, progressive (TS/MP4/MKV…); audio and subtitle tracks; picture size; speed (VOD); PiP; optional background audio; media notification; reconnect with backoff; diagnostics without links | Buffer settings, decoder preferences, catch-up, timeshift, recording |
+| EPG | – | XMLTV import, guide, reminders |
+| Other | Onboarding, settings, help/about, data deletion | Backup/restore, parental PIN, light theme, Android TV layout |
+
+There are no app screenshots yet; they will be added from real devices.
+
+## Privacy and security in short
+
+- No account, ads, analytics or trackers. Network traffic goes only to the sources you add.
+- Playlist links, usernames and passwords are encrypted with an Android Keystore key and excluded from backups.
+- Plain-HTTP servers are refused until you explicitly allow HTTP for a source.
+- Untrusted playlists are parsed with size, line-length and entry limits, and only network stream schemes are accepted.
+
+Details: [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md).
+
+## Build
+
+Requirements: JDK 21 and the Android SDK (platform 37, build tools 36).
+
+```sh
+./gradlew assembleDebug            # app/build/outputs/apk/debug/
+./gradlew testDebugUnitTest lintDebug
+```
+
+The debug build installs next to a release build (`com.muxlume.app.debug`).
+Docs: [architecture](docs/ARCHITECTURE.md), [design system](docs/DESIGN_SYSTEM.md),
+[IPTV formats](docs/IPTV_FORMATS.md), [testing](docs/TESTING.md), [releases](docs/RELEASE.md),
+[Google Play](docs/PLAY_STORE.md), [F-Droid](docs/FDROID.md), [contributing](CONTRIBUTING.md).
+
+## Licence
+
+Not chosen yet. Until a `LICENSE` file is added, no licence is granted. A FLOSS licence is required
+before F-Droid submission (see [docs/FDROID.md](docs/FDROID.md)).
+
+## Community and contact
+
+- Telegram: [t.me/Muxlume](https://t.me/Muxlume)
+- Contact the developer: [simplyfahim.pages.dev/contactme](https://simplyfahim.pages.dev/contactme)
+- Support development: [simplyfahim.pages.dev/pay-options](https://simplyfahim.pages.dev/pay-options)

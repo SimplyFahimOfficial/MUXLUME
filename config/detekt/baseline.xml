@@ -1,0 +1,81 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:M3uParser.kt$M3uParser$private fun advance(): M3uEntry?</ID>
+    <ID>CyclomaticComplexMethod:M3uParser.kt$M3uParser.Companion$internal fun parseAttributes(s: String): Map&lt;String, String&gt;</ID>
+    <ID>CyclomaticComplexMethod:PlaybackService.kt$PlaybackService$private suspend fun resolve(request: MediaItem): MediaItem?</ID>
+    <ID>CyclomaticComplexMethod:PlayerScreen.kt$@OptIn(UnstableApi::class) private fun diagnostics(ui: PlayerUi, p: Player): String</ID>
+    <ID>EmptyElseBlock:PlayerScreen.kt$if (!settings.backgroundPlayback) p?.pause()</ID>
+    <ID>ExplicitItLambdaParameter:LiveScreen.kt${ _, it -&gt; it.id }</ID>
+    <ID>InstanceOfCheckForException:DetailScreen.kt$DetailViewModel$e is kotlinx.coroutines.CancellationException</ID>
+    <ID>InstanceOfCheckForException:Playback.kt$e is kotlinx.coroutines.CancellationException</ID>
+    <ID>LoopWithTooManyJumpStatements:M3uParser.kt$M3uParser$while</ID>
+    <ID>MagicNumber:DetailScreen.kt$0.95</ID>
+    <ID>MagicNumber:DetailScreen.kt$DetailViewModel$4</ID>
+    <ID>MagicNumber:DetailScreen.kt$DetailViewModel$60</ID>
+    <ID>MagicNumber:ErrorText.kt$ErrorText$120</ID>
+    <ID>MagicNumber:ErrorText.kt$ErrorText$401</ID>
+    <ID>MagicNumber:ErrorText.kt$ErrorText$403</ID>
+    <ID>MagicNumber:ErrorText.kt$ErrorText$404</ID>
+    <ID>MagicNumber:ErrorText.kt$ErrorText$500</ID>
+    <ID>MagicNumber:ErrorText.kt$ErrorText$599</ID>
+    <ID>MagicNumber:Http.kt$Http$15</ID>
+    <ID>MagicNumber:Http.kt$Http$30</ID>
+    <ID>MagicNumber:Http.kt$TooLargeException$1024</ID>
+    <ID>MagicNumber:M3uParser.kt$M3uParser$1024</ID>
+    <ID>MagicNumber:M3uParser.kt$M3uParser$11</ID>
+    <ID>MagicNumber:M3uParser.kt$M3uParser$64</ID>
+    <ID>MagicNumber:M3uParser.kt$M3uParser$7</ID>
+    <ID>MagicNumber:M3uParser.kt$M3uParser$8</ID>
+    <ID>MagicNumber:M3uParser.kt$M3uParser.Companion$0xA0</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$16</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$31</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$9</ID>
+    <ID>MagicNumber:MediaIds.kt$MediaIds$3</ID>
+    <ID>MagicNumber:MuxlumeApp.kt$MuxlumeApp$1024</ID>
+    <ID>MagicNumber:MuxlumeApp.kt$MuxlumeApp$128L</ID>
+    <ID>MagicNumber:MuxlumeRoot.kt$12</ID>
+    <ID>MagicNumber:PlaybackService.kt$PlaybackService$10_000</ID>
+    <ID>MagicNumber:PlaybackService.kt$PlaybackService.Callback$0.95</ID>
+    <ID>MagicNumber:PlaybackService.kt$PlaybackService.Callback$30_000</ID>
+    <ID>MagicNumber:PlaybackService.kt$PlaybackService.Recovery$2_000L</ID>
+    <ID>MagicNumber:PlayerScreen.kt$1000</ID>
+    <ID>MagicNumber:PlayerScreen.kt$3600</ID>
+    <ID>MagicNumber:PlayerScreen.kt$6</ID>
+    <ID>MagicNumber:PlayerScreen.kt$60</ID>
+    <ID>MagicNumber:PlayerScreen.kt$8</ID>
+    <ID>MagicNumber:SourceRepository.kt$SourceRepository$3</ID>
+    <ID>MagicNumber:SourceRepository.kt$SourceRepository$4</ID>
+    <ID>MagicNumber:SourceRepository.kt$SourceRepository$512</ID>
+    <ID>MagicNumber:SourceRepository.kt$SourceRepository$80</ID>
+    <ID>MagicNumber:SourceRepository.kt$SourceRepository.Companion$12</ID>
+    <ID>MagicNumber:XtreamApi.kt$XtreamApi$401</ID>
+    <ID>MagicNumber:XtreamApi.kt$XtreamApi$403</ID>
+    <ID>MagicNumber:XtreamApi.kt$XtreamApi.Companion$64</ID>
+    <ID>MaxLineLength:AboutScreen.kt$"A channel doesn't play" to "Open the player's info panel (the sliders icon) to see the error. Common causes: the provider's connection limit is reached, the channel is offline, or the stream uses a codec this device can't decode. Refreshing the playlist fixes moved channels."</ID>
+    <ID>MaxLineLength:AboutScreen.kt$"Import failed or is slow" to "Very large playlists take a while; the import can be cancelled and your previous list stays intact. If it fails, the reason is shown on the playlist's card in Library."</ID>
+    <ID>MaxLineLength:AboutScreen.kt$"Which formats work?" to "HLS (.m3u8), MPEG-DASH (.mpd), RTSP and progressive files such as MPEG-TS, MP4 and MKV, as far as this device's decoders support the codecs. DRM-protected streams and RTMP are not supported."</ID>
+    <ID>MaxLineLength:AboutScreen.kt$"\"Unencrypted HTTP\" errors" to "Streams over http:// are blocked until you allow them. Edit the playlist in Library and tick \"allow unencrypted HTTP\". Prefer https:// if your provider offers it."</ID>
+    <ID>MaxLineLength:AddSourceScreen.kt$"With plain HTTP, anyone on your network path (public Wi-Fi, your ISP) can see what you watch and read any username, password or token sent to the server. Use an https:// address if your provider offers one."</ID>
+    <ID>MaxLineLength:AddSourceScreen.kt$AddSourceViewModel$SourceType.XTREAM -&gt; FormState(Mode.XTREAM, s.name, server = secret?.url.orEmpty(), username = secret?.username.orEmpty(), password = secret?.password.orEmpty(), httpAcknowledged = s.allowHttp)</ID>
+    <ID>MaxLineLength:AddSourceScreen.kt$AddSourceViewModel$it.copy(phase = Phase.Editing, accountInfo = listOfNotNull("Account ${acc.status.lowercase()}", exp?.let { d -&gt; "expires $d" }, acc.maxConnections?.let { n -&gt; "$n connection${if (n == 1) "" else "s"}" }).joinToString(" · "))</ID>
+    <ID>MaxLineLength:AddSourceScreen.kt$else -&gt; Form(s, vm, onPickFile = { picker.launch(arrayOf("audio/x-mpegurl", "audio/mpegurl", "application/x-mpegurl", "application/vnd.apple.mpegurl", "text/plain", "application/octet-stream")) })</ID>
+    <ID>MaxLineLength:DetailScreen.kt$DetailViewModel$Extra(plot = info.plot ?: it.plot, backdrop = info.backdrop, meta = listOfNotNull(info.releaseDate?.take(4) ?: it.year, info.durationSec?.let { d -&gt; "${d / 60} min" }, info.genre, it.rating?.let { r -&gt; "★ $r" }))</ID>
+    <ID>MaxLineLength:DetailScreen.kt$DetailViewModel$Extra(plot = info.plot ?: it.plot, backdrop = info.cover, episodes = info.episodes, meta = listOfNotNull(it.year, it.rating?.let { r -&gt; "★ $r" }, "${info.episodes.map { e -&gt; e.season }.distinct().size} seasons".takeIf { info.episodes.isNotEmpty() }))</ID>
+    <ID>MaxLineLength:DetailScreen.kt$val last = all.withIndex().filter { history[idOf(it.value)] != null }.maxByOrNull { history[idOf(it.value)]!!.updatedAt } ?: return all.first() to "Play S${all.first().season} E${all.first().number ?: 1}"</ID>
+    <ID>NestedBlockDepth:M3uParser.kt$BoundedLineReader$fun readLine(): String?</ID>
+    <ID>NestedBlockDepth:M3uParser.kt$M3uParser$private fun advance(): M3uEntry?</ID>
+    <ID>NestedBlockDepth:M3uParser.kt$M3uParser.Companion$internal fun parseAttributes(s: String): Map&lt;String, String&gt;</ID>
+    <ID>ReturnCount:PlaybackService.kt$PlaybackService$private suspend fun resolve(request: MediaItem): MediaItem?</ID>
+    <ID>SwallowedException:XtreamApi.kt$XtreamApi$e: SerializationException</ID>
+    <ID>SwallowedException:XtreamApi.kt$XtreamApi.Companion$e: IllegalArgumentException</ID>
+    <ID>SwallowedException:XtreamApi.kt$XtreamApi.Companion$e: SerializationException</ID>
+    <ID>ThrowsCount:SourceRepository.kt$SourceRepository$private fun open(source: SourceEntity): InputStream</ID>
+    <ID>ThrowsCount:XtreamApi.kt$XtreamApi.Companion$fun parseAccount(root: JsonObject): XtreamAccount</ID>
+    <ID>TooGenericExceptionCaught:AddSourceScreen.kt$AddSourceViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:DetailScreen.kt$DetailViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:Playback.kt$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:SourceRepository.kt$SourceRepository$e: Exception</ID>
+  </CurrentIssues>
+</SmellBaseline>
