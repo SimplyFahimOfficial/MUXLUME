@@ -18,6 +18,12 @@ publish there. `fdroid-readiness.yml` checks the prerequisites on every pull req
 | Fastlane metadata | Title, descriptions, icon, feature graphic, changelog for versionCode 1. Screenshots still needed |
 | Release tag | None yet |
 
+## Flavors
+
+F-Droid builds the `fdroid` flavor (`gradle: - fdroid` in the metadata template). CI fails if that flavor
+depends on Google Play services, Firebase, Play libraries or billing. The `github` and `play` flavors share
+all code with it plus whatever is in `app/src/github` or `app/src/play`.
+
 ## Submitting
 
 1. Resolve the missing items above and tag a release.

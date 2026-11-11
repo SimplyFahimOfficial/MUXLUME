@@ -354,6 +354,10 @@
     <string name="reminders_starting_soon">Starting soon: %1$s</string>
     <string name="reminders_channel_at">%1$s · %2$s</string>
 
+    <string name="about_check_for_updates">Check for updates</string>
+    <string name="about_you_have_the_latest_version">You have the latest version.</string>
+    <string name="about_version_available">Version %1$s is available.</string>
+    <string name="about_view_release">View release on GitHub</string>
     <!-- TV guide -->
     <string name="guide_title">TV guide</string>
     <string name="guide_settings_title">TV guide</string>

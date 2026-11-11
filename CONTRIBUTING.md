@@ -7,7 +7,7 @@ Thanks for helping. Keep changes small and focused; one concern per pull request
 JDK 21, Android SDK platform 37 and build tools 36. Then:
 
 ```sh
-./gradlew assembleDebug testDebugUnitTest lintDebug
+./gradlew assembleDebug testDebugUnitTest lintDebug   # all three builds
 ```
 
 Robolectric caches Android jars in your home directory; if it's read-only, add

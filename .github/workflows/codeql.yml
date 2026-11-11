@@ -61,7 +61,7 @@ jobs:
 
       # CodeQL observes the Kotlin and Java compilers, so the compile tasks must really run.
       - name: Compile for CodeQL
-        run: ./gradlew --no-build-cache --rerun-tasks :app:compileDebugKotlin :app:compileDebugJavaWithJavac
+        run: ./gradlew --no-build-cache --rerun-tasks :app:compileFdroidDebugKotlin :app:compileFdroidDebugJavaWithJavac :app:compileGithubDebugKotlin :app:compileGithubDebugJavaWithJavac
 
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:

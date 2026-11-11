@@ -32,7 +32,7 @@ Nothing is published if any check fails.
    (`keytool -list -v -keystore muxlume-release.jks | grep SHA256`).
 3. Protect `main` and `v*` tags (rulesets): required checks, no force pushes, no deletion.
 
-Local signed builds: export `MUXLUME_KEYSTORE_PATH` and the three secrets, then `./gradlew assembleRelease`.
+Local signed builds: export `MUXLUME_KEYSTORE_PATH` and the three secrets, then `./gradlew assembleGithubRelease` (APK) or `./gradlew bundlePlayRelease` (AAB). F-Droid builds the `fdroid` flavor itself.
 Without them, release builds are unsigned. No key material ever goes into the repository (CI fails on
 tracked `.jks`/`.keystore`/`.p12` files).
 

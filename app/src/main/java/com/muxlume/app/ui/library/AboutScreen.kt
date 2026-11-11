@@ -30,7 +30,23 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import com.muxlume.app.BuildConfig
+import com.muxlume.app.container
+import com.muxlume.app.data.ErrorText
+import com.muxlume.app.distribution.Extras
+import com.muxlume.app.distribution.ReleaseInfo
+import com.muxlume.app.distribution.UpdateChecker
+import com.muxlume.app.support.SupportIntents
+import com.muxlume.app.ui.components.SecondaryButton
+import kotlinx.coroutines.launch
+import java.io.IOException
 import com.muxlume.app.ui.components.MuxLogo
 import com.muxlume.app.ui.components.SectionHeader
 import com.muxlume.app.ui.components.pressable
@@ -59,6 +75,7 @@ private val licenses = listOf(
 /** Troubleshooting, version and licences. Project and developer links live on the Support screen. */
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
     Column(Modifier.fillMaxSize().background(MuxTheme.Background)) {
         TopHeader(stringResource(R.string.about_help_about), onSearch = null, onBack = onBack)
         Column(Modifier.verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 32.dp)) {
@@ -76,6 +93,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
                 modifier = Modifier.padding(horizontal = Mux.ScreenPadding),
             )
+            Extras.updates(context.container.http)?.let { UpdateRow(it) }
             Spacer(Modifier.height(20.dp))
             SectionHeader(stringResource(R.string.about_troubleshooting))
             faq.forEach { (q, a) -> Expandable(stringResource(q), stringResource(a)) }
@@ -105,5 +123,34 @@ private fun Expandable(question: String, answer: String) {
             Spacer(Modifier.height(6.dp))
             Text(answer, style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary)
         }
+    }
+}
+
+/** Manual update check (GitHub build only): contacts GitHub when tapped, never in the background. */
+@Composable
+private fun UpdateRow(checker: UpdateChecker) {
+    val context = LocalContext.current
+    val res = LocalResources.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var release by remember { mutableStateOf<ReleaseInfo?>(null) }
+    Column(Modifier.padding(horizontal = Mux.ScreenPadding, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SecondaryButton(stringResource(R.string.about_check_for_updates), {
+            busy = true
+            release = null
+            scope.launch {
+                try {
+                    release = checker.newerThan(BuildConfig.VERSION_NAME.substringBefore('-'))
+                    message = if (release == null) res.getString(R.string.about_you_have_the_latest_version) else res.getString(R.string.about_version_available, release!!.version)
+                } catch (e: IOException) {
+                    message = ErrorText.of(res, e)
+                } finally {
+                    busy = false
+                }
+            }
+        }, enabled = !busy)
+        message?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+        release?.let { r -> SecondaryButton(stringResource(R.string.about_view_release), { SupportIntents.openUrl(context, r.url) }) }
     }
 }
