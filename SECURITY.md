@@ -52,6 +52,14 @@ On a private repository without GitHub Code Security, CodeQL results aren't uplo
 gate still runs) and GitHub's dependency-review action is skipped; set `CODE_SCANNING_UPLOAD` and
 `DEPENDENCY_REVIEW_ENABLED` repository variables to `true` once available.
 
+## Backup files
+
+Backups hold playlist links and logins, so they are always encrypted: AES-256-GCM with a key derived from the
+user's passphrase (PBKDF2-HMAC-SHA256, 600,000 iterations, random salt and IV per file, header authenticated).
+Minimum 8 characters; there is no recovery. The file is read with a 64 MB cap and a limit on the number of
+entries, and a restore goes through the same validation as adding a playlist by hand. Strength depends on the
+passphrase: a short one can be guessed offline by anyone who gets the file.
+
 ## Permissions
 
 `INTERNET`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `WAKE_LOCK` (only while
