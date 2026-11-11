@@ -8,7 +8,7 @@ publish there. `fdroid-readiness.yml` checks the prerequisites on every pull req
 
 | Requirement | State |
 |---|---|
-| FLOSS licence | **Missing** – add `LICENSE` and set `License:` in `fdroid/com.muxlume.app.yml` |
+| FLOSS licence | Yes – GPL-3.0-or-later (`LICENSE`), set in `fdroid/com.muxlume.app.yml` |
 | Public source | **No** – the repository is private |
 | No proprietary dependencies | Yes – AndroidX, Kotlin, OkHttp, Coil only (Apache-2.0); no Play services/Firebase |
 | No prebuilt binaries in the repo | Yes (Gradle wrapper only, validated in CI) |

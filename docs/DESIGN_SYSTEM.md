@@ -45,7 +45,15 @@ Primary actions are cream pills with black text (≈ 19:1). Orange is an accent,
 Provider artwork only. When missing or loading, a flat placeholder shows the title's initials and a
 small orange bar, so layouts never jump and no stock posters are bundled.
 
+## Theming
+
+Colour roles come from `LocalMux` (a `MuxPalette`), so screens read `MuxTheme.<role>` and never a
+fixed colour. `MuxlumeTheme` builds a dark or light palette from the user's choice (System/Light/Dark),
+the accent (five presets or Material You on Android 12+) and the AMOLED toggle, and also drives the
+Material 3 `colorScheme` and the status-bar icon colour. Content that sits on artwork (the player,
+the home hero) wraps its subtree in `LocalMux provides current.onMedia()` so it stays light-on-dark
+in either theme.
+
 ## Planned
 
-Light theme, accent choice, density settings, shared-element transitions from cards to details,
-Android TV focus styling.
+Layout density, shared-element transitions from cards to details, Android TV focus styling.

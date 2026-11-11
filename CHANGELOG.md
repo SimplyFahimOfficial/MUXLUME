@@ -5,6 +5,15 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 
 ## [Unreleased]
 
+### Added
+- Light theme and an Appearance screen: System/Light/Dark, five accent colours, Material You accent
+  on Android 12+, AMOLED black for dark mode, and reduced motion.
+- Support screen with an on-device UPI QR code (no web service), copy/pay/share/save actions, and
+  the project and developer links; Help and about split into a focused help/licenses screen.
+
+### Changed
+- Licensed under GPL-3.0-or-later.
+
 ## [0.1.0] - unreleased
 
 First preview (not tagged yet).

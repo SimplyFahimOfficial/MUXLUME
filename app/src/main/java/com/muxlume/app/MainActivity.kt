@@ -49,7 +49,13 @@ class MainActivity : ComponentActivity() {
         addOnPictureInPictureModeChangedListener(pipListener)
         setContent {
             val settings by container.settings.settings.collectAsStateWithLifecycle(AppSettings(onboardingDone = true))
-            MuxlumeTheme(reduceMotion = settings.reduceMotion) { MuxlumeRoot() }
+            MuxlumeTheme(
+                theme = settings.theme,
+                amoled = settings.amoled,
+                accent = settings.accent,
+                dynamicColor = settings.dynamicColor,
+                reduceMotion = settings.reduceMotion,
+            ) { MuxlumeRoot() }
         }
     }
 

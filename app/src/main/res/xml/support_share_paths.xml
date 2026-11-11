@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only the cached UPI QR PNG is shareable (see support/SupportIntents.kt). -->
+<paths>
+    <cache-path
+        name="support_share"
+        path="support_share/" />
+</paths>

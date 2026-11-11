@@ -53,6 +53,7 @@ import com.muxlume.app.ui.main.BottomBarSpace
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.playFromList
 import com.muxlume.app.ui.theme.Mux
+import com.muxlume.app.ui.theme.MuxTheme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -174,7 +175,7 @@ fun BrowseFilters(vm: BrowseViewModel, sources: List<SourceEntity>, sourceId: Lo
         }
         PillRow(labels, selected, { i -> vm.filter(if (i == 0) GroupFilter.All else if (i == 1) GroupFilter.Favorites else GroupFilter.Group(groups[i - 2])) }, Modifier.weight(1f))
         IconButton(vm::toggleSort) {
-            Icon(Icons.Rounded.SortByAlpha, if (browse.alphabetical) "Sort by provider order" else "Sort A to Z", tint = if (browse.alphabetical) Mux.Orange else Mux.TextSecondary)
+            Icon(Icons.Rounded.SortByAlpha, if (browse.alphabetical) "Sort by provider order" else "Sort A to Z", tint = if (browse.alphabetical) MuxTheme.Orange else MuxTheme.TextSecondary)
         }
     }
 }
@@ -185,18 +186,18 @@ private fun ChannelRow(ch: ItemEntity, favorite: Boolean, onClick: () -> Unit, o
         Modifier.fillMaxWidth().pressable(onClick, label = "Play ${ch.name}").padding(horizontal = Mux.ScreenPadding, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Artwork(ch.logo, ch.name, Modifier.size(width = 72.dp, height = 52.dp).clip(Mux.CardShape).background(Mux.Raised).padding(6.dp), contentScale = ContentScale.Fit, monogramSize = 16)
+        Artwork(ch.logo, ch.name, Modifier.size(width = 72.dp, height = 52.dp).clip(Mux.CardShape).background(MuxTheme.Raised).padding(6.dp), contentScale = ContentScale.Fit, monogramSize = 16)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(ch.name, style = MaterialTheme.typography.titleMedium, color = Mux.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(ch.name, style = MaterialTheme.typography.titleMedium, color = MuxTheme.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val meta = listOfNotNull(ch.number?.toString(), ch.groupTitle.ifEmpty { null }).joinToString(" · ")
-            if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodySmall, color = Mux.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         IconButton(onFavorite) {
             Icon(
                 if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                 if (favorite) "Remove ${ch.name} from favorites" else "Add ${ch.name} to favorites",
-                tint = if (favorite) Mux.Orange else Mux.TextSecondary,
+                tint = if (favorite) MuxTheme.Orange else MuxTheme.TextSecondary,
             )
         }
     }
