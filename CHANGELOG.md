@@ -5,6 +5,19 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 
 ## [Unreleased]
 
+### Changed
+- HTTP permission is now per source: one source allowing HTTP no longer lets other sources use it.
+- Imports no longer block the app: new lists are staged and swapped in at the end.
+- Long channel, movie and series lists load in pages.
+- Search uses a full-text index and matches word beginnings ("bbc on" finds "BBC One").
+- Channel up/down works through the whole list it was picked from (provider order, A–Z, group or favorites), from the app, a remote, the notification or Bluetooth.
+- Renaming a source no longer re-downloads it.
+- All UI text is in string resources, ready for translation.
+- The Support screen is more compact.
+
+### Fixed
+- Links to HLS streams without ".m3u8" now play (retried as HLS once).
+
 ### Added
 - Light theme and an Appearance screen: System/Light/Dark, five accent colours, Material You accent
   on Android 12+, AMOLED black for dark mode, and reduced motion.

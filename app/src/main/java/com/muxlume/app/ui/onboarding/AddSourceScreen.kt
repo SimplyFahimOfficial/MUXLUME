@@ -1,5 +1,9 @@
 package com.muxlume.app.ui.onboarding
 
+import com.muxlume.app.R
+import androidx.annotation.StringRes
+import android.content.res.Resources
+import androidx.compose.ui.res.stringResource
 import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -51,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
@@ -87,7 +92,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
-enum class Mode(val label: String) { LINK("M3U link"), FILE("M3U file"), XTREAM("Xtream Codes") }
+enum class Mode(@StringRes val label: Int) { LINK(R.string.add_source_m3u_link), FILE(R.string.add_source_m3u_file), XTREAM(R.string.add_source_xtream_codes) }
 
 sealed interface Phase {
     data object Editing : Phase
@@ -120,13 +125,13 @@ data class FormState(
         Mode.FILE -> false
     }
 
-    val validationError: String? get() = when (mode) {
-        Mode.LINK -> if (Urls.parseHttp(url) == null) "Enter a link that starts with https:// or http://" else null
-        Mode.FILE -> if (fileUri == null) "Choose a playlist file" else null
+    @get:StringRes val validationError: Int? get() = when (mode) {
+        Mode.LINK -> if (Urls.parseHttp(url) == null) R.string.add_source_enter_a_link_that_starts else null
+        Mode.FILE -> if (fileUri == null) R.string.add_source_choose_a_playlist_file else null
         Mode.XTREAM -> when {
-            XtreamApi.normalizeServer(server) == null -> "Enter the server address, for example https://provider.example:8080"
-            username.isBlank() -> "Enter your username"
-            password.isEmpty() -> "Enter your password"
+            XtreamApi.normalizeServer(server) == null -> R.string.add_source_enter_the_server_address_for
+            username.isBlank() -> R.string.add_source_enter_your_username
+            password.isEmpty() -> R.string.add_source_enter_your_password
             else -> null
         }
     }
@@ -141,7 +146,7 @@ data class FormState(
     }
 }
 
-class AddSourceViewModel(private val c: AppContainer, private val existingId: Long?) : ViewModel() {
+class AddSourceViewModel(private val c: AppContainer, private val res: Resources, private val existingId: Long?) : ViewModel() {
     val state = MutableStateFlow(FormState())
     private var savedId: Long? = existingId
     private var job: Job? = null
@@ -185,9 +190,16 @@ class AddSourceViewModel(private val c: AppContainer, private val existingId: Lo
                 result.fold(
                     { acc ->
                         val exp = acc.expiresAtEpochSec?.let { e -> DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).format(Instant.ofEpochSecond(e).atZone(ZoneId.systemDefault())) }
-                        it.copy(phase = Phase.Editing, accountInfo = listOfNotNull("Account ${acc.status.lowercase()}", exp?.let { d -> "expires $d" }, acc.maxConnections?.let { n -> "$n connection${if (n == 1) "" else "s"}" }).joinToString(" · "))
+                        it.copy(
+                            phase = Phase.Editing,
+                            accountInfo = listOfNotNull(
+                                res.getString(R.string.add_source_account, acc.status.lowercase()),
+                                exp?.let { d -> res.getString(R.string.add_source_expires, d) },
+                                acc.maxConnections?.let { n -> res.getQuantityString(R.plurals.add_source_connections, n, n) },
+                            ).joinToString(" · "),
+                        )
                     },
-                    { e -> it.copy(phase = Phase.Editing, error = ErrorText.of(e)) },
+                    { e -> it.copy(phase = Phase.Editing, error = ErrorText.of(res, e)) },
                 )
             }
         }
@@ -215,7 +227,7 @@ class AddSourceViewModel(private val c: AppContainer, private val existingId: Lo
                 state.update { it.copy(phase = Phase.Editing) }
                 throw e
             } catch (e: Exception) {
-                state.update { it.copy(phase = Phase.Editing, error = ErrorText.of(e)) }
+                state.update { it.copy(phase = Phase.Editing, error = ErrorText.of(res, e)) }
             }
         }
     }
@@ -229,7 +241,8 @@ class AddSourceViewModel(private val c: AppContainer, private val existingId: Lo
 @Composable
 fun AddSourceScreen(existingId: Long?, onDone: () -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current
-    val vm: AddSourceViewModel = viewModel { AddSourceViewModel(context.container, existingId) }
+    val res = LocalResources.current
+    val vm: AddSourceViewModel = viewModel { AddSourceViewModel(context.container, context.applicationContext.resources, existingId) }
     val s by vm.state.collectAsStateWithLifecycle()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -237,13 +250,13 @@ fun AddSourceScreen(existingId: Long?, onDone: () -> Unit, onBack: () -> Unit) {
             runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
                 if (c.moveToFirst()) c.getString(0) else null
-            } ?: "Playlist file"
+            } ?: res.getString(R.string.add_source_playlist_file)
             vm.edit { it.copy(fileUri = uri, fileName = name) }
         }
     }
 
     Column(Modifier.fillMaxSize().background(MuxTheme.Background)) {
-        TopHeader(if (vm.isEditing) "Edit source" else "Add a playlist", onSearch = null, onBack = onBack)
+        TopHeader(stringResource(if (vm.isEditing) R.string.add_source_edit_source else R.string.add_source_add_a_playlist), onSearch = null, onBack = onBack)
         if (s.phase == Phase.Saved) LaunchedEffect(Unit) { onDone() }
         when (val phase = s.phase) {
             is Phase.Importing -> Progress(phase.count, vm::cancel)
@@ -260,29 +273,39 @@ private fun Form(s: FormState, vm: AddSourceViewModel, onPickFile: () -> Unit) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        if (!vm.isEditing) PillRow(Mode.entries.map { it.label }, s.mode.ordinal, { i -> vm.edit { it.copy(mode = Mode.entries[i]) } })
+        if (!vm.isEditing) PillRow(Mode.entries.map { stringResource(it.label) }, s.mode.ordinal, { i -> vm.edit { it.copy(mode = Mode.entries[i]) } })
         Column(Modifier.padding(horizontal = Mux.ScreenPadding).widthIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Field("Name (optional)", s.name, { v -> vm.edit { it.copy(name = v) } })
+            Field(stringResource(R.string.add_source_name_optional), s.name, { v -> vm.edit { it.copy(name = v) } })
             when (s.mode) {
-                Mode.LINK -> Field("Playlist link", s.url, { v -> vm.edit { it.copy(url = v) } }, keyboard = KeyboardType.Uri, placeholder = "https://…/playlist.m3u")
+                Mode.LINK -> Field(stringResource(R.string.add_source_playlist_link), s.url, { v -> vm.edit { it.copy(url = v) } }, keyboard = KeyboardType.Uri, placeholder = "https://…/playlist.m3u")
                 Mode.FILE -> {
-                    SecondaryButton(if (s.fileUri == null) "Choose a file" else s.fileName, onPickFile, Modifier.fillMaxWidth(), icon = Icons.Rounded.FileOpen)
-                    Text("The file stays where it is; MUXLUME keeps read access to re-import it.", style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
+                    SecondaryButton(if (s.fileUri == null) stringResource(R.string.add_source_choose_a_file) else s.fileName, onPickFile, Modifier.fillMaxWidth(), icon = Icons.Rounded.FileOpen)
+                    Text(stringResource(R.string.add_source_the_file_stays_where_it), style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
                 }
                 Mode.XTREAM -> {
-                    Field("Server address", s.server, { v -> vm.edit { it.copy(server = v) } }, keyboard = KeyboardType.Uri, placeholder = "https://provider.example:8080")
-                    Field("Username", s.username, { v -> vm.edit { it.copy(username = v) } })
                     Field(
-                        "Password", s.password, { v -> vm.edit { it.copy(password = v) } }, keyboard = KeyboardType.Password,
+                        stringResource(R.string.add_source_server_address),
+                        s.server,
+                        { v -> vm.edit { it.copy(server = v) } },
+                        keyboard = KeyboardType.Uri,
+                        placeholder = "https://provider.example:8080",
+                    )
+                    Field(stringResource(R.string.add_source_username), s.username, { v -> vm.edit { it.copy(username = v) } })
+                    Field(
+                        stringResource(R.string.add_source_password), s.password, { v -> vm.edit { it.copy(password = v) } }, keyboard = KeyboardType.Password,
                         visual = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                         trailing = {
                             IconButton({ showPassword = !showPassword }) {
-                                Icon(if (showPassword) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, if (showPassword) "Hide password" else "Show password", tint = MuxTheme.TextSecondary)
+                                Icon(
+                                    if (showPassword) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                    stringResource(if (showPassword) R.string.add_source_hide_password else R.string.add_source_show_password),
+                                    tint = MuxTheme.TextSecondary,
+                                )
                             }
                         },
                     )
                     Text(
-                        "Credentials are encrypted with a key that never leaves this device and are only sent to this server.",
+                        stringResource(R.string.add_source_credentials_are_encrypted_with_a),
                         style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary,
                     )
                 }
@@ -298,15 +321,20 @@ private fun Form(s: FormState, vm: AddSourceViewModel, onPickFile: () -> Unit) {
             }
             s.error?.let { Text(it, color = MuxTheme.Error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
             Spacer(Modifier.height(4.dp))
-            PrimaryButton(if (!vm.isEditing) "Add and import" else if (vm.needsImport(s)) "Save and re-import" else "Save", vm::submit, Modifier.fillMaxWidth(), enabled = s.canSubmit)
+            PrimaryButton(
+                if (!vm.isEditing) stringResource(R.string.add_source_add_and_import) else stringResource(if (vm.needsImport(s)) R.string.add_source_save_and_re_import else R.string.add_source_save),
+                vm::submit,
+                Modifier.fillMaxWidth(),
+                enabled = s.canSubmit,
+            )
             if (s.mode == Mode.XTREAM) {
                 if (s.phase == Phase.Testing) {
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(28.dp), color = MuxTheme.Accent) }
                 } else {
-                    SecondaryButton("Test connection", vm::testConnection, Modifier.fillMaxWidth(), enabled = s.canSubmit)
+                    SecondaryButton(stringResource(R.string.add_source_test_connection), vm::testConnection, Modifier.fillMaxWidth(), enabled = s.canSubmit)
                 }
             }
-            if (!s.canSubmit && s.phase == Phase.Editing) s.validationError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary) }
+            if (!s.canSubmit && s.phase == Phase.Editing) s.validationError?.let { Text(stringResource(it), style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary) }
         }
     }
 }
@@ -317,12 +345,16 @@ private fun HttpWarning(acknowledged: Boolean, optional: Boolean, onChange: (Boo
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Warning, null, tint = MuxTheme.Accent)
             Spacer(Modifier.width(10.dp))
-            Text(if (optional) "Streams over plain HTTP" else "This server doesn't use encryption", style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary)
+            Text(
+                stringResource(if (optional) R.string.add_source_streams_over_plain_http else R.string.add_source_this_server_doesn_t_use),
+                style = MaterialTheme.typography.titleMedium,
+                color = MuxTheme.TextPrimary,
+            )
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            (if (optional) "Many playlist files list http:// streams, which are blocked unless you allow them. " else "") +
-                "With plain HTTP, anyone on your network path (public Wi-Fi, your ISP) can see what you watch and read any username, password or token sent to the server. Use an https:// address if your provider offers one.",
+            (if (optional) stringResource(R.string.add_source_many_playlist_files_list_http) else "") +
+                stringResource(R.string.add_source_with_plain_http_anyone_on),
             style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
         )
         Row(
@@ -331,7 +363,7 @@ private fun HttpWarning(acknowledged: Boolean, optional: Boolean, onChange: (Boo
         ) {
             Checkbox(acknowledged, null, colors = CheckboxDefaults.colors(checkedColor = MuxTheme.Accent, checkmarkColor = MuxTheme.OnAccent))
             Spacer(Modifier.width(8.dp))
-            Text("I understand, allow unencrypted HTTP", color = MuxTheme.TextPrimary, style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.add_source_i_understand_allow_unencrypted_http), color = MuxTheme.TextPrimary, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -363,14 +395,14 @@ private fun Progress(count: Int, onCancel: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(Mux.ScreenPadding), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         CircularProgressIndicator(color = MuxTheme.Accent)
         Spacer(Modifier.height(24.dp))
-        Text("Importing", style = MaterialTheme.typography.headlineSmall, color = MuxTheme.TextPrimary)
+        Text(stringResource(R.string.add_source_importing), style = MaterialTheme.typography.headlineSmall, color = MuxTheme.TextPrimary)
         Text(
-            if (count == 0) "Connecting…" else "$count items read",
+            if (count == 0) stringResource(R.string.add_source_connecting) else stringResource(R.string.add_source_items_read, count),
             style = MaterialTheme.typography.bodyLarge, color = MuxTheme.TextSecondary,
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
         )
         Spacer(Modifier.height(24.dp))
-        SecondaryButton("Cancel", onCancel)
+        SecondaryButton(stringResource(R.string.add_source_cancel), onCancel)
     }
 }
 
@@ -379,24 +411,27 @@ private fun Done(r: ImportResult, onDone: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(Mux.ScreenPadding), verticalArrangement = Arrangement.Center) {
         Icon(Icons.Rounded.CheckCircle, null, tint = MuxTheme.Accent, modifier = Modifier.size(56.dp))
         Spacer(Modifier.height(20.dp))
-        Text("You're all set", style = MaterialTheme.typography.displaySmall, color = MuxTheme.TextPrimary)
+        Text(stringResource(R.string.add_source_you_re_all_set), style = MaterialTheme.typography.displaySmall, color = MuxTheme.TextPrimary)
         Spacer(Modifier.height(8.dp))
         Text(
             listOfNotNull(
-                "${r.live} channels", r.movies.takeIf { it > 0 }?.let { "$it movies" }, r.series.takeIf { it > 0 }?.let { "$it series" },
+                stringResource(
+                    R.string.add_source_channels,
+                    r.live,
+                ), r.movies.takeIf { it > 0 }?.let { stringResource(R.string.add_source_movies, it) }, r.series.takeIf { it > 0 }?.let { stringResource(R.string.add_source_series, it) },
             ).joinToString(" · "),
             style = MaterialTheme.typography.titleMedium, color = MuxTheme.Primary,
         )
         if (r.skipped > 0 || r.duplicates > 0) {
             Text(
                 listOfNotNull(
-                    r.duplicates.takeIf { it > 0 }?.let { "$it duplicates merged" },
-                    r.skipped.takeIf { it > 0 }?.let { "$it unreadable or unsupported entries skipped" },
+                    r.duplicates.takeIf { it > 0 }?.let { stringResource(R.string.add_source_duplicates_merged, it) },
+                    r.skipped.takeIf { it > 0 }?.let { stringResource(R.string.add_source_unreadable_or_unsupported_entries_skipped, it) },
                 ).joinToString(" · "),
                 style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
             )
         }
         Spacer(Modifier.height(28.dp))
-        PrimaryButton("Start watching", onDone, Modifier.fillMaxWidth())
+        PrimaryButton(stringResource(R.string.add_source_start_watching), onDone, Modifier.fillMaxWidth())
     }
 }

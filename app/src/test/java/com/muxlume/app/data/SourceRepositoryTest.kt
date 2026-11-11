@@ -48,7 +48,7 @@ class SourceRepositoryTest {
         server.start()
         val context = ApplicationProvider.getApplicationContext<Context>()
         db = Room.inMemoryDatabaseBuilder(context, MuxlumeDatabase::class.java).allowMainThreadQueries().build()
-        repo = SourceRepository(db, Http.client(), PlainBox(), context.contentResolver)
+        repo = SourceRepository(db, Http.client(), PlainBox(), context.contentResolver, context.resources)
     }
 
     @After

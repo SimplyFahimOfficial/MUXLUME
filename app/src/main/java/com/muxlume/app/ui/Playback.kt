@@ -1,5 +1,7 @@
 package com.muxlume.app.ui
 
+import com.muxlume.app.R
+import androidx.compose.ui.res.stringResource
 import android.content.Context
 import android.widget.Toast
 import androidx.media3.common.C
@@ -20,7 +22,7 @@ suspend fun Context.play(items: List<MediaItem>, startIndex: Int = 0, positionMs
         true
     } catch (e: Exception) {
         if (e is kotlinx.coroutines.CancellationException) throw e
-        Toast.makeText(this, "Playback couldn't start.", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.playback_playback_couldn_t_start), Toast.LENGTH_SHORT).show()
         false
     }
 }

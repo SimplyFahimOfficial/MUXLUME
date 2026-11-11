@@ -1,5 +1,7 @@
 package com.muxlume.app.ui.live
 
+import com.muxlume.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -167,17 +169,22 @@ fun LiveScreen(nav: Nav) {
     LaunchedEffect(browse, sourceId) { listState.scrollToItem(0) }
 
     Column(Modifier.fillMaxSize()) {
-        TopHeader("Live TV", onSearch = nav::search)
+        TopHeader(stringResource(R.string.live_live_tv), onSearch = nav::search)
         val list = sources ?: return@Column
         if (list.isEmpty()) {
-            EmptyState("No channels yet", "Add an M3U playlist or an Xtream Codes-compatible account to see live channels here.", action = "Add a playlist", onAction = { nav.addSource() })
+            EmptyState(
+                stringResource(R.string.live_no_channels_yet),
+                stringResource(R.string.live_add_an_m3u_playlist_or),
+                action = stringResource(R.string.live_add_a_playlist),
+                onAction = { nav.addSource() },
+            )
             return@Column
         }
         BrowseFilters(vm, list, sourceId, browse, groups)
         if (channels.isLoadedEmpty) {
             EmptyState(
-                if (browse.filter is GroupFilter.Favorites) "No favorites here" else "Nothing in this list",
-                if (browse.filter is GroupFilter.Favorites) "Tap the star next to a channel to add it." else "This playlist has no live channels in this group.",
+                stringResource(if (browse.filter is GroupFilter.Favorites) R.string.live_no_favorites_here else R.string.live_nothing_in_this_list),
+                stringResource(if (browse.filter is GroupFilter.Favorites) R.string.live_tap_the_star_next_to else R.string.live_this_playlist_has_no_live),
             )
             return@Column
         }
@@ -198,7 +205,7 @@ fun BrowseFilters(vm: BrowseViewModel, sources: List<SourceEntity>, sourceId: Lo
         Spacer(Modifier.height(8.dp))
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        val labels = listOf("All", "Favorites") + groups.map { it.ifEmpty { "Ungrouped" } }
+        val labels = listOf(stringResource(R.string.live_all), stringResource(R.string.live_favorites)) + groups.map { it.ifEmpty { stringResource(R.string.live_ungrouped) } }
         val selected = when (val f = browse.filter) {
             GroupFilter.All -> 0
             GroupFilter.Favorites -> 1
@@ -206,7 +213,11 @@ fun BrowseFilters(vm: BrowseViewModel, sources: List<SourceEntity>, sourceId: Lo
         }
         PillRow(labels, selected, { i -> vm.filter(if (i == 0) GroupFilter.All else if (i == 1) GroupFilter.Favorites else GroupFilter.Group(groups[i - 2])) }, Modifier.weight(1f))
         IconButton(vm::toggleSort) {
-            Icon(Icons.Rounded.SortByAlpha, if (browse.alphabetical) "Sort by provider order" else "Sort A to Z", tint = if (browse.alphabetical) MuxTheme.Accent else MuxTheme.TextSecondary)
+            Icon(
+                Icons.Rounded.SortByAlpha,
+                stringResource(if (browse.alphabetical) R.string.live_sort_by_provider_order else R.string.live_sort_a_to_z),
+                tint = if (browse.alphabetical) MuxTheme.Accent else MuxTheme.TextSecondary,
+            )
         }
     }
 }
@@ -214,7 +225,7 @@ fun BrowseFilters(vm: BrowseViewModel, sources: List<SourceEntity>, sourceId: Lo
 @Composable
 private fun ChannelRow(ch: ItemEntity, favorite: Boolean, onClick: () -> Unit, onFavorite: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().pressable(onClick, label = "Play ${ch.name}").padding(horizontal = Mux.ScreenPadding, vertical = 8.dp),
+        Modifier.fillMaxWidth().pressable(onClick, label = stringResource(R.string.live_play, ch.name)).padding(horizontal = Mux.ScreenPadding, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Artwork(ch.logo, ch.name, Modifier.size(width = 72.dp, height = 52.dp).clip(Mux.CardShape).background(MuxTheme.Raised).padding(6.dp), contentScale = ContentScale.Fit, monogramSize = 16)
@@ -227,7 +238,7 @@ private fun ChannelRow(ch: ItemEntity, favorite: Boolean, onClick: () -> Unit, o
         IconButton(onFavorite) {
             Icon(
                 if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                if (favorite) "Remove ${ch.name} from favorites" else "Add ${ch.name} to favorites",
+                if (favorite) stringResource(R.string.live_remove_from_favorites, ch.name) else stringResource(R.string.live_add_to_favorites, ch.name),
                 tint = if (favorite) MuxTheme.Accent else MuxTheme.TextSecondary,
             )
         }

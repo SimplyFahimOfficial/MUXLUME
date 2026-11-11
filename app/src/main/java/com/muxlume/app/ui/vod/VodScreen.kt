@@ -1,5 +1,7 @@
 package com.muxlume.app.ui.vod
 
+import com.muxlume.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -42,25 +44,25 @@ fun VodScreen(kind: ItemKind, nav: Nav) {
     val items = vm.items.collectAsLazyPagingItems()
     val gridState = rememberLazyGridState()
     LaunchedEffect(browse, sourceId) { gridState.scrollToItem(0) }
-    val title = if (kind == ItemKind.MOVIE) "Movies" else "Series"
+    val title = stringResource(if (kind == ItemKind.MOVIE) R.string.vod_movies else R.string.vod_series)
 
     Column(Modifier.fillMaxSize()) {
         TopHeader(title, onSearch = nav::search)
         val list = sources ?: return@Column
         if (list.isEmpty()) {
             EmptyState(
-                "No ${title.lowercase()} yet",
-                if (kind == ItemKind.SERIES) "Series come from Xtream Codes-compatible accounts that include them."
-                else "Movies come from Xtream Codes-compatible accounts, or from playlist entries that point to video files.",
-                action = "Add a source", onAction = { nav.addSource() },
+                stringResource(R.string.vod_no_yet, title.lowercase()),
+                if (kind == ItemKind.SERIES) stringResource(R.string.vod_series_come_from_xtream_codes)
+                else stringResource(R.string.vod_movies_come_from_xtream_codes),
+                action = stringResource(R.string.vod_add_a_source), onAction = { nav.addSource() },
             )
             return@Column
         }
         BrowseFilters(vm, list, sourceId, browse, groups)
         if (items.isLoadedEmpty) {
             EmptyState(
-                if (browse.filter is GroupFilter.Favorites) "Your watchlist is empty" else "Nothing here",
-                if (browse.filter is GroupFilter.Favorites) "Add titles to your watchlist from their detail page." else "This source has no ${title.lowercase()} in this category.",
+                stringResource(if (browse.filter is GroupFilter.Favorites) R.string.vod_your_watchlist_is_empty else R.string.vod_nothing_here),
+                if (browse.filter is GroupFilter.Favorites) stringResource(R.string.vod_add_titles_to_your_watchlist) else stringResource(R.string.vod_this_source_has_no_in, title.lowercase()),
             )
             return@Column
         }

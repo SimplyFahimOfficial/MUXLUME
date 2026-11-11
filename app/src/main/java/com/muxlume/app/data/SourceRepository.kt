@@ -1,6 +1,7 @@
 package com.muxlume.app.data
 
 import android.content.ContentResolver
+import android.content.res.Resources
 import android.net.Uri
 import androidx.core.net.toUri
 import androidx.room.withTransaction
@@ -55,6 +56,7 @@ class SourceRepository(
     private val http: OkHttpClient,
     private val secrets: SecretBox,
     private val resolver: ContentResolver,
+    private val res: Resources,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     val sources: Flow<List<SourceEntity>> = db.sources().all()
@@ -130,7 +132,7 @@ class SourceRepository(
             // IOException for network/format problems, SecurityException for a revoked file permission.
             withContext(NonCancellable) {
                 db.items().deletePending(id)
-                db.sources().setError(id, ErrorText.of(e))
+                db.sources().setError(id, ErrorText.of(res, e))
             }
             throw e
         }

@@ -1,5 +1,7 @@
 package com.muxlume.app.ui.home
 
+import com.muxlume.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -104,9 +106,9 @@ fun HomeScreen(nav: Nav, openTab: (Tab) -> Unit) {
         if (s.sources.isEmpty()) {
             item {
                 EmptyState(
-                    "Bring your own playlist",
-                    "MUXLUME plays the M3U playlists and Xtream Codes-compatible services you already have access to. It doesn't include any channels or subscriptions.",
-                    action = "Add a playlist", onAction = { nav.addSource() },
+                    stringResource(R.string.home_bring_your_own_playlist),
+                    stringResource(R.string.home_muxlume_plays_the_m3u_playlists),
+                    action = stringResource(R.string.home_add_a_playlist), onAction = { nav.addSource() },
                 )
             }
             return@LazyColumn
@@ -117,40 +119,40 @@ fun HomeScreen(nav: Nav, openTab: (Tab) -> Unit) {
                 Hero(
                     title = hero.title, subtitle = hero.subtitle, artwork = hero.artwork, live = false,
                     progress = if (hero.durationMs > 0) hero.positionMs.toFloat() / hero.durationMs else null,
-                    action = "Resume", onPlay = { playEntry(hero) },
+                    action = stringResource(R.string.home_resume), onPlay = { playEntry(hero) },
                 )
             }
         } else if (s.favoriteChannels.isNotEmpty()) {
             val ch = s.favoriteChannels.first()
-            item { Hero(ch.name, ch.groupTitle, ch.logo, live = true, progress = null, action = "Watch live", onPlay = { playFavorite(ch) }, fitArt = true) }
+            item { Hero(ch.name, ch.groupTitle, ch.logo, live = true, progress = null, action = stringResource(R.string.home_watch_live), onPlay = { playFavorite(ch) }, fitArt = true) }
         }
         if (s.continueWatching.size > 1) {
             item {
-                Shelf("Continue watching", s.continueWatching.drop(1)) { e ->
+                Shelf(stringResource(R.string.home_continue_watching), s.continueWatching.drop(1)) { e ->
                     WideCard(e.title, e.subtitle, e.artwork, { playEntry(e) }, progress = if (e.durationMs > 0) e.positionMs.toFloat() / e.durationMs else null)
                 }
             }
         }
         if (s.favoriteChannels.isNotEmpty()) {
             item {
-                Shelf("Favorite channels", s.favoriteChannels, action = "All channels", onAction = { openTab(Tab.LIVE) }) { ch ->
+                Shelf(stringResource(R.string.home_favorite_channels), s.favoriteChannels, action = stringResource(R.string.home_all_channels), onAction = { openTab(Tab.LIVE) }) { ch ->
                     WideCard(ch.name, ch.groupTitle.ifEmpty { null }, ch.logo, { playFavorite(ch) }, fit = true)
                 }
             }
         }
         if (s.recentChannels.isNotEmpty()) {
-            item { Shelf("Recently watched", s.recentChannels) { e -> WideCard(e.title, e.subtitle, e.artwork, { playEntry(e) }, fit = true) } }
+            item { Shelf(stringResource(R.string.home_recently_watched), s.recentChannels) { e -> WideCard(e.title, e.subtitle, e.artwork, { playEntry(e) }, fit = true) } }
         }
         if (s.newMovies.isNotEmpty()) {
             item {
-                Shelf("Recently added movies", s.newMovies, action = "Movies", onAction = { openTab(Tab.MOVIES) }) { m ->
+                Shelf(stringResource(R.string.home_recently_added_movies), s.newMovies, action = stringResource(R.string.home_movies), onAction = { openTab(Tab.MOVIES) }) { m ->
                     PosterCard(m.name, m.logo, { nav.detail(m.sourceId, m.stableKey) }, subtitle = m.year)
                 }
             }
         }
         if (s.newSeries.isNotEmpty()) {
             item {
-                Shelf("New series", s.newSeries, action = "Series", onAction = { openTab(Tab.SERIES) }) { m ->
+                Shelf(stringResource(R.string.home_new_series), s.newSeries, action = stringResource(R.string.home_series), onAction = { openTab(Tab.SERIES) }) { m ->
                     PosterCard(m.name, m.logo, { nav.detail(m.sourceId, m.stableKey) }, subtitle = m.year)
                 }
             }
@@ -158,14 +160,14 @@ fun HomeScreen(nav: Nav, openTab: (Tab) -> Unit) {
         if (hero == null && s.favoriteChannels.isEmpty() && s.recentChannels.isEmpty()) {
             item {
                 EmptyState(
-                    "Start with Live TV",
-                    "Pick a channel and it shows up here. Star channels to keep them at the top.",
-                    action = "Browse channels", onAction = { openTab(Tab.LIVE) },
+                    stringResource(R.string.home_start_with_live_tv),
+                    stringResource(R.string.home_pick_a_channel_and_it),
+                    action = stringResource(R.string.home_browse_channels), onAction = { openTab(Tab.LIVE) },
                 )
             }
         }
         item {
-            SectionHeader("Your playlists", action = "Manage", onAction = { openTab(Tab.LIBRARY) })
+            SectionHeader(stringResource(R.string.home_your_playlists), action = stringResource(R.string.home_manage), onAction = { openTab(Tab.LIBRARY) })
             Spacer(Modifier.height(10.dp))
             LazyRow(contentPadding = PaddingValues(horizontal = Mux.ScreenPadding), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(s.sources, key = { it.id }) { src ->
@@ -173,10 +175,10 @@ fun HomeScreen(nav: Nav, openTab: (Tab) -> Unit) {
                         Text(src.name, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(
                             listOfNotNull(
-                                src.liveCount.takeIf { it > 0 }?.let { "$it channels" },
-                                src.movieCount.takeIf { it > 0 }?.let { "$it movies" },
-                                src.seriesCount.takeIf { it > 0 }?.let { "$it series" },
-                            ).joinToString(" · ").ifEmpty { if (src.lastError != null) "Import failed" else "Not imported yet" },
+                                src.liveCount.takeIf { it > 0 }?.let { stringResource(R.string.home_channels, it) },
+                                src.movieCount.takeIf { it > 0 }?.let { stringResource(R.string.home_movies_2, it) },
+                                src.seriesCount.takeIf { it > 0 }?.let { stringResource(R.string.home_series_2, it) },
+                            ).joinToString(" · ").ifEmpty { stringResource(if (src.lastError != null) R.string.home_import_failed else R.string.home_not_imported_yet) },
                             style = MaterialTheme.typography.bodySmall, color = if (src.lastError != null) MuxTheme.Error else MuxTheme.TextSecondary,
                         )
                     }

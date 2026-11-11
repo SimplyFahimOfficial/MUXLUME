@@ -1,5 +1,7 @@
 package com.muxlume.app.ui.search
 
+import com.muxlume.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -90,13 +92,17 @@ fun SearchScreen(nav: Nav) {
 
     Column(Modifier.fillMaxSize().background(MuxTheme.Background).imePadding()) {
         Row(Modifier.windowInsetsPadding(WindowInsets.statusBars).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(nav::back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = MuxTheme.TextPrimary) }
+            IconButton(nav::back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.search_back), tint = MuxTheme.TextPrimary) }
             TextField(
                 query, { vm.query.value = it.take(100) },
                 Modifier.weight(1f).focusRequester(focus),
-                placeholder = { Text("Channels, movies, series") },
+                placeholder = { Text(stringResource(R.string.search_channels_movies_series)) },
                 leadingIcon = { Icon(Icons.Rounded.Search, null, tint = MuxTheme.TextSecondary) },
-                trailingIcon = { if (query.isNotEmpty()) IconButton({ vm.query.value = "" }) { Icon(Icons.Rounded.Close, "Clear search", tint = MuxTheme.TextSecondary) } },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton({ vm.query.value = "" }) { Icon(Icons.Rounded.Close, stringResource(R.string.search_clear_search), tint = MuxTheme.TextSecondary) }
+                    }
+                },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 shape = Mux.PillShape,
@@ -109,17 +115,22 @@ fun SearchScreen(nav: Nav) {
         val list = results
         when {
             list == null -> Text(
-                "Type at least two letters.", style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
+                stringResource(R.string.search_type_at_least_two_letters), style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
                 modifier = Modifier.padding(Mux.ScreenPadding),
             )
-            list.isEmpty() -> EmptyState("No matches", "Nothing in your playlists matches \"${query.trim()}\".")
+            list.isEmpty() -> EmptyState(stringResource(R.string.search_no_matches), stringResource(R.string.search_nothing_in_your_playlists_matches, query.trim()))
             else -> {
                 val byKind = list.groupBy { it.kind }
                 LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                     for (kind in ItemKind.entries) {
                         val items = byKind[kind] ?: continue
                         item(key = kind.name) {
-                            SectionHeader(when (kind) { ItemKind.LIVE -> "Channels"; ItemKind.MOVIE -> "Movies"; ItemKind.SERIES -> "Series" }, Modifier.padding(top = 16.dp, bottom = 4.dp))
+                            val title = when (kind) {
+                                ItemKind.LIVE -> R.string.search_channels
+                                ItemKind.MOVIE -> R.string.search_movies
+                                ItemKind.SERIES -> R.string.search_series
+                            }
+                            SectionHeader(stringResource(title), Modifier.padding(top = 16.dp, bottom = 4.dp))
                         }
                         items(items, key = { it.id }) { item ->
                             ResultRow(item) {

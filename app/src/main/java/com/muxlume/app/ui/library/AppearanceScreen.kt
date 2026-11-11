@@ -1,5 +1,7 @@
 package com.muxlume.app.ui.library
 
+import com.muxlume.app.R
+import androidx.compose.ui.res.stringResource
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -49,10 +51,10 @@ import com.muxlume.app.ui.theme.accentColor
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 
-private val themeLabels = listOf("System", "Light", "Dark")
+private val themeLabels = listOf(R.string.appearance_system, R.string.appearance_light, R.string.appearance_dark)
 private val accentLabels = mapOf(
-    Accent.ORANGE to "Orange", Accent.AMBER to "Amber", Accent.CRIMSON to "Crimson",
-    Accent.TEAL to "Teal", Accent.VIOLET to "Violet",
+    Accent.ORANGE to R.string.appearance_orange, Accent.AMBER to R.string.appearance_amber, Accent.CRIMSON to R.string.appearance_crimson,
+    Accent.TEAL to R.string.appearance_teal, Accent.VIOLET to R.string.appearance_violet,
 )
 
 @Composable
@@ -63,14 +65,14 @@ fun AppearanceScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     Column(Modifier.fillMaxSize().background(MuxTheme.Background)) {
-        TopHeader("Appearance", onSearch = null, onBack = onBack)
+        TopHeader(stringResource(R.string.appearance_appearance), onSearch = null, onBack = onBack)
         Column(Modifier.verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 24.dp)) {
-            SectionHeader("Theme")
+            SectionHeader(stringResource(R.string.appearance_theme))
             Spacer(Modifier.height(10.dp))
-            PillRow(themeLabels, settings.theme.ordinal, { i -> scope.launch { c.settings.setTheme(ThemeMode.entries[i]) } })
+            PillRow(themeLabels.map { stringResource(it) }, settings.theme.ordinal, { i -> scope.launch { c.settings.setTheme(ThemeMode.entries[i]) } })
 
             Spacer(Modifier.height(20.dp))
-            SectionHeader("Accent colour")
+            SectionHeader(stringResource(R.string.appearance_accent_colour))
             Spacer(Modifier.height(12.dp))
             Row(Modifier.padding(horizontal = Mux.ScreenPadding), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 val dynamicOn = settings.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -79,27 +81,27 @@ fun AppearanceScreen(onBack: () -> Unit) {
                         color = accentColor(accent, light = MuxTheme.isLight),
                         selected = !dynamicOn && settings.accent == accent,
                         enabled = !dynamicOn,
-                        label = accentLabels.getValue(accent),
+                        label = stringResource(accentLabels.getValue(accent)),
                     ) { scope.launch { c.settings.setAccent(accent) } }
                 }
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 Spacer(Modifier.height(16.dp))
-                Toggle("Material You", "Use the system's accent colour instead of the one above.", settings.dynamicColor) {
+                Toggle(stringResource(R.string.appearance_material_you), stringResource(R.string.appearance_use_the_system_s_accent), settings.dynamicColor) {
                     scope.launch { c.settings.setDynamicColor(it) }
                 }
             }
 
             Spacer(Modifier.height(16.dp))
-            SectionHeader("Dark mode")
-            Toggle("AMOLED black", "Use pure black for cards and bars in dark mode. Saves power on OLED screens.", settings.amoled) {
+            SectionHeader(stringResource(R.string.appearance_dark_mode))
+            Toggle(stringResource(R.string.appearance_amoled_black), stringResource(R.string.appearance_use_pure_black_for_cards), settings.amoled) {
                 scope.launch { c.settings.setAmoled(it) }
             }
 
             Spacer(Modifier.height(16.dp))
-            SectionHeader("Motion")
-            Toggle("Reduce motion", "Turn off transitions and animated effects. Also follows the system's \"Remove animations\" setting.", settings.reduceMotion) {
+            SectionHeader(stringResource(R.string.appearance_motion))
+            Toggle(stringResource(R.string.appearance_reduce_motion), stringResource(R.string.appearance_turn_off_transitions_and_animated), settings.reduceMotion) {
                 scope.launch { c.settings.setReduceMotion(it) }
             }
         }

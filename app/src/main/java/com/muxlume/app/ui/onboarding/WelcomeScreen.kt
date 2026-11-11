@@ -1,5 +1,7 @@
 package com.muxlume.app.ui.onboarding
 
+import com.muxlume.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -69,10 +71,10 @@ fun WelcomeScreen(onAdd: () -> Unit, onExplore: () -> Unit) {
                 Column {
                     MuxLogo(size = 96.dp)
                     Spacer(Modifier.height(28.dp))
-                    Text("MUXLUME", style = MaterialTheme.typography.displayLarge, color = MuxTheme.TextPrimary, modifier = Modifier.semantics { heading() })
+                    Text(stringResource(R.string.welcome_muxlume), style = MaterialTheme.typography.displayLarge, color = MuxTheme.TextPrimary, modifier = Modifier.semantics { heading() })
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "A cinematic player for the live TV, movies and series you already subscribe to.",
+                        stringResource(R.string.welcome_a_cinematic_player_for_the),
                         style = MaterialTheme.typography.titleLarge, color = MuxTheme.Primary.copy(alpha = 0.9f),
                     )
                     Spacer(Modifier.height(28.dp))
@@ -80,15 +82,15 @@ fun WelcomeScreen(onAdd: () -> Unit, onExplore: () -> Unit) {
                         Icon(Icons.Rounded.Info, null, tint = MuxTheme.Accent, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            "MUXLUME is only a player. It doesn't provide channels, subscriptions or any media. " +
-                                "Add M3U playlists or Xtream Codes-compatible accounts you're authorized to use. Everything stays on this device.",
+                            stringResource(R.string.welcome_muxlume_is_only_a_player) +
+                                stringResource(R.string.welcome_add_m3u_playlists_or_xtream),
                             style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
                         )
                     }
                     Spacer(Modifier.height(28.dp))
-                    PrimaryButton("Add a playlist", onAdd, Modifier.fillMaxWidth())
+                    PrimaryButton(stringResource(R.string.welcome_add_a_playlist), onAdd, Modifier.fillMaxWidth())
                     Spacer(Modifier.height(10.dp))
-                    SecondaryButton("Explore first", {
+                    SecondaryButton(stringResource(R.string.welcome_explore_first), {
                         scope.launch {
                             context.container.settings.setOnboardingDone()
                             onExplore()
