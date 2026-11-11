@@ -169,6 +169,9 @@ interface FavoriteDao {
     @Query("SELECT stableKey FROM favorites WHERE sourceId = :sourceId")
     fun keys(sourceId: Long): Flow<List<String>>
 
+    @Query("SELECT * FROM favorites")
+    suspend fun all(): List<FavoriteEntity>
+
     @Query("SELECT * FROM favorites WHERE sourceId = :sourceId AND stableKey = :key")
     suspend fun get(sourceId: Long, key: String): FavoriteEntity?
 
@@ -186,6 +189,9 @@ interface FavoriteDao {
 interface HistoryDao {
     @Upsert
     suspend fun upsert(entry: HistoryEntity)
+
+    @Query("SELECT * FROM history")
+    suspend fun all(): List<HistoryEntity>
 
     @Query("SELECT * FROM history WHERE mediaId = :mediaId")
     suspend fun get(mediaId: String): HistoryEntity?
