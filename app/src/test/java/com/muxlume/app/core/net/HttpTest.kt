@@ -2,7 +2,9 @@ package com.muxlume.app.core.net
 
 import com.google.common.truth.Truth.assertThat
 import com.muxlume.app.playback.MediaIds
-import com.muxlume.app.ui.search.SearchViewModel
+import com.muxlume.app.data.db.ItemDao
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.io.ByteArrayInputStream
@@ -43,7 +45,22 @@ class HttpTest {
     }
 
     @Test
-    fun `search escapes like wildcards`() {
-        assertThat(SearchViewModel.escapeLike("100%_a\\b")).isEqualTo("100\\%\\_a\\\\b")
+    fun `fts query matches word prefixes and neutralises operators`() {
+        assertThat(ItemDao.ftsQuery("bbc on")).isEqualTo("\"bbc*\" \"on*\"")
+        assertThat(ItemDao.ftsQuery("a\" OR NEAR(x) -y*")).isEqualTo("\"a*\" \"OR*\" \"NEAR*\" \"x*\" \"y*\"")
+        assertThat(ItemDao.ftsQuery("Ünïcødé 2")).isEqualTo("\"Ünïcødé*\" \"2*\"")
+        assertThat(ItemDao.ftsQuery(" - ")).isNull()
+    }
+
+    @Test
+    fun `gate uses the request's source policy, artwork rule only for untagged requests`() {
+        val url = "http://iptv.example/x".toHttpUrl()
+        CleartextGate.artworkAllowed = true
+        assertThat(CleartextGate.permits(request(url, HttpPolicy.HTTPS_ONLY))).isFalse()
+        assertThat(CleartextGate.permits(request(url, HttpPolicy.ALLOW_HTTP))).isTrue()
+        assertThat(CleartextGate.permits(Request.Builder().url(url).build())).isTrue()
+        CleartextGate.artworkAllowed = false
+        assertThat(CleartextGate.permits(Request.Builder().url(url).build())).isFalse()
+        assertThat(CleartextGate.permits(request("https://iptv.example/x".toHttpUrl(), HttpPolicy.HTTPS_ONLY))).isTrue()
     }
 }

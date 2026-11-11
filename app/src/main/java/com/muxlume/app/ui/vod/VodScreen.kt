@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,6 +23,9 @@ import com.muxlume.app.ui.components.PosterCard
 import com.muxlume.app.ui.live.BrowseFilters
 import com.muxlume.app.ui.live.BrowseViewModel
 import com.muxlume.app.ui.live.GroupFilter
+import com.muxlume.app.ui.live.isLoadedEmpty
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
 import com.muxlume.app.ui.main.BottomBarSpace
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.theme.Mux
@@ -37,7 +39,7 @@ fun VodScreen(kind: ItemKind, nav: Nav) {
     val sourceId by vm.sourceId.collectAsStateWithLifecycle()
     val browse by vm.browse.collectAsStateWithLifecycle()
     val groups by vm.groups.collectAsStateWithLifecycle()
-    val items by vm.items.collectAsStateWithLifecycle()
+    val items = vm.items.collectAsLazyPagingItems()
     val gridState = rememberLazyGridState()
     LaunchedEffect(browse, sourceId) { gridState.scrollToItem(0) }
     val title = if (kind == ItemKind.MOVIE) "Movies" else "Series"
@@ -55,8 +57,7 @@ fun VodScreen(kind: ItemKind, nav: Nav) {
             return@Column
         }
         BrowseFilters(vm, list, sourceId, browse, groups)
-        val all = items ?: return@Column
-        if (all.isEmpty()) {
+        if (items.isLoadedEmpty) {
             EmptyState(
                 if (browse.filter is GroupFilter.Favorites) "Your watchlist is empty" else "Nothing here",
                 if (browse.filter is GroupFilter.Favorites) "Add titles to your watchlist from their detail page." else "This source has no ${title.lowercase()} in this category.",
@@ -70,7 +71,8 @@ fun VodScreen(kind: ItemKind, nav: Nav) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            items(all, key = { it.id }) { item ->
+            items(items.itemCount, key = items.itemKey { it.id }) { i ->
+                val item = items[i] ?: return@items // placeholder while the page loads
                 PosterCard(item.name, item.logo, { nav.detail(item.sourceId, item.stableKey) }, subtitle = item.year, width = null)
             }
         }

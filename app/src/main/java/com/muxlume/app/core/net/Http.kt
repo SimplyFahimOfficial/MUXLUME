@@ -4,6 +4,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.Response
 import java.io.FilterInputStream
 import java.io.IOException
@@ -20,22 +21,39 @@ class HttpStatusException(val code: Int) : IOException("HTTP $code")
 class TooLargeException(limit: Long) : IOException("Response larger than ${limit / (1024 * 1024)} MB")
 
 /**
- * The single HTTP client for playlists, provider APIs, images and streams.
- *
- * Android must permit cleartext at the platform level because IPTV hosts are user-defined at
- * runtime (no domain list is possible). This gate is the real control: plain HTTP is refused unless
- * the user has explicitly allowed HTTP for at least one of their sources.
- * shortcut: the allowance is app-wide, not per source; make it per-request if non-source traffic is ever added.
+ * Whether a request may use plain HTTP: the setting of the source it belongs to, attached as an
+ * OkHttp request tag (`Request.Builder.tag(HttpPolicy::class.java, …)`).
  */
-object CleartextGate {
-    @Volatile var allowed: Boolean = false
-
-    val interceptor = Interceptor { chain ->
-        val url = chain.request().url
-        if (!url.isHttps && !allowed) throw CleartextBlockedException(url.host)
-        chain.proceed(chain.request())
+data class HttpPolicy(val allowHttp: Boolean) {
+    companion object {
+        val HTTPS_ONLY = HttpPolicy(false)
+        val ALLOW_HTTP = HttpPolicy(true)
+        fun of(allowHttp: Boolean) = if (allowHttp) ALLOW_HTTP else HTTPS_ONLY
     }
 }
+
+/**
+ * Android must permit cleartext at the platform level because IPTV hosts are user-defined at
+ * runtime (no domain list is possible). This gate is the real control: a plain-HTTP request is
+ * refused unless the source it was made for allows HTTP ([HttpPolicy] tag). Requests without a tag
+ * are artwork, which isn't tied to one source and carries no credentials: those may use HTTP when
+ * any source allows it ([artworkAllowed]).
+ */
+object CleartextGate {
+    @Volatile var artworkAllowed: Boolean = false
+
+    fun permits(request: Request): Boolean =
+        request.url.isHttps || (request.tag(HttpPolicy::class.java)?.allowHttp ?: artworkAllowed)
+
+    val interceptor = Interceptor { chain ->
+        val request = chain.request()
+        if (!permits(request)) throw CleartextBlockedException(request.url.host)
+        chain.proceed(request)
+    }
+}
+
+/** A request for [url] that may only use plain HTTP if [policy] allows it. */
+fun request(url: HttpUrl, policy: HttpPolicy): Request = Request.Builder().url(url).tag(HttpPolicy::class.java, policy).build()
 
 object Http {
     const val USER_AGENT = "MUXLUME/1.0 (Android)"

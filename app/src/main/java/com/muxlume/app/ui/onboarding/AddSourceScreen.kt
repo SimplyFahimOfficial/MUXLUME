@@ -42,6 +42,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,6 +94,9 @@ sealed interface Phase {
     data object Testing : Phase
     data class Importing(val count: Int) : Phase
     data class Done(val result: ImportResult) : Phase
+
+    /** Saved without re-importing (only the name or the HTTP setting changed). */
+    data object Saved : Phase
 }
 
 data class FormState(
@@ -128,12 +132,24 @@ data class FormState(
     }
 
     val canSubmit: Boolean get() = validationError == null && (!usesHttp || httpAcknowledged) && phase == Phase.Editing
+
+    /** Where the list comes from; only a change here needs a new download. */
+    val location: List<Any?> get() = when (mode) {
+        Mode.LINK -> listOf(mode, url.trim())
+        Mode.FILE -> listOf(mode, fileUri)
+        Mode.XTREAM -> listOf(mode, XtreamApi.normalizeServer(server), username.trim(), password)
+    }
 }
 
 class AddSourceViewModel(private val c: AppContainer, private val existingId: Long?) : ViewModel() {
     val state = MutableStateFlow(FormState())
     private var savedId: Long? = existingId
     private var job: Job? = null
+    /** The source's location as loaded, to tell a rename from a new playlist. */
+    private var loadedLocation: List<Any?>? = null
+
+    /** Editing a source re-imports only when its link, file or login changed. */
+    fun needsImport(s: FormState) = loadedLocation == null || s.location != loadedLocation
 
     init {
         if (existingId != null) viewModelScope.launch {
@@ -144,6 +160,8 @@ class AddSourceViewModel(private val c: AppContainer, private val existingId: Lo
                 SourceType.M3U_FILE -> FormState(Mode.FILE, s.name, fileUri = secret?.url?.let(Uri::parse), fileName = s.label, httpAcknowledged = s.allowHttp)
                 SourceType.XTREAM -> FormState(Mode.XTREAM, s.name, server = secret?.url.orEmpty(), username = secret?.username.orEmpty(), password = secret?.password.orEmpty(), httpAcknowledged = s.allowHttp)
             }
+            // An item list that never imported (or failed) still needs one, even if nothing changed.
+            loadedLocation = if (s.refreshedAt != null && s.lastError == null) state.value.location else null
         }
     }
 
@@ -162,8 +180,7 @@ class AddSourceViewModel(private val c: AppContainer, private val existingId: Lo
         if (s.mode != Mode.XTREAM || !s.canSubmit) return
         job = viewModelScope.launch {
             state.update { it.copy(phase = Phase.Testing, error = null) }
-            // The HTTP gate only opens once a source with allowHttp is saved; testing an unsaved http server is allowed explicitly here.
-            val result = withHttpIfAcknowledged(s) { runCatching { c.sources.testXtream(input(s) as SourceInput.Xtream) } }
+            val result = runCatching { c.sources.testXtream(input(s) as SourceInput.Xtream) }
             state.update {
                 result.fold(
                     { acc ->
@@ -176,13 +193,6 @@ class AddSourceViewModel(private val c: AppContainer, private val existingId: Lo
         }
     }
 
-    private suspend fun <T> withHttpIfAcknowledged(s: FormState, block: suspend () -> T): T {
-        val gate = com.muxlume.app.core.net.CleartextGate
-        val before = gate.allowed
-        if (s.usesHttp && s.httpAcknowledged) gate.allowed = true
-        return try { block() } finally { gate.allowed = before || c.db.sources().anyAllowsHttpNow() }
-    }
-
     fun submit() {
         val s = state.value
         if (!s.canSubmit) return
@@ -190,9 +200,12 @@ class AddSourceViewModel(private val c: AppContainer, private val existingId: Lo
             state.update { it.copy(phase = Phase.Importing(0), error = null) }
             val createdNew = savedId == null
             try {
+                if (!needsImport(s)) {
+                    c.sources.save(input(s), savedId)
+                    state.update { it.copy(phase = Phase.Saved) }
+                    return@launch
+                }
                 val id = c.sources.save(input(s), savedId).also { savedId = it }
-                // The gate follows the database asynchronously; open it now so the first import isn't refused.
-                if (s.usesHttp && s.httpAcknowledged) com.muxlume.app.core.net.CleartextGate.allowed = true
                 val result = c.sources.refresh(id) { n -> state.update { it.copy(phase = Phase.Importing(n)) } }
                 c.settings.setOnboardingDone()
                 state.update { it.copy(phase = Phase.Done(result)) }
@@ -231,6 +244,7 @@ fun AddSourceScreen(existingId: Long?, onDone: () -> Unit, onBack: () -> Unit) {
 
     Column(Modifier.fillMaxSize().background(MuxTheme.Background)) {
         TopHeader(if (vm.isEditing) "Edit source" else "Add a playlist", onSearch = null, onBack = onBack)
+        if (s.phase == Phase.Saved) LaunchedEffect(Unit) { onDone() }
         when (val phase = s.phase) {
             is Phase.Importing -> Progress(phase.count, vm::cancel)
             is Phase.Done -> Done(phase.result, onDone)
@@ -284,7 +298,7 @@ private fun Form(s: FormState, vm: AddSourceViewModel, onPickFile: () -> Unit) {
             }
             s.error?.let { Text(it, color = MuxTheme.Error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
             Spacer(Modifier.height(4.dp))
-            PrimaryButton(if (vm.isEditing) "Save and re-import" else "Add and import", vm::submit, Modifier.fillMaxWidth(), enabled = s.canSubmit)
+            PrimaryButton(if (!vm.isEditing) "Add and import" else if (vm.needsImport(s)) "Save and re-import" else "Save", vm::submit, Modifier.fillMaxWidth(), enabled = s.canSubmit)
             if (s.mode == Mode.XTREAM) {
                 if (s.phase == Phase.Testing) {
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(28.dp), color = MuxTheme.Accent) }

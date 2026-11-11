@@ -48,6 +48,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.muxlume.app.AppContainer
 import com.muxlume.app.container
+import com.muxlume.app.data.db.ItemDao
 import com.muxlume.app.data.db.ItemEntity
 import com.muxlume.app.data.db.ItemKind
 import com.muxlume.app.ui.Nav
@@ -55,7 +56,7 @@ import com.muxlume.app.ui.components.Artwork
 import com.muxlume.app.ui.components.EmptyState
 import com.muxlume.app.ui.components.SectionHeader
 import com.muxlume.app.ui.components.pressable
-import com.muxlume.app.ui.playFromList
+import com.muxlume.app.ui.playChannel
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -72,14 +73,9 @@ import kotlinx.coroutines.launch
 class SearchViewModel(c: AppContainer) : ViewModel() {
     val query = MutableStateFlow("")
     val results = query.debounce(250).flatMapLatest { q ->
-        val t = q.trim()
-        if (t.length < 2) flowOf(null) else c.db.items().search(escapeLike(t), 300)
+        val match = ItemDao.ftsQuery(q).takeIf { q.trim().length >= 2 }
+        if (match == null) flowOf(null) else c.db.items().search(match, 300)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
-    companion object {
-        /** The query is matched literally: LIKE wildcards in it are escaped (see ItemDao.search). */
-        fun escapeLike(s: String) = s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    }
 }
 
 @Composable
@@ -127,7 +123,7 @@ fun SearchScreen(nav: Nav) {
                         }
                         items(items, key = { it.id }) { item ->
                             ResultRow(item) {
-                                if (kind == ItemKind.LIVE) scope.launch { if (context.playFromList(items, items.indexOf(item))) nav.player() }
+                                if (kind == ItemKind.LIVE) scope.launch { if (context.playChannel(item)) nav.player() } // up/down: the channel's group
                                 else nav.detail(item.sourceId, item.stableKey)
                             }
                         }

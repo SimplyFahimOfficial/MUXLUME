@@ -141,8 +141,9 @@ private class PlayerUi {
         live = p.currentMediaItem?.let { MediaIds.kindOf(it) == ItemKind.LIVE } ?: true
         duration = p.duration.takeIf { it != C.TIME_UNSET } ?: 0L
         position = p.currentPosition
-        hasNext = p.hasNextMediaItem()
-        hasPrevious = p.hasPreviousMediaItem()
+        // Live channels switch on demand (the service looks up the neighbour), so there's no queue to check.
+        hasNext = live || p.hasNextMediaItem()
+        hasPrevious = live || p.hasPreviousMediaItem()
         tracks = p.currentTracks
         cues = p.currentCues
         speed = p.playbackParameters.speed

@@ -79,37 +79,36 @@ fun SupportScreen(onBack: () -> Unit) {
         TopHeader("Support my work", onSearch = null, onBack = onBack)
         Column(Modifier.verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 28.dp)) {
             Text(
-                "Your support helps keep MUXLUME maintained and independent, with no ads and no tracking. " +
-                    "Every contribution is voluntary and appreciated.",
-                style = MaterialTheme.typography.bodyLarge, color = MuxTheme.TextSecondary,
-                modifier = Modifier.padding(horizontal = Mux.ScreenPadding, vertical = 4.dp),
+                "Voluntary support keeps MUXLUME ad-free and independent.",
+                style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary,
+                modifier = Modifier.padding(horizontal = Mux.ScreenPadding),
             )
-            Spacer(Modifier.height(16.dp))
-            SectionHeader("Payment")
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
 
-            Column(Modifier.padding(horizontal = Mux.ScreenPadding).fillMaxWidth().clip(Mux.CardShape).background(MuxTheme.Surface).padding(18.dp)) {
-                Text("UPI", style = MaterialTheme.typography.titleLarge, color = MuxTheme.TextPrimary)
-                Text(
-                    "Scan this code with any UPI app, or open one on this phone. You choose the amount.",
-                    style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
-                )
-                Spacer(Modifier.height(16.dp))
-                // Dark-on-white, as scanners expect, in every theme.
-                Box(Modifier.align(Alignment.CenterHorizontally).clip(Mux.CardShape).background(Color.White).padding(14.dp)) {
-                    Image(
-                        bitmap = qr,
-                        contentDescription = "UPI QR code for ${SupportConfig.UPI_ID}",
-                        filterQuality = FilterQuality.None,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.size(208.dp),
-                    )
+            Column(Modifier.padding(horizontal = Mux.ScreenPadding).fillMaxWidth().clip(Mux.CardShape).background(MuxTheme.Surface).padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Dark-on-white, as scanners expect, in every theme.
+                    Box(Modifier.clip(Mux.CardShape).background(Color.White).padding(8.dp)) {
+                        Image(
+                            bitmap = qr,
+                            contentDescription = "UPI QR code for ${SupportConfig.UPI_ID}",
+                            filterQuality = FilterQuality.None,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.size(132.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("UPI", style = MaterialTheme.typography.labelMedium, color = MuxTheme.TextSecondary)
+                        SelectionContainer {
+                            Text(SupportConfig.UPI_ID, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary, maxLines = 2)
+                        }
+                        Text("Payee: ${SupportConfig.UPI_PAYEE_NAME}", style = MaterialTheme.typography.labelSmall, color = MuxTheme.TextSecondary)
+                        Spacer(Modifier.height(6.dp))
+                        Text("Scan with any UPI app. You choose the amount.", style = MaterialTheme.typography.labelSmall, color = MuxTheme.TextSecondary)
+                    }
                 }
-                Spacer(Modifier.height(16.dp))
-                Text("UPI ID", style = MaterialTheme.typography.labelMedium, color = MuxTheme.TextSecondary)
-                SelectionContainer { Text(SupportConfig.UPI_ID, style = MaterialTheme.typography.headlineSmall, color = MuxTheme.TextPrimary) }
-                Text("Payee: ${SupportConfig.UPI_PAYEE_NAME}", style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(14.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     ActionChip(Icons.Rounded.ContentCopy, "Copy UPI ID", Modifier.weight(1f)) {
                         SupportIntents.copyUpiId(context)
@@ -121,25 +120,22 @@ fun SupportScreen(onBack: () -> Unit) {
                         }
                     }
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     ActionChip(Icons.Rounded.Share, "Share QR", Modifier.weight(1f)) {
                         if (!SupportIntents.shareQr(context)) Toast.makeText(context, "Couldn't share the QR code", Toast.LENGTH_SHORT).show()
                     }
                     ActionChip(Icons.Rounded.Download, "Save QR", Modifier.weight(1f)) { saveLauncher.launch(SupportIntents.QR_FILE_NAME) }
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
                 Text(
-                    "Check that your UPI app shows the payee ${SupportConfig.UPI_PAYEE_NAME} before you pay. " +
-                        "Opening a UPI app doesn't mean a payment was made: only your UPI app can confirm that.",
-                    style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary,
+                    "Check the payee is ${SupportConfig.UPI_PAYEE_NAME}. Only your UPI app can confirm a payment.",
+                    style = MaterialTheme.typography.labelSmall, color = MuxTheme.TextSecondary,
                 )
             }
 
-            Spacer(Modifier.height(10.dp))
             LinkRow(Icons.Rounded.Favorite, "More ways to pay", "Cards and other options", { open(SupportConfig.MORE_WAYS_TO_PAY) })
-
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(4.dp))
             SectionHeader("Project and developer")
             LinkRow(Icons.AutoMirrored.Rounded.Send, "Telegram community", "t.me/Muxlume", { open(SupportConfig.TELEGRAM) })
             LinkRow(Icons.Rounded.Language, "Project website", "simplyfahim.pages.dev/Muxlume", { open(SupportConfig.WEBSITE) })

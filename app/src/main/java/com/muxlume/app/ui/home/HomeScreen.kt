@@ -53,7 +53,8 @@ import com.muxlume.app.ui.main.BottomBarSpace
 import com.muxlume.app.ui.main.Tab
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.play
-import com.muxlume.app.ui.playFromList
+import com.muxlume.app.playback.ChannelList
+import com.muxlume.app.ui.playChannel
 import com.muxlume.app.ui.theme.OnMedia
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
@@ -92,7 +93,10 @@ fun HomeScreen(nav: Nav, openTab: (Tab) -> Unit) {
     val s by vm.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     fun playEntry(e: HistoryEntity) = scope.launch { if (context.play(listOf(MediaIds.request(e)))) nav.player() }
-    fun playChannels(list: List<ItemEntity>, i: Int) = scope.launch { if (context.playFromList(list, i)) nav.player() }
+    // Favorites across all sources, newest first, as the row shows them.
+    fun playFavorite(ch: ItemEntity) = scope.launch {
+        if (context.playChannel(ch, ChannelList(ChannelList.Order.FAVORITES, group = null))) nav.player()
+    }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = BottomBarSpace + 24.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
         item { TopHeader(null, onSearch = nav::search) }
@@ -118,7 +122,7 @@ fun HomeScreen(nav: Nav, openTab: (Tab) -> Unit) {
             }
         } else if (s.favoriteChannels.isNotEmpty()) {
             val ch = s.favoriteChannels.first()
-            item { Hero(ch.name, ch.groupTitle, ch.logo, live = true, progress = null, action = "Watch live", onPlay = { playChannels(s.favoriteChannels, 0) }, fitArt = true) }
+            item { Hero(ch.name, ch.groupTitle, ch.logo, live = true, progress = null, action = "Watch live", onPlay = { playFavorite(ch) }, fitArt = true) }
         }
         if (s.continueWatching.size > 1) {
             item {
@@ -130,7 +134,7 @@ fun HomeScreen(nav: Nav, openTab: (Tab) -> Unit) {
         if (s.favoriteChannels.isNotEmpty()) {
             item {
                 Shelf("Favorite channels", s.favoriteChannels, action = "All channels", onAction = { openTab(Tab.LIVE) }) { ch ->
-                    WideCard(ch.name, ch.groupTitle.ifEmpty { null }, ch.logo, { playChannels(s.favoriteChannels, s.favoriteChannels.indexOf(ch)) }, fit = true)
+                    WideCard(ch.name, ch.groupTitle.ifEmpty { null }, ch.logo, { playFavorite(ch) }, fit = true)
                 }
             }
         }

@@ -58,8 +58,8 @@ class MuxlumeApp : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
-        // Keep the HTTP gate in sync with the sources' "allow HTTP" choices.
-        container.appScope.launch { container.db.sources().anyAllowsHttp().collect { CleartextGate.allowed = it } }
+        // Artwork isn't tied to a source: allow it over HTTP only while some source allows HTTP.
+        container.appScope.launch { container.db.sources().anyAllowsHttp().collect { CleartextGate.artworkAllowed = it } }
     }
 
     override fun newImageLoader(context: Context): ImageLoader = ImageLoader.Builder(context)
