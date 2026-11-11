@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.SortByAlpha
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
@@ -50,6 +51,8 @@ import com.muxlume.app.ui.components.Artwork
 import com.muxlume.app.ui.components.EmptyState
 import com.muxlume.app.ui.components.PillRow
 import com.muxlume.app.ui.components.pressable
+import com.muxlume.app.ui.guide.NowNextLine
+import com.muxlume.app.ui.guide.rememberNowNext
 import com.muxlume.app.ui.main.BottomBarSpace
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.playback.ChannelList
@@ -164,12 +167,16 @@ fun LiveScreen(nav: Nav) {
     val groups by vm.groups.collectAsStateWithLifecycle()
     val channels = vm.items.collectAsLazyPagingItems()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
+    val guide = sources?.firstOrNull { it.id == sourceId }?.guideEnabled == true
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     LaunchedEffect(browse, sourceId) { listState.scrollToItem(0) }
 
     Column(Modifier.fillMaxSize()) {
-        TopHeader(stringResource(R.string.live_live_tv), onSearch = nav::search)
+        TopHeader(
+            stringResource(R.string.live_live_tv), onSearch = nav::search,
+            actions = { IconButton(nav::guide) { Icon(Icons.Rounded.CalendarMonth, stringResource(R.string.guide_title), tint = MuxTheme.TextPrimary) } },
+        )
         val list = sources ?: return@Column
         if (list.isEmpty()) {
             EmptyState(
@@ -192,7 +199,7 @@ fun LiveScreen(nav: Nav) {
             items(channels.itemCount, key = channels.itemKey { it.id }) { i ->
                 val ch = channels[i] ?: return@items // placeholder while the page loads
                 val fav = ch.stableKey in favorites
-                ChannelRow(ch, fav, onClick = { scope.launch { if (context.playChannel(ch, vm.channelList())) nav.player() } }, onFavorite = { vm.toggleFavorite(ch, fav) })
+                ChannelRow(ch, fav, guide, onClick = { scope.launch { if (context.playChannel(ch, vm.channelList())) nav.player() } }, onFavorite = { vm.toggleFavorite(ch, fav) })
             }
         }
     }
@@ -223,7 +230,7 @@ fun BrowseFilters(vm: BrowseViewModel, sources: List<SourceEntity>, sourceId: Lo
 }
 
 @Composable
-private fun ChannelRow(ch: ItemEntity, favorite: Boolean, onClick: () -> Unit, onFavorite: () -> Unit) {
+private fun ChannelRow(ch: ItemEntity, favorite: Boolean, guide: Boolean, onClick: () -> Unit, onFavorite: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().pressable(onClick, label = stringResource(R.string.live_play, ch.name)).padding(horizontal = Mux.ScreenPadding, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -234,6 +241,7 @@ private fun ChannelRow(ch: ItemEntity, favorite: Boolean, onClick: () -> Unit, o
             Text(ch.name, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val meta = listOfNotNull(ch.number?.toString(), ch.groupTitle.ifEmpty { null }).joinToString(" · ")
             if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            NowNextLine(rememberNowNext(ch.sourceId, ch.stableKey, guide).value)
         }
         IconButton(onFavorite) {
             Icon(

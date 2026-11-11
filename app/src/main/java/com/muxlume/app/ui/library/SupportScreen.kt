@@ -25,7 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Code
@@ -33,13 +33,25 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Language
-import androidx.compose.material.icons.rounded.PhotoCamera
+import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.widthIn
+import com.muxlume.app.ui.components.PrimaryButton
+import com.muxlume.app.ui.components.HighlightRow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,6 +84,7 @@ fun SupportScreen(onBack: () -> Unit) {
     }
     // Encoded once; the payload identifies only the payee (no amount) and never leaves the device.
     val qr = remember { UpiQrCode.toBitmap(UpiQrCode.encode(SupportConfig.upiPaymentUri())).asImageBitmap() }
+    var enlarged by rememberSaveable { mutableStateOf(false) }
     val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(SupportIntents.QR_MIME_TYPE)) { uri ->
         if (uri != null) {
             val ok = SupportIntents.saveQr(context, uri)
@@ -92,7 +105,11 @@ fun SupportScreen(onBack: () -> Unit) {
             Column(Modifier.padding(horizontal = Mux.ScreenPadding).fillMaxWidth().clip(Mux.CardShape).background(MuxTheme.Surface).padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // Dark-on-white, as scanners expect, in every theme.
-                    Box(Modifier.clip(Mux.CardShape).background(Color.White).padding(8.dp)) {
+                    Box(
+                        Modifier.clip(Mux.CardShape).background(Color.White)
+                            .pressable({ enlarged = true }, label = stringResource(R.string.support_enlarge_the_qr_code))
+                            .padding(8.dp),
+                    ) {
                         Image(
                             bitmap = qr,
                             contentDescription = stringResource(R.string.support_upi_qr_code_for, SupportConfig.UPI_ID),
@@ -138,14 +155,47 @@ fun SupportScreen(onBack: () -> Unit) {
                 )
             }
 
-            LinkRow(Icons.Rounded.Favorite, stringResource(R.string.support_more_ways_to_pay), stringResource(R.string.support_cards_and_other_options), { open(SupportConfig.MORE_WAYS_TO_PAY) })
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(8.dp))
+            HighlightRow(
+                Icons.Rounded.CreditCard, stringResource(R.string.support_more_ways_to_pay), stringResource(R.string.support_cards_and_other_options),
+                { open(SupportConfig.MORE_WAYS_TO_PAY) }, trailing = Icons.AutoMirrored.Rounded.OpenInNew,
+            )
+            Spacer(Modifier.height(8.dp))
             SectionHeader(stringResource(R.string.support_project_and_developer))
             LinkRow(Icons.AutoMirrored.Rounded.Send, stringResource(R.string.support_telegram_community), "t.me/Muxlume", { open(SupportConfig.TELEGRAM) })
             LinkRow(Icons.Rounded.Language, stringResource(R.string.support_project_website), "simplyfahim.pages.dev/Muxlume", { open(SupportConfig.WEBSITE) })
             LinkRow(Icons.Rounded.Email, stringResource(R.string.support_contact_the_developer), "simplyfahim.pages.dev", { open(SupportConfig.CONTACT) })
-            LinkRow(Icons.Rounded.Code, stringResource(R.string.support_github), stringResource(R.string.support_simplyfahimofficial), { open(SupportConfig.GITHUB_PROFILE) })
-            LinkRow(Icons.Rounded.PhotoCamera, stringResource(R.string.support_instagram), stringResource(R.string.support_simplyfahimofficial_2), { open(SupportConfig.INSTAGRAM) })
+            LinkRow(Icons.Rounded.Code, stringResource(R.string.support_github), "SimplyFahimOfficial/MUXLUME", { open(SupportConfig.GITHUB_REPO) })
+        }
+    }
+    if (enlarged) QrDialog(qr, onClose = { enlarged = false })
+}
+
+/** The QR code at full size for scanning from another device, with the payee, UPI ID and a Close button below. */
+@Composable
+private fun QrDialog(qr: ImageBitmap, onClose: () -> Unit) {
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(
+            Modifier.padding(horizontal = 24.dp).widthIn(max = 420.dp).fillMaxWidth().clip(Mux.HeroShape).background(MuxTheme.Surface).padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // Dark-on-white, as scanners expect, in every theme.
+            Box(Modifier.clip(Mux.CardShape).background(Color.White).padding(12.dp)) {
+                Image(
+                    bitmap = qr,
+                    contentDescription = stringResource(R.string.support_upi_qr_code_for, SupportConfig.UPI_ID),
+                    filterQuality = FilterQuality.None,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            Text(stringResource(R.string.support_payee, SupportConfig.UPI_PAYEE_NAME), style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextSecondary)
+            SelectionContainer {
+                Text(SupportConfig.UPI_ID, style = MaterialTheme.typography.headlineSmall, color = MuxTheme.TextPrimary, textAlign = TextAlign.Center)
+            }
+            Spacer(Modifier.height(18.dp))
+            PrimaryButton(stringResource(R.string.support_close), onClose, Modifier.fillMaxWidth())
         }
     }
 }

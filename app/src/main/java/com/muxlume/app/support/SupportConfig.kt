@@ -20,10 +20,8 @@ object SupportConfig {
     /** Other payment options (cards, etc.), on the developer's site. */
     const val MORE_WAYS_TO_PAY = "https://simplyfahim.pages.dev/pay-options"
 
-    /** Developer's public GitHub profile. */
-    const val GITHUB_PROFILE = "https://github.com/SimplyFahimOfficial"
-
-    const val INSTAGRAM = "https://instagram.com/SimplyFahimofficial"
+    /** Project repository (source code, issues, releases). */
+    const val GITHUB_REPO = "https://github.com/SimplyFahimOfficial/MUXLUME"
 
     /** Public UPI ID (VPA) and the payee name UPI apps show before the user confirms. */
     const val UPI_ID = "SimplyFahim@sbi"

@@ -117,12 +117,15 @@ import com.muxlume.app.ui.theme.Motion
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
 import com.muxlume.app.ui.theme.SectionLabel
+import com.muxlume.app.ui.guide.NowNextLine
+import com.muxlume.app.ui.guide.rememberNowNext
 import kotlinx.coroutines.delay
 
 /** Snapshot of the controller state the screen needs, updated by one listener. */
 @OptIn(UnstableApi::class)
 private class PlayerUi {
     var title by mutableStateOf("")
+    var mediaId by mutableStateOf<String?>(null)
     var subtitle by mutableStateOf<String?>(null)
     var isPlaying by mutableStateOf(false)
     var state by mutableIntStateOf(Player.STATE_IDLE)
@@ -139,6 +142,7 @@ private class PlayerUi {
     fun read(p: Player) {
         val meta = p.mediaMetadata
         title = meta.title?.toString().orEmpty()
+        mediaId = p.currentMediaItem?.mediaId
         subtitle = meta.artist?.toString()
         isPlaying = p.isPlaying
         state = p.playbackState
@@ -315,6 +319,7 @@ private fun Controls(
                 Column(Modifier.weight(1f).padding(horizontal = 4.dp)) {
                     Text(ui.title, style = MaterialTheme.typography.titleLarge, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     ui.subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MuxTheme.Primary.copy(alpha = 0.8f), maxLines = 1) }
+                    if (ui.live) ui.mediaId?.let(MediaIds::parse)?.let { (sourceId, key) -> NowNextLine(rememberNowNext(sourceId, key, true).value) }
                 }
                 IconButton(onOptions) { Icon(Icons.Rounded.Tune, stringResource(R.string.player_audio_subtitles_and_info), tint = MuxTheme.TextPrimary) }
                 val sizeLabel = stringResource(R.string.player_picture_size, scaleLabel)

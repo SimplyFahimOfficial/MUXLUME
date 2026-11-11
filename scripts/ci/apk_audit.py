@@ -29,6 +29,8 @@ ALLOWED_PERMISSIONS = {
     "android.permission.FOREGROUND_SERVICE",  # media playback service (background audio, notification)
     "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",  # foreground service type for the above (API 34+)
     "android.permission.WAKE_LOCK",  # CPU/Wi-Fi awake only while playing (ExoPlayer wake mode)
+    "android.permission.POST_NOTIFICATIONS",  # guide reminders; asked when the first reminder is set
+    "android.permission.RECEIVE_BOOT_COMPLETED",  # re-arms reminders after a restart (receiver not exported)
 }
 # Reviewed exception (docs/SECURITY.md, "Cleartext HTTP"): the platform must permit cleartext because
 # IPTV servers are user-defined at runtime; core/net/Http.kt refuses HTTP until the user opts in.

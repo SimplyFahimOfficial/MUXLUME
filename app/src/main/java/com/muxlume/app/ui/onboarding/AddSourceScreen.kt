@@ -80,6 +80,7 @@ import com.muxlume.app.data.xtream.XtreamApi
 import com.muxlume.app.ui.components.PillRow
 import com.muxlume.app.ui.components.PrimaryButton
 import com.muxlume.app.ui.components.SecondaryButton
+import com.muxlume.app.ui.components.Toggle
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
@@ -113,6 +114,7 @@ data class FormState(
     val server: String = "",
     val username: String = "",
     val password: String = "",
+    val guideUrl: String = "",
     val httpAcknowledged: Boolean = false,
     val phase: Phase = Phase.Editing,
     val error: String? = null,
@@ -120,14 +122,24 @@ data class FormState(
 ) {
     /** The address the user typed uses plain HTTP and needs an explicit acknowledgement. */
     val usesHttp: Boolean get() = when (mode) {
-        Mode.LINK -> url.trim().startsWith("http://", ignoreCase = true)
+        Mode.LINK -> url.trim().startsWith("http://", ignoreCase = true) || guideUrl.trim().startsWith("http://", ignoreCase = true)
         Mode.XTREAM -> server.isNotBlank() && XtreamApi.normalizeServer(server)?.isHttps == false
         Mode.FILE -> false
     }
 
+    private val badGuide: Boolean get() = guideUrl.isNotBlank() && Urls.parseHttp(guideUrl.trim()) == null
+
     @get:StringRes val validationError: Int? get() = when (mode) {
-        Mode.LINK -> if (Urls.parseHttp(url) == null) R.string.add_source_enter_a_link_that_starts else null
-        Mode.FILE -> if (fileUri == null) R.string.add_source_choose_a_playlist_file else null
+        Mode.LINK -> when {
+            Urls.parseHttp(url) == null -> R.string.add_source_enter_a_link_that_starts
+            badGuide -> R.string.add_source_guide_link_invalid
+            else -> null
+        }
+        Mode.FILE -> when {
+            fileUri == null -> R.string.add_source_choose_a_playlist_file
+            badGuide -> R.string.add_source_guide_link_invalid
+            else -> null
+        }
         Mode.XTREAM -> when {
             XtreamApi.normalizeServer(server) == null -> R.string.add_source_enter_the_server_address_for
             username.isBlank() -> R.string.add_source_enter_your_username
@@ -161,8 +173,8 @@ class AddSourceViewModel(private val c: AppContainer, private val res: Resources
             val s = c.sources.get(existingId) ?: return@launch
             val secret = runCatching { c.sources.secretOf(s) }.getOrNull()
             state.value = when (s.type) {
-                SourceType.M3U_URL -> FormState(Mode.LINK, s.name, url = secret?.url.orEmpty(), httpAcknowledged = s.allowHttp)
-                SourceType.M3U_FILE -> FormState(Mode.FILE, s.name, fileUri = secret?.url?.let(Uri::parse), fileName = s.label, httpAcknowledged = s.allowHttp)
+                SourceType.M3U_URL -> FormState(Mode.LINK, s.name, url = secret?.url.orEmpty(), guideUrl = secret?.epgUrl.orEmpty(), httpAcknowledged = s.allowHttp)
+                SourceType.M3U_FILE -> FormState(Mode.FILE, s.name, fileUri = secret?.url?.let(Uri::parse), fileName = s.label, guideUrl = secret?.epgUrl.orEmpty(), httpAcknowledged = s.allowHttp)
                 SourceType.XTREAM -> FormState(Mode.XTREAM, s.name, server = secret?.url.orEmpty(), username = secret?.username.orEmpty(), password = secret?.password.orEmpty(), httpAcknowledged = s.allowHttp)
             }
             // An item list that never imported (or failed) still needs one, even if nothing changed.
@@ -175,8 +187,8 @@ class AddSourceViewModel(private val c: AppContainer, private val res: Resources
     fun edit(f: (FormState) -> FormState) = state.update { f(it).copy(error = null, accountInfo = if (it.mode == f(it).mode) it.accountInfo else null) }
 
     private fun input(s: FormState): SourceInput = when (s.mode) {
-        Mode.LINK -> SourceInput.M3uUrl(s.name, s.url, s.usesHttp && s.httpAcknowledged)
-        Mode.FILE -> SourceInput.M3uFile(s.name, s.fileUri!!, s.fileName, s.httpAcknowledged)
+        Mode.LINK -> SourceInput.M3uUrl(s.name, s.url, s.usesHttp && s.httpAcknowledged, s.guideUrl)
+        Mode.FILE -> SourceInput.M3uFile(s.name, s.fileUri!!, s.fileName, s.httpAcknowledged, s.guideUrl)
         Mode.XTREAM -> SourceInput.Xtream(s.name, s.server, s.username, s.password, s.usesHttp && s.httpAcknowledged)
     }
 
@@ -232,6 +244,15 @@ class AddSourceViewModel(private val c: AppContainer, private val res: Resources
         }
     }
 
+    /** Turns the guide on for the source just imported and downloads it in the background. */
+    fun enableGuide() {
+        val id = savedId ?: return
+        c.appScope.launch {
+            c.epg.setEnabled(id, true)
+            runCatching { c.epg.refresh(id) } // a failure is recorded on the source and shown in TV guide settings
+        }
+    }
+
     fun cancel() {
         job?.cancel()
         state.update { it.copy(phase = Phase.Editing) }
@@ -260,7 +281,10 @@ fun AddSourceScreen(existingId: Long?, onDone: () -> Unit, onBack: () -> Unit) {
         if (s.phase == Phase.Saved) LaunchedEffect(Unit) { onDone() }
         when (val phase = s.phase) {
             is Phase.Importing -> Progress(phase.count, vm::cancel)
-            is Phase.Done -> Done(phase.result, onDone)
+            is Phase.Done -> Done(phase.result) { guide ->
+                if (guide) vm.enableGuide()
+                onDone()
+            }
             else -> Form(s, vm, onPickFile = { picker.launch(arrayOf("audio/x-mpegurl", "audio/mpegurl", "application/x-mpegurl", "application/vnd.apple.mpegurl", "text/plain", "application/octet-stream")) })
         }
     }
@@ -309,6 +333,9 @@ private fun Form(s: FormState, vm: AddSourceViewModel, onPickFile: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary,
                     )
                 }
+            }
+            if (s.mode != Mode.XTREAM) {
+                Field(stringResource(R.string.add_source_guide_link), s.guideUrl, { v -> vm.edit { it.copy(guideUrl = v) } }, keyboard = KeyboardType.Uri, placeholder = "https://…/guide.xml")
             }
             // A local file can list plain-HTTP streams; that is opt-in here instead of required up front.
             if (s.usesHttp || s.mode == Mode.FILE) HttpWarning(s.httpAcknowledged, optional = s.mode == Mode.FILE) { on -> vm.edit { it.copy(httpAcknowledged = on) } }
@@ -407,7 +434,8 @@ private fun Progress(count: Int, onCancel: () -> Unit) {
 }
 
 @Composable
-private fun Done(r: ImportResult, onDone: () -> Unit) {
+private fun Done(r: ImportResult, onDone: (guide: Boolean) -> Unit) {
+    var guide by remember { mutableStateOf(true) }
     Column(Modifier.fillMaxSize().padding(Mux.ScreenPadding), verticalArrangement = Arrangement.Center) {
         Icon(Icons.Rounded.CheckCircle, null, tint = MuxTheme.Accent, modifier = Modifier.size(56.dp))
         Spacer(Modifier.height(20.dp))
@@ -431,7 +459,8 @@ private fun Done(r: ImportResult, onDone: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
             )
         }
+        if (r.guideAvailable) Toggle(stringResource(R.string.add_source_use_the_tv_guide), stringResource(R.string.add_source_use_the_tv_guide_body), guide) { guide = it }
         Spacer(Modifier.height(28.dp))
-        PrimaryButton(stringResource(R.string.add_source_start_watching), onDone, Modifier.fillMaxWidth())
+        PrimaryButton(stringResource(R.string.add_source_start_watching), { onDone(r.guideAvailable && guide) }, Modifier.fillMaxWidth())
     }
 }

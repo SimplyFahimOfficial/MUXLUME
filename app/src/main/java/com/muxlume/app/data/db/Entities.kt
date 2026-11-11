@@ -27,6 +27,7 @@ data class SourceEntity(
     val allowHttp: Boolean,
     /** File extension for Xtream live streams (m3u8 or ts). */
     val liveExtension: String? = null,
+    /** Unused since v3: guide links can carry credentials, so they live in the sealed [secret]. */
     val epgUrl: String? = null,
     val createdAt: Long,
     val refreshedAt: Long? = null,
@@ -36,6 +37,11 @@ data class SourceEntity(
     val seriesCount: Int = 0,
     /** Xtream account expiry, epoch seconds, if the provider reports one. */
     val expiresAt: Long? = null,
+    /** The user turned the TV guide on: it is downloaded now and refreshed in the background. */
+    @ColumnInfo(defaultValue = "0") val guideEnabled: Boolean = false,
+    val epgRefreshedAt: Long? = null,
+    val epgError: String? = null,
+    @ColumnInfo(defaultValue = "0") val epgPrograms: Int = 0,
 )
 
 /**

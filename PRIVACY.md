@@ -9,6 +9,8 @@ MUXLUME is a local media player. It has no user accounts and the developer runs 
 - The playlists and provider accounts you add: links, usernames and passwords (encrypted with a key
   in your device's Android Keystore), and the channel, movie and series lists they contain.
 - Favorites, watch history and resume positions.
+- If you turn the TV guide on for a playlist: its programme data and your reminders, stored only on
+  the device.
 - Settings, and cached artwork images.
 
 None of it is sent to the developer or anyone else, and none of it is included in Android backups or
@@ -19,6 +21,7 @@ device-to-device transfers. **Settings → Delete all data** removes everything;
 The app connects only to:
 
 - the playlist links and provider servers you add (to download lists, metadata and streams);
+- the TV guide link, only for playlists where you turned the guide on (downloaded when you enable it and about every 12 hours on Wi-Fi unless you change that);
 - the artwork (logo, poster) addresses those lists contain;
 - links you open yourself from the Support screen, in your browser.
 
@@ -30,7 +33,7 @@ read that traffic.
 ## Permissions
 
 Internet access, a foreground service for playback with the screen off or in the background, and
-keeping the device awake while a stream plays. Files are only read when you pick them.
+keeping the device awake while a stream plays. Notifications (for guide reminders, only if you set one) and a restart receiver that re-arms those reminders. Files are only read when you pick them.
 
 ## Children
 
