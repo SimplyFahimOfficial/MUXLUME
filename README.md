@@ -21,9 +21,10 @@ everything else is planned.
 | Sources | M3U/M3U8 from a link or a local file (SAF), Xtream Codes-compatible login with connection test, edit, refresh, remove, multiple sources | Periodic background refresh, other provider formats |
 | Live TV | Groups, favorites, recently watched, A–Z sort, search, channel up/down in the player | Hidden channels, custom order, now/next |
 | Movies and series | Poster grids by category, detail pages with provider metadata, seasons and episodes, watchlist, resume, continue watching, next episode | Optional third-party metadata |
+| Appearance | Dark and light themes, System option, five accents, Material You (Android 12+), AMOLED black, reduced motion | Layout density, shared-element transitions |
 | Playback | Media3 ExoPlayer: HLS, DASH, RTSP, progressive (TS/MP4/MKV…); audio and subtitle tracks; picture size; speed (VOD); PiP; optional background audio; media notification; reconnect with backoff; diagnostics without links | Buffer settings, decoder preferences, catch-up, timeshift, recording |
 | EPG | – | XMLTV import, guide, reminders |
-| Other | Onboarding, settings, help/about, data deletion | Backup/restore, parental PIN, light theme, Android TV layout |
+| Other | Onboarding, settings, help & about, Support (native UPI), data deletion | Backup/restore, parental PIN, Android TV layout |
 
 There are no app screenshots yet; they will be added from real devices.
 
@@ -52,8 +53,8 @@ Docs: [architecture](docs/ARCHITECTURE.md), [design system](docs/DESIGN_SYSTEM.m
 
 ## Licence
 
-Not chosen yet. Until a `LICENSE` file is added, no licence is granted. A FLOSS licence is required
-before F-Droid submission (see [docs/FDROID.md](docs/FDROID.md)).
+[GNU General Public License v3.0 or later](LICENSE) (GPL-3.0-or-later). You may use, study, share and
+modify it; derivatives must stay under the same licence.
 
 ## Community and contact
 

@@ -57,6 +57,7 @@ import com.muxlume.app.ui.components.SectionHeader
 import com.muxlume.app.ui.components.pressable
 import com.muxlume.app.ui.playFromList
 import com.muxlume.app.ui.theme.Mux
+import com.muxlume.app.ui.theme.MuxTheme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -91,20 +92,20 @@ fun SearchScreen(nav: Nav) {
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
-    Column(Modifier.fillMaxSize().background(Mux.Black).imePadding()) {
+    Column(Modifier.fillMaxSize().background(MuxTheme.Background).imePadding()) {
         Row(Modifier.windowInsetsPadding(WindowInsets.statusBars).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(nav::back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = Mux.White) }
+            IconButton(nav::back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = MuxTheme.TextPrimary) }
             TextField(
                 query, { vm.query.value = it.take(100) },
                 Modifier.weight(1f).focusRequester(focus),
                 placeholder = { Text("Channels, movies, series") },
-                leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Mux.TextSecondary) },
-                trailingIcon = { if (query.isNotEmpty()) IconButton({ vm.query.value = "" }) { Icon(Icons.Rounded.Close, "Clear search", tint = Mux.TextSecondary) } },
+                leadingIcon = { Icon(Icons.Rounded.Search, null, tint = MuxTheme.TextSecondary) },
+                trailingIcon = { if (query.isNotEmpty()) IconButton({ vm.query.value = "" }) { Icon(Icons.Rounded.Close, "Clear search", tint = MuxTheme.TextSecondary) } },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 shape = Mux.PillShape,
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Mux.Raised, unfocusedContainerColor = Mux.Raised, cursorColor = Mux.Orange,
+                    focusedContainerColor = MuxTheme.Raised, unfocusedContainerColor = MuxTheme.Raised, cursorColor = MuxTheme.Accent,
                     focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                 ),
             )
@@ -112,7 +113,7 @@ fun SearchScreen(nav: Nav) {
         val list = results
         when {
             list == null -> Text(
-                "Type at least two letters.", style = MaterialTheme.typography.bodyMedium, color = Mux.TextSecondary,
+                "Type at least two letters.", style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
                 modifier = Modifier.padding(Mux.ScreenPadding),
             )
             list.isEmpty() -> EmptyState("No matches", "Nothing in your playlists matches \"${query.trim()}\".")
@@ -148,8 +149,8 @@ private fun ResultRow(item: ItemEntity, onClick: () -> Unit) {
         )
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(item.name, style = MaterialTheme.typography.titleMedium, color = Mux.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (item.groupTitle.isNotEmpty()) Text(item.groupTitle, style = MaterialTheme.typography.bodySmall, color = Mux.TextSecondary, maxLines = 1)
+            Text(item.name, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (item.groupTitle.isNotEmpty()) Text(item.groupTitle, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary, maxLines = 1)
         }
     }
 }

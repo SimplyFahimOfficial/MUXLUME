@@ -59,7 +59,7 @@ fun WelcomeScreen(onAdd: () -> Unit, onExplore: () -> Unit) {
     var shown by remember { mutableStateOf(reduced) }
     LaunchedEffect(Unit) { shown = true }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(Mux.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(MuxTheme.Background).windowInsetsPadding(WindowInsets.safeDrawing)) {
         // Bottom-aligned on tall screens, scrollable when large fonts need more room.
         Column(
             Modifier.verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(horizontal = 28.dp, vertical = 24.dp).widthIn(max = 560.dp),
@@ -69,20 +69,20 @@ fun WelcomeScreen(onAdd: () -> Unit, onExplore: () -> Unit) {
                 Column {
                     MuxLogo(size = 96.dp)
                     Spacer(Modifier.height(28.dp))
-                    Text("MUXLUME", style = MaterialTheme.typography.displayLarge, color = Mux.White, modifier = Modifier.semantics { heading() })
+                    Text("MUXLUME", style = MaterialTheme.typography.displayLarge, color = MuxTheme.TextPrimary, modifier = Modifier.semantics { heading() })
                     Spacer(Modifier.height(8.dp))
                     Text(
                         "A cinematic player for the live TV, movies and series you already subscribe to.",
-                        style = MaterialTheme.typography.titleLarge, color = Mux.Cream.copy(alpha = 0.9f),
+                        style = MaterialTheme.typography.titleLarge, color = MuxTheme.Primary.copy(alpha = 0.9f),
                     )
                     Spacer(Modifier.height(28.dp))
-                    Row(Modifier.fillMaxWidth().clip(Mux.CardShape).background(Mux.Surface).padding(16.dp)) {
-                        Icon(Icons.Rounded.Info, null, tint = Mux.Orange, modifier = Modifier.size(22.dp))
+                    Row(Modifier.fillMaxWidth().clip(Mux.CardShape).background(MuxTheme.Surface).padding(16.dp)) {
+                        Icon(Icons.Rounded.Info, null, tint = MuxTheme.Accent, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(12.dp))
                         Text(
                             "MUXLUME is only a player. It doesn't provide channels, subscriptions or any media. " +
                                 "Add M3U playlists or Xtream Codes-compatible accounts you're authorized to use. Everything stays on this device.",
-                            style = MaterialTheme.typography.bodyMedium, color = Mux.TextSecondary,
+                            style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
                         )
                     }
                     Spacer(Modifier.height(28.dp))

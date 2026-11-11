@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -41,8 +42,10 @@ import com.muxlume.app.container
 import com.muxlume.app.data.AppSettings
 import com.muxlume.app.ui.Nav
 import com.muxlume.app.ui.components.SectionHeader
+import com.muxlume.app.ui.components.Toggle
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.theme.Mux
+import com.muxlume.app.ui.theme.MuxTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -55,24 +58,21 @@ fun SettingsScreen(nav: Nav) {
     val scope = rememberCoroutineScope()
     var confirm by remember { mutableStateOf<String?>(null) }
 
-    Column(Modifier.fillMaxSize().background(Mux.Black)) {
+    Column(Modifier.fillMaxSize().background(MuxTheme.Background)) {
         TopHeader("Settings", onSearch = null, onBack = { nav.back() })
         Column(Modifier.verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 24.dp)) {
+            LinkRow(Icons.Rounded.Palette, "Appearance", "Theme, accent colour, AMOLED, motion", nav::appearance)
+            Spacer(Modifier.height(16.dp))
             SectionHeader("Playback")
             Toggle("Background audio", "Keep the sound playing after you leave the app. Off: playback pauses (picture-in-picture keeps playing).", settings.backgroundPlayback) {
                 scope.launch { c.settings.setBackgroundPlayback(it) }
-            }
-            Spacer(Modifier.height(16.dp))
-            SectionHeader("Accessibility")
-            Toggle("Reduce motion", "Turn off transitions and animated effects. Also follows the system's Remove animations setting.", settings.reduceMotion) {
-                scope.launch { c.settings.setReduceMotion(it) }
             }
             Spacer(Modifier.height(16.dp))
             SectionHeader("Privacy and data")
             Text(
                 "MUXLUME has no account, ads, analytics or trackers. It only connects to the playlists, provider servers and artwork links you add. " +
                     "Playlist links and provider passwords are encrypted with a key that stays in this device's secure hardware, and nothing is included in Android backups.",
-                style = MaterialTheme.typography.bodyMedium, color = Mux.TextSecondary, modifier = Modifier.padding(horizontal = Mux.ScreenPadding, vertical = 8.dp),
+                style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary, modifier = Modifier.padding(horizontal = Mux.ScreenPadding, vertical = 8.dp),
             )
             LinkRow(Icons.Rounded.History, "Clear watch history", "Resume positions and recently watched", { confirm = "history" })
             LinkRow(Icons.Rounded.DeleteForever, "Delete all data", "Playlists, credentials, favorites, history and cached images", { confirm = "all" })
@@ -102,25 +102,10 @@ fun SettingsScreen(nav: Nav) {
                         Toast.makeText(context, if (what == "all") "All data deleted" else "Watch history cleared", Toast.LENGTH_SHORT).show()
                         if (what == "all") nav.home()
                     }
-                }) { Text(if (what == "all") "Delete" else "Clear", color = Mux.Error) }
+                }) { Text(if (what == "all") "Delete" else "Clear", color = MuxTheme.Error) }
             },
-            dismissButton = { TextButton({ confirm = null }) { Text("Cancel", color = Mux.Cream) } },
-            containerColor = Mux.Raised,
+            dismissButton = { TextButton({ confirm = null }) { Text("Cancel", color = MuxTheme.Primary) } },
+            containerColor = MuxTheme.Raised,
         )
-    }
-}
-
-@Composable
-private fun Toggle(title: String, body: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(horizontal = Mux.ScreenPadding, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = Mux.White)
-            Text(body, style = MaterialTheme.typography.bodySmall, color = Mux.TextSecondary)
-        }
-        Spacer(Modifier.width(16.dp))
-        Switch(checked, null, colors = SwitchDefaults.colors(checkedTrackColor = Mux.Orange, checkedThumbColor = Mux.Cream))
     }
 }

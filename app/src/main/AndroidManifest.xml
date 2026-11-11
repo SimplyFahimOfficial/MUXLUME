@@ -10,6 +10,15 @@
     <!-- Keeps the CPU and Wi-Fi awake only while a stream is playing (ExoPlayer wake mode). -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Support screen: package visibility (Android 11+) for installed UPI apps, so "Pay with UPI"
+         can open one or show a chooser. Without this the query is always empty. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="upi" />
+        </intent>
+    </queries>
+
     <application
         android:name=".MuxlumeApp"
         android:allowBackup="false"
@@ -23,6 +32,18 @@
         android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.Muxlume.Starting"
         tools:targetApi="36">
+
+        <!-- Shares the on-device UPI QR PNG (Support screen). Not exported; the receiving app gets
+             temporary read access to that one cached file only. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.supportshare"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/support_share_paths" />
+        </provider>
 
         <activity
             android:name=".MainActivity"

@@ -107,6 +107,7 @@ import com.muxlume.app.data.db.ItemKind
 import com.muxlume.app.ui.components.LiveBadge
 import com.muxlume.app.ui.components.PrimaryButton
 import com.muxlume.app.ui.components.SecondaryButton
+import com.muxlume.app.ui.theme.OnMedia
 import com.muxlume.app.ui.theme.Motion
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
@@ -229,62 +230,65 @@ fun PlayerScreen(onBack: () -> Unit) {
 
     fun poke() { controls = true; interaction++ }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .focusRequester(focus)
-            .focusable()
-            .onKeyEvent { e ->
-                if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
-                when (e.key.nativeKeyCode) {
-                    KeyEvent.KEYCODE_CHANNEL_UP -> { p?.seekToNextMediaItem(); poke(); true }
-                    KeyEvent.KEYCODE_CHANNEL_DOWN -> { p?.seekToPreviousMediaItem(); poke(); true }
-                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (!controls) { poke(); true } else false
-                    else -> if (!controls) { poke(); false } else false
+    // The player always sits on dark video; force the dark palette regardless of the app theme.
+    OnMedia {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .focusRequester(focus)
+                .focusable()
+                .onKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
+                    when (e.key.nativeKeyCode) {
+                        KeyEvent.KEYCODE_CHANNEL_UP -> { p?.seekToNextMediaItem(); poke(); true }
+                        KeyEvent.KEYCODE_CHANNEL_DOWN -> { p?.seekToPreviousMediaItem(); poke(); true }
+                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (!controls) { poke(); true } else false
+                        else -> if (!controls) { poke(); false } else false
+                    }
                 }
-            }
-            .clickable(remember { MutableInteractionSource() }, indication = null, onClickLabel = "Show or hide controls") {
-                if (controls) controls = false else poke()
-            },
-    ) {
-        if (p != null) {
-            ContentFrame(player = p, modifier = Modifier.fillMaxSize(), contentScale = scales[scaleIndex].first)
-            AndroidView(
-                factory = { SubtitleView(it).apply { setUserDefaultStyle(); setUserDefaultTextSize() } },
-                update = { it.setCues(ui.cues.cues) },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-        if (ui.state == Player.STATE_BUFFERING && ui.error == null) {
-            var show by remember { mutableStateOf(false) }
-            LaunchedEffect(Unit) { delay(400); show = true } // no spinner flash on quick rebuffers
-            if (show) CircularProgressIndicator(Modifier.align(Alignment.Center).size(44.dp), color = Mux.Cream, strokeWidth = 3.dp)
-        }
-        ui.error?.let { e ->
-            ErrorPanel(e, onRetry = { p?.prepare(); p?.play() }, onBack = onBack, modifier = Modifier.align(Alignment.Center))
-        }
-        AnimatedVisibility(
-            visible = controls && !inPip && ui.error == null,
-            enter = fadeIn(Motion.spec(Motion.SHORT, reduced)),
-            exit = fadeOut(Motion.spec(Motion.MEDIUM, reduced)),
+                .clickable(remember { MutableInteractionSource() }, indication = null, onClickLabel = "Show or hide controls") {
+                    if (controls) controls = false else poke()
+                },
         ) {
-            Controls(
-                ui, p,
-                scaleLabel = scales[scaleIndex].second,
-                onBack = { if (!settings.backgroundPlayback) p?.pause(); onBack() },
-                onScale = { scaleIndex = (scaleIndex + 1) % scales.size; poke() },
-                onPip = { if (activity?.enterPip() != true) Toast.makeText(context, "Picture-in-picture isn't available on this device or is turned off for MUXLUME.", Toast.LENGTH_LONG).show() },
-                onRotate = { portrait = !portrait; poke() },
-                onOptions = { sheet = true },
-                poke = ::poke,
-            )
+            if (p != null) {
+                ContentFrame(player = p, modifier = Modifier.fillMaxSize(), contentScale = scales[scaleIndex].first)
+                AndroidView(
+                    factory = { SubtitleView(it).apply { setUserDefaultStyle(); setUserDefaultTextSize() } },
+                    update = { it.setCues(ui.cues.cues) },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            if (ui.state == Player.STATE_BUFFERING && ui.error == null) {
+                var show by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) { delay(400); show = true } // no spinner flash on quick rebuffers
+                if (show) CircularProgressIndicator(Modifier.align(Alignment.Center).size(44.dp), color = MuxTheme.Primary, strokeWidth = 3.dp)
+            }
+            ui.error?.let { e ->
+                ErrorPanel(e, onRetry = { p?.prepare(); p?.play() }, onBack = onBack, modifier = Modifier.align(Alignment.Center))
+            }
+            AnimatedVisibility(
+                visible = controls && !inPip && ui.error == null,
+                enter = fadeIn(Motion.spec(Motion.SHORT, reduced)),
+                exit = fadeOut(Motion.spec(Motion.MEDIUM, reduced)),
+            ) {
+                Controls(
+                    ui, p,
+                    scaleLabel = scales[scaleIndex].second,
+                    onBack = { if (!settings.backgroundPlayback) p?.pause(); onBack() },
+                    onScale = { scaleIndex = (scaleIndex + 1) % scales.size; poke() },
+                    onPip = { if (activity?.enterPip() != true) Toast.makeText(context, "Picture-in-picture isn't available on this device or is turned off for MUXLUME.", Toast.LENGTH_LONG).show() },
+                    onRotate = { portrait = !portrait; poke() },
+                    onOptions = { sheet = true },
+                    poke = ::poke,
+                )
+            }
         }
-    }
 
-    if (sheet && p != null) {
-        ModalBottomSheet(onDismissRequest = { sheet = false; poke() }, containerColor = Mux.Surface) {
-            OptionsSheet(ui, p)
+        if (sheet && p != null) {
+            ModalBottomSheet(onDismissRequest = { sheet = false; poke() }, containerColor = MuxTheme.Surface) {
+                OptionsSheet(ui, p)
+            }
         }
     }
 }
@@ -296,38 +300,38 @@ private fun Controls(
 ) {
     Box(Modifier.fillMaxSize()) {
         // Scrims only behind the top and bottom bars, so the picture stays clean.
-        Box(Modifier.fillMaxWidth().height(140.dp).background(Brush.verticalGradient(listOf(Mux.Scrim, Color.Transparent))))
-        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(160.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Mux.Scrim))))
+        Box(Modifier.fillMaxWidth().height(140.dp).background(Brush.verticalGradient(listOf(MuxTheme.Scrim, Color.Transparent))))
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(160.dp).background(Brush.verticalGradient(listOf(Color.Transparent, MuxTheme.Scrim))))
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = Mux.White) }
+                IconButton(onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = MuxTheme.TextPrimary) }
                 Column(Modifier.weight(1f).padding(horizontal = 4.dp)) {
-                    Text(ui.title, style = MaterialTheme.typography.titleLarge, color = Mux.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    ui.subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Mux.Cream.copy(alpha = 0.8f), maxLines = 1) }
+                    Text(ui.title, style = MaterialTheme.typography.titleLarge, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    ui.subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MuxTheme.Primary.copy(alpha = 0.8f), maxLines = 1) }
                 }
-                IconButton(onOptions) { Icon(Icons.Rounded.Tune, "Audio, subtitles and info", tint = Mux.White) }
-                IconButton(onScale, Modifier.semantics { contentDescription = "Picture size: $scaleLabel" }) { Icon(Icons.Rounded.AspectRatio, null, tint = Mux.White) }
-                IconButton(onRotate) { Icon(Icons.Rounded.ScreenRotation, "Rotate", tint = Mux.White) }
-                IconButton(onPip) { Icon(Icons.Rounded.PictureInPictureAlt, "Picture in picture", tint = Mux.White) }
+                IconButton(onOptions) { Icon(Icons.Rounded.Tune, "Audio, subtitles and info", tint = MuxTheme.TextPrimary) }
+                IconButton(onScale, Modifier.semantics { contentDescription = "Picture size: $scaleLabel" }) { Icon(Icons.Rounded.AspectRatio, null, tint = MuxTheme.TextPrimary) }
+                IconButton(onRotate) { Icon(Icons.Rounded.ScreenRotation, "Rotate", tint = MuxTheme.TextPrimary) }
+                IconButton(onPip) { Icon(Icons.Rounded.PictureInPictureAlt, "Picture in picture", tint = MuxTheme.TextPrimary) }
             }
             Spacer(Modifier.weight(1f))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                val roundButton = Modifier.size(56.dp).clip(Mux.PillShape).background(Mux.Scrim)
+                val roundButton = Modifier.size(56.dp).clip(Mux.PillShape).background(MuxTheme.Scrim)
                 if (ui.live) {
-                    IconButton({ p?.seekToPreviousMediaItem(); poke() }, roundButton, enabled = ui.hasPrevious) { Icon(Icons.Rounded.SkipPrevious, "Previous channel", tint = Mux.White) }
+                    IconButton({ p?.seekToPreviousMediaItem(); poke() }, roundButton, enabled = ui.hasPrevious) { Icon(Icons.Rounded.SkipPrevious, "Previous channel", tint = MuxTheme.TextPrimary) }
                 } else {
-                    IconButton({ p?.seekBack(); poke() }, roundButton) { Icon(Icons.Rounded.Replay10, "Back 10 seconds", tint = Mux.White) }
+                    IconButton({ p?.seekBack(); poke() }, roundButton) { Icon(Icons.Rounded.Replay10, "Back 10 seconds", tint = MuxTheme.TextPrimary) }
                 }
                 Spacer(Modifier.width(28.dp))
                 IconButton(
                     { if (ui.isPlaying) p?.pause() else p?.play(); poke() },
-                    Modifier.size(76.dp).clip(Mux.PillShape).background(Mux.Cream),
-                ) { Icon(if (ui.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (ui.isPlaying) "Pause" else "Play", tint = Mux.Black, modifier = Modifier.size(40.dp)) }
+                    Modifier.size(76.dp).clip(Mux.PillShape).background(MuxTheme.Primary),
+                ) { Icon(if (ui.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (ui.isPlaying) "Pause" else "Play", tint = MuxTheme.OnPrimary, modifier = Modifier.size(40.dp)) }
                 Spacer(Modifier.width(28.dp))
                 if (ui.live) {
-                    IconButton({ p?.seekToNextMediaItem(); poke() }, roundButton, enabled = ui.hasNext) { Icon(Icons.Rounded.SkipNext, "Next channel", tint = Mux.White) }
+                    IconButton({ p?.seekToNextMediaItem(); poke() }, roundButton, enabled = ui.hasNext) { Icon(Icons.Rounded.SkipNext, "Next channel", tint = MuxTheme.TextPrimary) }
                 } else {
-                    IconButton({ p?.seekForward(); poke() }, roundButton) { Icon(Icons.Rounded.Forward10, "Forward 10 seconds", tint = Mux.White) }
+                    IconButton({ p?.seekForward(); poke() }, roundButton) { Icon(Icons.Rounded.Forward10, "Forward 10 seconds", tint = MuxTheme.TextPrimary) }
                 }
             }
             Spacer(Modifier.weight(1f))
@@ -339,13 +343,13 @@ private fun Controls(
                     value = dragging ?: (ui.position.toFloat() / ui.duration).coerceIn(0f, 1f),
                     onValueChange = { dragging = it; poke() },
                     onValueChangeFinished = { dragging?.let { f -> p?.seekTo((f * ui.duration).toLong()) }; dragging = null },
-                    colors = SliderDefaults.colors(thumbColor = Mux.Cream, activeTrackColor = Mux.Orange, inactiveTrackColor = Mux.Outline),
+                    colors = SliderDefaults.colors(thumbColor = MuxTheme.Primary, activeTrackColor = MuxTheme.Accent, inactiveTrackColor = MuxTheme.Outline),
                     modifier = Modifier.semantics { contentDescription = "Playback position" },
                 )
                 Row(Modifier.padding(horizontal = 8.dp)) {
-                    Text(time(dragging?.let { (it * ui.duration).toLong() } ?: ui.position), color = Mux.White, style = MaterialTheme.typography.labelLarge)
+                    Text(time(dragging?.let { (it * ui.duration).toLong() } ?: ui.position), color = MuxTheme.TextPrimary, style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.weight(1f))
-                    Text(time(ui.duration), color = Mux.TextSecondary, style = MaterialTheme.typography.labelLarge)
+                    Text(time(ui.duration), color = MuxTheme.TextSecondary, style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
@@ -355,12 +359,12 @@ private fun Controls(
 @Composable
 private fun ErrorPanel(e: PlaybackException, onRetry: () -> Unit, onBack: () -> Unit, modifier: Modifier) {
     Column(
-        modifier.padding(24.dp).clip(Mux.CardShape).background(Mux.Surface).padding(24.dp).semantics { liveRegion = LiveRegionMode.Polite },
+        modifier.padding(24.dp).clip(Mux.CardShape).background(MuxTheme.Surface).padding(24.dp).semantics { liveRegion = LiveRegionMode.Polite },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Can't play this stream", style = MaterialTheme.typography.titleLarge, color = Mux.White)
+        Text("Can't play this stream", style = MaterialTheme.typography.titleLarge, color = MuxTheme.TextPrimary)
         Spacer(Modifier.height(8.dp))
-        Text(explain(e), style = MaterialTheme.typography.bodyMedium, color = Mux.TextSecondary)
+        Text(explain(e), style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary)
         Spacer(Modifier.height(18.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             SecondaryButton("Back", onBack)
@@ -398,16 +402,16 @@ private fun OptionsSheet(ui: PlayerUi, p: Player) {
         TrackSection("Audio", C.TRACK_TYPE_AUDIO, ui.tracks, p, allowOff = false)
         TrackSection("Subtitles", C.TRACK_TYPE_TEXT, ui.tracks, p, allowOff = true)
         if (!ui.live) {
-            Text("SPEED", style = SectionLabel, color = Mux.TextSecondary, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
+            Text("SPEED", style = SectionLabel, color = MuxTheme.TextSecondary, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
             com.muxlume.app.ui.components.PillRow(
                 listOf("0.5×", "0.75×", "1×", "1.25×", "1.5×", "2×"),
                 listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).indexOf(ui.speed),
                 { i -> p.setPlaybackSpeed(listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)[i]) },
             )
         }
-        Text("PLAYBACK INFO", style = SectionLabel, color = Mux.TextSecondary, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
+        Text("PLAYBACK INFO", style = SectionLabel, color = MuxTheme.TextSecondary, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
         val info = diagnostics(ui, p)
-        Text(info, style = MaterialTheme.typography.bodySmall, color = Mux.Cream)
+        Text(info, style = MaterialTheme.typography.bodySmall, color = MuxTheme.Primary)
         Spacer(Modifier.height(12.dp))
         SecondaryButton("Copy playback info", {
             context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("MUXLUME playback info", info))
@@ -420,7 +424,7 @@ private fun OptionsSheet(ui: PlayerUi, p: Player) {
 private fun TrackSection(title: String, type: Int, tracks: Tracks, p: Player, allowOff: Boolean) {
     val groups = tracks.groups.filter { it.type == type && it.isSupported }
     if (groups.isEmpty() && !allowOff) return
-    Text(title.uppercase(), style = SectionLabel, color = Mux.TextSecondary, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
+    Text(title.uppercase(), style = SectionLabel, color = MuxTheme.TextSecondary, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
     val options = buildList {
         if (allowOff) add(Triple("Off", null as Tracks.Group?, -1))
         groups.forEach { g -> for (i in 0 until g.length) if (g.isTrackSupported(i)) add(Triple(label(g, i), g, i)) }
@@ -428,7 +432,7 @@ private fun TrackSection(title: String, type: Int, tracks: Tracks, p: Player, al
     val disabled = type in p.trackSelectionParameters.disabledTrackTypes
     val selected = options.indexOfFirst { (_, g, i) -> if (g == null) disabled || groups.none { it.isSelected } else !disabled && g.isTrackSelected(i) }
     if (options.size <= 1 && allowOff && groups.isEmpty()) {
-        Text("None in this stream", style = MaterialTheme.typography.bodyMedium, color = Mux.TextSecondary)
+        Text("None in this stream", style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary)
         return
     }
     com.muxlume.app.ui.components.PillRow(options.map { it.first }, selected, { idx ->

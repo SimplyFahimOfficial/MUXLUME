@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
@@ -60,6 +61,7 @@ import com.muxlume.app.ui.components.pressable
 import com.muxlume.app.ui.main.BottomBarSpace
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.theme.Mux
+import com.muxlume.app.ui.theme.MuxTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -115,8 +117,9 @@ fun LibraryScreen(nav: Nav) {
             }
         }
         item { Spacer(Modifier.height(12.dp)); SectionHeader("More") }
-        item { LinkRow(Icons.Rounded.Settings, "Settings", "Playback, privacy and data", nav::settings) }
-        item { LinkRow(Icons.AutoMirrored.Rounded.Help, "Help and about", "Troubleshooting, project links, licenses", nav::about) }
+        item { LinkRow(Icons.Rounded.Settings, "Settings", "Appearance, playback, privacy and data", nav::settings) }
+        item { LinkRow(Icons.Rounded.FavoriteBorder, "Support my work", "Telegram, project website, payment options", nav::support) }
+        item { LinkRow(Icons.AutoMirrored.Rounded.Help, "Help & about", "Troubleshooting, licenses, version", nav::about) }
     }
 
     confirmDelete?.let { s ->
@@ -124,24 +127,24 @@ fun LibraryScreen(nav: Nav) {
             onDismissRequest = { confirmDelete = null },
             title = { Text("Remove ${s.name}?") },
             text = { Text("Its channels, favorites and watch history are deleted from this device. The playlist itself isn't affected.") },
-            confirmButton = { TextButton({ vm.delete(s.id); confirmDelete = null }) { Text("Remove", color = Mux.Error) } },
-            dismissButton = { TextButton({ confirmDelete = null }) { Text("Cancel", color = Mux.Cream) } },
-            containerColor = Mux.Raised,
+            confirmButton = { TextButton({ vm.delete(s.id); confirmDelete = null }) { Text("Remove", color = MuxTheme.Error) } },
+            dismissButton = { TextButton({ confirmDelete = null }) { Text("Cancel", color = MuxTheme.Primary) } },
+            containerColor = MuxTheme.Raised,
         )
     }
 }
 
 @Composable
 private fun SourceCard(s: SourceEntity, refreshing: Boolean, onRefresh: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
-    Column(Modifier.padding(horizontal = Mux.ScreenPadding).fillMaxWidth().clip(Mux.CardShape).background(Mux.Surface).padding(start = 18.dp, top = 16.dp, bottom = 8.dp, end = 8.dp)) {
-        Text(s.name, style = MaterialTheme.typography.titleLarge, color = Mux.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Column(Modifier.padding(horizontal = Mux.ScreenPadding).fillMaxWidth().clip(Mux.CardShape).background(MuxTheme.Surface).padding(start = 18.dp, top = 16.dp, bottom = 8.dp, end = 8.dp)) {
+        Text(s.name, style = MaterialTheme.typography.titleLarge, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
             listOfNotNull(
                 when (s.type) { SourceType.M3U_URL -> "M3U link"; SourceType.M3U_FILE -> "M3U file"; SourceType.XTREAM -> "Xtream Codes" },
                 s.label.takeIf { it.isNotEmpty() },
                 "HTTP".takeIf { s.allowHttp },
             ).joinToString(" · "),
-            style = MaterialTheme.typography.bodySmall, color = Mux.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(8.dp))
         Text(
@@ -150,20 +153,20 @@ private fun SourceCard(s: SourceEntity, refreshing: Boolean, onRefresh: () -> Un
                 s.movieCount.takeIf { it > 0 }?.let { "$it movies" },
                 s.seriesCount.takeIf { it > 0 }?.let { "$it series" },
             ).joinToString(" · ").ifEmpty { "No items" },
-            style = MaterialTheme.typography.bodyMedium, color = Mux.Cream,
+            style = MaterialTheme.typography.bodyMedium, color = MuxTheme.Primary,
         )
         val updated = s.refreshedAt?.let { "Updated " + DateUtils.getRelativeTimeSpanString(it, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS) }
         val expires = s.expiresAt?.let { "account expires " + DateUtils.formatDateTime(null, it * 1000, DateUtils.FORMAT_SHOW_DATE) }
-        Text(listOfNotNull(updated, expires).joinToString(" · ").ifEmpty { "Never imported" }, style = MaterialTheme.typography.bodySmall, color = Mux.TextSecondary)
-        s.lastError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Mux.Error, modifier = Modifier.padding(top = 4.dp)) }
+        Text(listOfNotNull(updated, expires).joinToString(" · ").ifEmpty { "Never imported" }, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
+        s.lastError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MuxTheme.Error, modifier = Modifier.padding(top = 4.dp)) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             if (refreshing) {
-                CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp), color = Mux.Orange, strokeWidth = 2.dp)
+                CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp), color = MuxTheme.Accent, strokeWidth = 2.dp)
             } else {
-                IconButton(onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh ${s.name}", tint = Mux.White) }
+                IconButton(onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh ${s.name}", tint = MuxTheme.TextPrimary) }
             }
-            IconButton(onEdit, enabled = !refreshing) { Icon(Icons.Rounded.Edit, "Edit ${s.name}", tint = Mux.White) }
-            IconButton(onDelete, enabled = !refreshing) { Icon(Icons.Rounded.Delete, "Remove ${s.name}", tint = Mux.White) }
+            IconButton(onEdit, enabled = !refreshing) { Icon(Icons.Rounded.Edit, "Edit ${s.name}", tint = MuxTheme.TextPrimary) }
+            IconButton(onDelete, enabled = !refreshing) { Icon(Icons.Rounded.Delete, "Remove ${s.name}", tint = MuxTheme.TextPrimary) }
         }
     }
 }
@@ -171,12 +174,12 @@ private fun SourceCard(s: SourceEntity, refreshing: Boolean, onRefresh: () -> Un
 @Composable
 fun LinkRow(icon: ImageVector, title: String, subtitle: String?, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().pressable(onClick, label = title).padding(horizontal = Mux.ScreenPadding, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = Mux.Cream, modifier = Modifier.size(24.dp))
+        Icon(icon, null, tint = MuxTheme.Primary, modifier = Modifier.size(24.dp))
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = Mux.White)
-            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Mux.TextSecondary)
+            Text(title, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary)
+            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
         }
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Mux.TextSecondary)
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MuxTheme.TextSecondary)
     }
 }

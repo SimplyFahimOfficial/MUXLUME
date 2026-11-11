@@ -23,7 +23,9 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.muxlume.app.container
 import com.muxlume.app.ui.library.AboutScreen
+import com.muxlume.app.ui.library.AppearanceScreen
 import com.muxlume.app.ui.library.SettingsScreen
+import com.muxlume.app.ui.library.SupportScreen
 import com.muxlume.app.ui.main.MainScreen
 import com.muxlume.app.ui.onboarding.AddSourceScreen
 import com.muxlume.app.ui.onboarding.WelcomeScreen
@@ -43,6 +45,8 @@ import kotlinx.serialization.Serializable
 @Serializable object SearchRoute
 @Serializable data class DetailRoute(val sourceId: Long, val key: String)
 @Serializable object SettingsRoute
+@Serializable object AppearanceRoute
+@Serializable object SupportRoute
 @Serializable object AboutRoute
 
 /** Navigation actions shared by screens. */
@@ -52,6 +56,8 @@ class Nav(private val controller: NavHostController) {
     fun detail(sourceId: Long, key: String) = controller.navigate(DetailRoute(sourceId, key))
     fun addSource(sourceId: Long = -1) = controller.navigate(AddSourceRoute(sourceId))
     fun settings() = controller.navigate(SettingsRoute)
+    fun appearance() = controller.navigate(AppearanceRoute)
+    fun support() = controller.navigate(SupportRoute)
     fun about() = controller.navigate(AboutRoute)
     fun back() = controller.popBackStack()
     fun home() = controller.navigate(MainRoute) { popUpTo(0) { inclusive = true } }
@@ -65,7 +71,7 @@ fun MuxlumeRoot() {
         val onboarded = c.settings.current().onboardingDone || c.db.sources().all().first().isNotEmpty()
         value = if (onboarded) MainRoute else WelcomeRoute
     }
-    Box(Modifier.fillMaxSize().background(Mux.Black)) {
+    Box(Modifier.fillMaxSize().background(MuxTheme.Background)) {
         val startRoute = start ?: return@Box // black splash continuation while settings load (a few ms)
         val controller = rememberNavController()
         val nav = Nav(controller)
@@ -90,6 +96,8 @@ fun MuxlumeRoot() {
             composable<SearchRoute> { SearchScreen(nav) }
             composable<DetailRoute> { entry -> entry.toRoute<DetailRoute>().let { DetailScreen(it.sourceId, it.key, nav) } }
             composable<SettingsRoute> { SettingsScreen(nav) }
+            composable<AppearanceRoute> { AppearanceScreen(onBack = { nav.back() }) }
+            composable<SupportRoute> { SupportScreen(onBack = { nav.back() }) }
             composable<AboutRoute> { AboutScreen(onBack = { nav.back() }) }
         }
     }

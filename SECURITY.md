@@ -4,7 +4,7 @@
 
 Please don't open a public issue. Report privately through the developer contact page,
 <https://simplyfahim.pages.dev/contactme>, or GitHub's private vulnerability reporting once the
-repository is public. Include the version (Help and about), the device and steps to reproduce.
+repository is public. Include the version (Library → Help & about), the device and steps to reproduce.
 Never send real provider credentials or private playlist links; redact them.
 
 ## Threat model in brief

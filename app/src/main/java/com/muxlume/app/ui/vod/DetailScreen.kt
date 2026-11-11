@@ -63,6 +63,7 @@ import com.muxlume.app.ui.components.SecondaryButton
 import com.muxlume.app.ui.components.pressable
 import com.muxlume.app.ui.play
 import com.muxlume.app.ui.theme.Mux
+import com.muxlume.app.ui.theme.MuxTheme
 import com.muxlume.app.ui.theme.SectionLabel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -148,9 +149,9 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
     val scope = rememberCoroutineScope()
     val it = item
 
-    Box(Modifier.fillMaxSize().background(Mux.Black)) {
+    Box(Modifier.fillMaxSize().background(MuxTheme.Background)) {
         if (it == null) {
-            CircularProgressIndicator(Modifier.align(Alignment.Center), color = Mux.Orange)
+            CircularProgressIndicator(Modifier.align(Alignment.Center), color = MuxTheme.Accent)
         } else {
             val seasons = extra.episodes.map { e -> e.season }.distinct()
             val season = selectedSeason ?: seasons.firstOrNull()
@@ -159,16 +160,16 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
                 item {
                     Box(Modifier.fillMaxWidth().aspectRatio(0.8f)) {
                         Artwork(extra.backdrop ?: it.logo, it.name, Modifier.fillMaxSize(), monogramSize = 72)
-                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Mux.Black)))
+                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to MuxTheme.Background)))
                     }
                 }
                 item {
                     Column(Modifier.padding(horizontal = Mux.ScreenPadding)) {
-                        if (it.groupTitle.isNotEmpty()) Text(it.groupTitle.uppercase(), style = SectionLabel, color = Mux.Orange)
-                        Text(it.name, style = MaterialTheme.typography.displaySmall, color = Mux.White)
+                        if (it.groupTitle.isNotEmpty()) Text(it.groupTitle.uppercase(), style = SectionLabel, color = MuxTheme.Accent)
+                        Text(it.name, style = MaterialTheme.typography.displaySmall, color = MuxTheme.TextPrimary)
                         if (extra.meta.isNotEmpty()) {
                             Spacer(Modifier.height(6.dp))
-                            Text(extra.meta.joinToString("  ·  "), style = MaterialTheme.typography.bodyMedium, color = Mux.TextSecondary)
+                            Text(extra.meta.joinToString("  ·  "), style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary)
                         }
                         Spacer(Modifier.height(18.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -190,16 +191,16 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
                         }
                         extra.plot?.let { plot ->
                             Spacer(Modifier.height(18.dp))
-                            Text(plot, style = MaterialTheme.typography.bodyLarge, color = Mux.Cream.copy(alpha = 0.86f))
+                            Text(plot, style = MaterialTheme.typography.bodyLarge, color = MuxTheme.Primary.copy(alpha = 0.86f))
                         }
                         if (extra.loading) {
                             Spacer(Modifier.height(18.dp))
-                            CircularProgressIndicator(Modifier.size(24.dp), color = Mux.Orange, strokeWidth = 2.dp)
+                            CircularProgressIndicator(Modifier.size(24.dp), color = MuxTheme.Accent, strokeWidth = 2.dp)
                         }
                         extra.error?.let { e ->
                             Spacer(Modifier.height(18.dp))
-                            Text("Details couldn't be loaded. $e", style = MaterialTheme.typography.bodyMedium, color = Mux.Error)
-                            Text("Retry", color = Mux.Cream, modifier = Modifier.clip(Mux.PillShape).pressable({ vm.load() }).padding(vertical = 10.dp))
+                            Text("Details couldn't be loaded. $e", style = MaterialTheme.typography.bodyMedium, color = MuxTheme.Error)
+                            Text("Retry", color = MuxTheme.Primary, modifier = Modifier.clip(Mux.PillShape).pressable({ vm.load() }).padding(vertical = 10.dp))
                         }
                     }
                 }
@@ -220,8 +221,8 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
         }
         IconButton(
             nav::back,
-            Modifier.windowInsetsPadding(WindowInsets.statusBars).padding(8.dp).clip(Mux.PillShape).background(Mux.Scrim),
-        ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = Mux.White) }
+            Modifier.windowInsetsPadding(WindowInsets.statusBars).padding(8.dp).clip(Mux.PillShape).background(MuxTheme.Scrim),
+        ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = androidx.compose.ui.graphics.Color.White) } // on the dark scrim in any theme
     }
 }
 
@@ -241,16 +242,16 @@ private fun EpisodeRow(ep: XtreamEpisode, h: HistoryEntity?, onClick: () -> Unit
         Box(Modifier.width(132.dp).aspectRatio(16f / 9f).clip(Mux.CardShape)) {
             Artwork(ep.image, ep.title, Modifier.fillMaxSize(), monogramSize = 18)
             if (h != null && h.durationMs > 0) {
-                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Mux.Scrim)) {
-                    Box(Modifier.fillMaxWidth((h.positionMs.toFloat() / h.durationMs).coerceIn(0f, 1f)).height(3.dp).background(Mux.Orange))
+                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(MuxTheme.Scrim)) {
+                    Box(Modifier.fillMaxWidth((h.positionMs.toFloat() / h.durationMs).coerceIn(0f, 1f)).height(3.dp).background(MuxTheme.Accent))
                 }
             }
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text("Episode ${ep.number ?: "?"}", style = SectionLabel, color = Mux.TextSecondary)
-            Text(ep.title, style = MaterialTheme.typography.titleMedium, color = Mux.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            ep.durationSec?.takeIf { it > 0 }?.let { Text("${it / 60} min", style = MaterialTheme.typography.bodySmall, color = Mux.TextSecondary) }
+            Text("Episode ${ep.number ?: "?"}", style = SectionLabel, color = MuxTheme.TextSecondary)
+            Text(ep.title, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            ep.durationSec?.takeIf { it > 0 }?.let { Text("${it / 60} min", style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary) }
         }
     }
 }

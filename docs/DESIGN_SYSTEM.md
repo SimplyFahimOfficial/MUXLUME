@@ -45,7 +45,20 @@ Primary actions are cream pills with black text (≈ 19:1). Orange is an accent,
 Provider artwork only. When missing or loading, a flat placeholder shows the title's initials and a
 small orange bar, so layouts never jump and no stock posters are bundled.
 
+## Theming
+
+Screens read colour roles from `MuxTheme` (`Background`, `Surface`, `Raised`, `Outline`,
+`TextPrimary`, `TextSecondary`, `Primary`/`OnPrimary`, `Accent`/`OnAccent`, `Error`, `Scrim`), never
+fixed colours. `MuxlumeTheme` builds the palette from Appearance settings (System/Light/Dark, accent
+or Material You, AMOLED) and also sets the Material 3 colour scheme and the system-bar icon colour.
+
+- Each accent has a dark-theme and a darker light-theme value so accent text and labels on accent
+  fills reach WCAG AA; `SupportTest` checks every accent in both themes.
+- UI drawn over video or artwork (player, home hero) is wrapped in `OnMedia { }`, which switches to
+  the dark palette with the same accent. White icons on a `Scrim` may use `Color.White` directly.
+- The logo has a dark-framed copy (`brand_logo_light`) because the cream frame vanishes on the light
+  background.
+
 ## Planned
 
-Light theme, accent choice, density settings, shared-element transitions from cards to details,
-Android TV focus styling.
+Layout density, shared-element transitions from cards to details, Android TV focus styling.
