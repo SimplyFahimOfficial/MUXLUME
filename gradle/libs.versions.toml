@@ -23,7 +23,7 @@ androidxTestExt = "1.3.0"
 cyclonedx = "3.5.1"
 # Patched floor for Guava, which ships only transitively (Media3). Applied as a constraint in
 # app/build.gradle.kts, which raises the version and never lowers it. Listed here so Dependabot updates it.
-guava = "33.7.2-android"
+guava = "33.8.0-android"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
