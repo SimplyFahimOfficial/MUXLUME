@@ -20,6 +20,16 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Three builds of one app: `fdroid` is the clean FLOSS build (no proprietary code, nothing beyond `main`);
+    // `github` and `play` may add features that F-Droid would not accept. They differ only through the
+    // source sets src/<flavor>/ (see app/src/*/java/com/muxlume/app/distribution/Extras.kt).
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("fdroid") { dimension = "distribution" }
+        create("github") { dimension = "distribution" }
+        create("play") { dimension = "distribution" }
+    }
+
     // Release signing comes only from environment variables (CI secrets or your shell); no keys in the repo.
     // If any are missing, release builds are produced unsigned.
     val keystorePath = System.getenv("MUXLUME_KEYSTORE_PATH")
@@ -109,7 +119,7 @@ room {
 // Software bill of materials (CycloneDX) of what ships in the release APK.
 // ./gradlew :app:cyclonedxDirectBom → app/build/reports/sbom/muxlume-bom.json
 tasks.named<org.cyclonedx.gradle.CyclonedxDirectTask>("cyclonedxDirectBom") {
-    includeConfigs = listOf("releaseRuntimeClasspath")
+    includeConfigs = listOf("fdroidReleaseRuntimeClasspath", "githubReleaseRuntimeClasspath", "playReleaseRuntimeClasspath")
     projectType = org.cyclonedx.model.Component.Type.APPLICATION
     componentName = "muxlume"
     componentVersion = android.defaultConfig.versionName
@@ -174,4 +184,14 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test.junit4)
+}
+
+// AGP only creates lint and unit-test tasks per flavor; these keep the usual names. `play` has no code of
+// its own yet (it equals `fdroid`), so it is left out until it does: add it here when src/play grows.
+for ((name, task) in mapOf("lintDebug" to "lint%sDebug", "testDebugUnitTest" to "test%sDebugUnitTest")) {
+    tasks.register(name) {
+        group = "verification"
+        description = "Runs $name for the fdroid and github flavors."
+        dependsOn(listOf("Fdroid", "Github").map { task.format(it) })
+    }
 }
