@@ -80,6 +80,11 @@ class VisualRender {
         save("05-support")
     }
 
+    @Test fun supportLight() {
+        compose.setContent { MuxlumeTheme(theme = com.muxlume.app.data.ThemeMode.LIGHT) { com.muxlume.app.ui.library.SupportScreen(onBack = {}) } }
+        save("07-support-light")
+    }
+
     @Test fun appearance() {
         compose.setContent { MuxlumeTheme { com.muxlume.app.ui.library.AppearanceScreen(onBack = {}) } }
         save("06-appearance")

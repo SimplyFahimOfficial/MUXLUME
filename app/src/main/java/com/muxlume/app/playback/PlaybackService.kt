@@ -10,6 +10,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
 import androidx.media3.datasource.DataSourceBitmapLoader
 import androidx.media3.datasource.DefaultDataSource
@@ -21,6 +22,7 @@ import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.ListenableFuture
 import com.muxlume.app.MainActivity
 import com.muxlume.app.MuxlumeApp
+import com.muxlume.app.core.net.HttpPolicy
 import com.muxlume.app.core.net.Urls
 import com.muxlume.app.data.db.HistoryEntity
 import com.muxlume.app.data.db.ItemKind
@@ -34,6 +36,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.guava.future
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.Call
 
 /**
  * Owns the player. The UI talks to it through a MediaController, which also gives system media
@@ -47,23 +50,36 @@ class PlaybackService : MediaSessionService() {
     private lateinit var http: OkHttpDataSource.Factory
     private var session: MediaSession? = null
     private val headersByMediaId = HashMap<String, Map<String, String>>()
+    private val policyByMediaId = HashMap<String, HttpPolicy>()
+    private val hlsRetried = HashSet<String>()
     private var retries = 0
     private var retryJob: Job? = null
+    private var switchJob: Job? = null
+
+    /**
+     * HTTP setting of the source that is playing. Stream and segment requests run on loader threads
+     * and are tagged with it, so one source's HTTP opt-in never applies to another source's streams.
+     * A queue only ever holds one source's items (a series' episodes), so "the current item" is exact.
+     */
+    @Volatile private var currentPolicy = HttpPolicy.HTTPS_ONLY
 
     override fun onCreate() {
         super.onCreate()
-        http = OkHttpDataSource.Factory(container.http)
-        val player = ExoPlayer.Builder(this)
+        http = OkHttpDataSource.Factory(
+            Call.Factory { req -> container.http.newCall(req.newBuilder().tag(HttpPolicy::class.java, currentPolicy).build()) },
+        )
+        val exo = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this, http)))
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
-        player.addListener(Recovery(player))
+        exo.addListener(Recovery(exo))
+        val player = ChannelSwitcher(exo)
         session = MediaSession.Builder(this, player)
             .setCallback(Callback())
-            // Artwork for the notification goes through the same gated HTTP client as everything else.
-            .setBitmapLoader(DataSourceBitmapLoader.Builder(this).setDataSourceFactory(http).build())
+            // Notification artwork goes through the gated client untagged, i.e. with the artwork rule.
+            .setBitmapLoader(DataSourceBitmapLoader.Builder(this).setDataSourceFactory(OkHttpDataSource.Factory(container.http)).build())
             .setSessionActivity(
                 PendingIntent.getActivity(
                     this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
@@ -121,7 +137,7 @@ class PlaybackService : MediaSessionService() {
                     if (h.positionMs > 30_000 && (h.durationMs <= 0 || h.positionMs < h.durationMs * 0.95)) position = h.positionMs
                 }
             }
-            start?.let { applyHeaders(it.mediaId) }
+            start?.let { applyFor(it.mediaId) }
             MediaSession.MediaItemsWithStartPosition(resolved, index, position)
         }
     }
@@ -153,6 +169,7 @@ class PlaybackService : MediaSessionService() {
         if (url.startsWith("rtsp", ignoreCase = true) && !source.allowHttp) return null
         if (!Urls.isPlayable(url)) return null
         headersByMediaId[request.mediaId] = headers
+        policyByMediaId[request.mediaId] = HttpPolicy.of(source.allowHttp)
         val path = url.substringBefore('?').lowercase()
         return request.buildUpon()
             .setUri(url.toUri())
@@ -160,15 +177,50 @@ class PlaybackService : MediaSessionService() {
             .build()
     }
 
-    /** Playlist headers (User-Agent, Referer) apply to every request of the current item, including segments. */
-    private fun applyHeaders(mediaId: String) {
+    /** Playlist headers (User-Agent, Referer) and the source's HTTP setting apply to every request of the current item. */
+    private fun applyFor(mediaId: String) {
         http.setDefaultRequestProperties(headersByMediaId[mediaId].orEmpty())
+        currentPolicy = policyByMediaId[mediaId] ?: HttpPolicy.HTTPS_ONLY
+    }
+
+    /**
+     * Channel up/down for live TV (app buttons, remote keys, media notification, Bluetooth): the
+     * neighbouring channel of the list it was picked from is looked up when asked for. Other items
+     * (a season's episodes) use the normal queue.
+     */
+    private inner class ChannelSwitcher(private val exo: ExoPlayer) : ForwardingPlayer(exo) {
+        override fun getAvailableCommands(): Player.Commands = super.getAvailableCommands().buildUpon().apply { SEEK_COMMANDS.forEach(::add) }.build()
+        override fun isCommandAvailable(command: Int): Boolean = command in SEEK_COMMANDS || super.isCommandAvailable(command)
+        override fun seekToNext() { if (!switchChannel(forward = true)) super.seekToNext() }
+        override fun seekToNextMediaItem() { if (!switchChannel(forward = true)) super.seekToNextMediaItem() }
+        override fun seekToPrevious() { if (!switchChannel(forward = false)) super.seekToPrevious() }
+        override fun seekToPreviousMediaItem() { if (!switchChannel(forward = false)) super.seekToPreviousMediaItem() }
+
+        /** True when the current item is a live channel (the switch then happens asynchronously). */
+        private fun switchChannel(forward: Boolean): Boolean {
+            val current = exo.currentMediaItem ?: return false
+            if (MediaIds.kindOf(current) != ItemKind.LIVE) return false
+            val (sourceId, key) = MediaIds.parse(current.mediaId) ?: return false
+            switchJob?.cancel()
+            switchJob = scope.launch {
+                val item = container.db.items().byKey(sourceId, key) ?: return@launch
+                val list = ChannelList.from(current.mediaMetadata.extras, item)
+                val next = container.db.neighbour(item, list, forward) ?: return@launch // end of the list
+                val resolved = resolve(MediaIds.request(next, list)) ?: return@launch
+                saveHistory(exo)
+                applyFor(resolved.mediaId)
+                exo.setMediaItem(resolved)
+                exo.prepare()
+                exo.play()
+            }
+            return true
+        }
     }
 
     /** Reconnects after network failures (2, 4, 8 s) and rejoins live streams that fell behind. */
-    private inner class Recovery(private val player: Player) : Player.Listener {
+    private inner class Recovery(val player: Player) : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            mediaItem?.let { applyHeaders(it.mediaId) }
+            mediaItem?.let { applyFor(it.mediaId) }
             retries = 0
         }
 
@@ -177,6 +229,7 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            if (retryAsHls(error)) return
             if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
                 player.seekToDefaultPosition()
                 player.prepare()
@@ -193,6 +246,19 @@ class PlaybackService : MediaSessionService() {
                 }
             }
         }
+    }
+
+    /**
+     * Many providers serve HLS from links without ".m3u8", which then fail as an unknown container.
+     * Retry such an item once as HLS before showing the error.
+     */
+    private fun Recovery.retryAsHls(error: PlaybackException): Boolean {
+        if (error.errorCode != PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED) return false
+        val item = player.currentMediaItem ?: return false
+        if (item.localConfiguration?.mimeType != null || !hlsRetried.add(item.mediaId)) return false
+        player.replaceMediaItem(player.currentMediaItemIndex, item.buildUpon().setMimeType(MimeTypes.APPLICATION_M3U8).build())
+        player.prepare()
+        return true
     }
 
     private suspend fun savePositionsWhilePlaying(player: Player) {
@@ -233,5 +299,9 @@ class PlaybackService : MediaSessionService() {
 
     private companion object {
         const val MAX_RETRIES = 3
+        val SEEK_COMMANDS = intArrayOf(
+            Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+            Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+        )
     }
 }

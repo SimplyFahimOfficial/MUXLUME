@@ -1,6 +1,8 @@
 package com.muxlume.app.data.xtream
 
 import com.muxlume.app.core.net.Http.requireSuccess
+import com.muxlume.app.core.net.HttpPolicy
+import com.muxlume.app.core.net.request
 import com.muxlume.app.core.net.HttpStatusException
 import com.muxlume.app.core.net.LimitedInputStream
 import com.muxlume.app.core.net.Urls
@@ -16,7 +18,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeToSequence
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.IOException
 import java.io.InputStream
 
@@ -65,6 +66,8 @@ class XtreamApi(
     val server: HttpUrl,
     private val username: String,
     private val password: String,
+    /** The source's HTTP setting; every request to this server carries it. */
+    @PublishedApi internal val policy: HttpPolicy = HttpPolicy.HTTPS_ONLY,
 ) {
     private fun url(action: String?, vararg params: Pair<String, String>): HttpUrl = server.newBuilder()
         .addPathSegment("player_api.php")
@@ -78,7 +81,7 @@ class XtreamApi(
 
     @PublishedApi
     internal inline fun <T> get(url: HttpUrl, limit: Long, read: (InputStream) -> T): T {
-        val response = client.newCall(Request.Builder().url(url).build()).execute()
+        val response = client.newCall(request(url, policy)).execute()
         try {
             response.requireSuccess()
         } catch (e: HttpStatusException) {

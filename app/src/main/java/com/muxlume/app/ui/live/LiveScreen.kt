@@ -1,5 +1,7 @@
 package com.muxlume.app.ui.live
 
+import com.muxlume.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.SortByAlpha
@@ -51,7 +52,17 @@ import com.muxlume.app.ui.components.PillRow
 import com.muxlume.app.ui.components.pressable
 import com.muxlume.app.ui.main.BottomBarSpace
 import com.muxlume.app.ui.main.TopHeader
-import com.muxlume.app.ui.playFromList
+import com.muxlume.app.playback.ChannelList
+import com.muxlume.app.ui.playChannel
+import androidx.paging.LoadState
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
+import kotlinx.coroutines.flow.Flow
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -100,13 +111,28 @@ class BrowseViewModel(private val c: AppContainer, val kind: ItemKind) : ViewMod
     val groups: StateFlow<List<String>> = sourceId.flatMapLatest { id -> if (id == null) flowOf(emptyList()) else c.db.items().groups(id, kind) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val items: StateFlow<List<ItemEntity>?> = combine(sourceId, browse) { id, b -> id to b }.flatMapLatest { (id, b) ->
-        when {
-            id == null -> flowOf(emptyList())
-            b.filter is GroupFilter.Favorites -> c.db.items().favorites(kind, id)
-            else -> c.db.items().list(id, kind, (b.filter as? GroupFilter.Group)?.title, b.alphabetical)
+    /** Loaded a page at a time, so groups with hundreds of thousands of channels stay light. */
+    val items: Flow<PagingData<ItemEntity>> = combine(sourceId, browse) { id, b -> id to b }.flatMapLatest { (id, b) ->
+        if (id == null) {
+            flowOf(PagingData.empty())
+        } else {
+            Pager(PagingConfig(pageSize = PAGE_SIZE)) {
+                if (b.filter is GroupFilter.Favorites) c.db.items().favoritesPage(kind, id)
+                else c.db.items().page(id, kind, (b.filter as? GroupFilter.Group)?.title, b.alphabetical)
+            }.flow
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    }.cachedIn(viewModelScope)
+
+    /** The list as shown, so channel up/down in the player follows it. */
+    fun channelList(): ChannelList = browse.value.let { b ->
+        when (val f = b.filter) {
+            GroupFilter.Favorites -> ChannelList(ChannelList.Order.FAVORITES, group = null, favoritesSourceId = sourceId.value)
+            else -> ChannelList(
+                if (b.alphabetical) ChannelList.Order.NAME else ChannelList.Order.PROVIDER,
+                group = (f as? GroupFilter.Group)?.title,
+            )
+        }
+    }
 
     val favorites: StateFlow<Set<String>> = sourceId.flatMapLatest { id -> if (id == null) flowOf(emptyList()) else c.db.favorites().keys(id) }
         .map { it.toSet() }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
@@ -119,7 +145,14 @@ class BrowseViewModel(private val c: AppContainer, val kind: ItemKind) : ViewMod
         if (isFavorite) c.db.favorites().remove(item.sourceId, item.stableKey)
         else c.db.favorites().add(FavoriteEntity(item.sourceId, item.stableKey, System.currentTimeMillis()))
     }
+
+    private companion object {
+        const val PAGE_SIZE = 60
+    }
 }
+
+/** True once the first page has loaded and the list is empty (not while it's still loading). */
+val LazyPagingItems<*>.isLoadedEmpty: Boolean get() = itemCount == 0 && loadState.refresh is LoadState.NotLoading
 
 @Composable
 fun LiveScreen(nav: Nav) {
@@ -129,32 +162,37 @@ fun LiveScreen(nav: Nav) {
     val sourceId by vm.sourceId.collectAsStateWithLifecycle()
     val browse by vm.browse.collectAsStateWithLifecycle()
     val groups by vm.groups.collectAsStateWithLifecycle()
-    val channels by vm.items.collectAsStateWithLifecycle()
+    val channels = vm.items.collectAsLazyPagingItems()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     LaunchedEffect(browse, sourceId) { listState.scrollToItem(0) }
 
     Column(Modifier.fillMaxSize()) {
-        TopHeader("Live TV", onSearch = nav::search)
+        TopHeader(stringResource(R.string.live_live_tv), onSearch = nav::search)
         val list = sources ?: return@Column
         if (list.isEmpty()) {
-            EmptyState("No channels yet", "Add an M3U playlist or an Xtream Codes-compatible account to see live channels here.", action = "Add a playlist", onAction = { nav.addSource() })
+            EmptyState(
+                stringResource(R.string.live_no_channels_yet),
+                stringResource(R.string.live_add_an_m3u_playlist_or),
+                action = stringResource(R.string.live_add_a_playlist),
+                onAction = { nav.addSource() },
+            )
             return@Column
         }
         BrowseFilters(vm, list, sourceId, browse, groups)
-        val items = channels ?: return@Column
-        if (items.isEmpty()) {
+        if (channels.isLoadedEmpty) {
             EmptyState(
-                if (browse.filter is GroupFilter.Favorites) "No favorites here" else "Nothing in this list",
-                if (browse.filter is GroupFilter.Favorites) "Tap the star next to a channel to add it." else "This playlist has no live channels in this group.",
+                stringResource(if (browse.filter is GroupFilter.Favorites) R.string.live_no_favorites_here else R.string.live_nothing_in_this_list),
+                stringResource(if (browse.filter is GroupFilter.Favorites) R.string.live_tap_the_star_next_to else R.string.live_this_playlist_has_no_live),
             )
             return@Column
         }
         LazyColumn(state = listState, contentPadding = PaddingValues(bottom = BottomBarSpace + 16.dp, top = 8.dp)) {
-            itemsIndexed(items, key = { _, it -> it.id }) { i, ch ->
+            items(channels.itemCount, key = channels.itemKey { it.id }) { i ->
+                val ch = channels[i] ?: return@items // placeholder while the page loads
                 val fav = ch.stableKey in favorites
-                ChannelRow(ch, fav, onClick = { scope.launch { if (context.playFromList(items, i)) nav.player() } }, onFavorite = { vm.toggleFavorite(ch, fav) })
+                ChannelRow(ch, fav, onClick = { scope.launch { if (context.playChannel(ch, vm.channelList())) nav.player() } }, onFavorite = { vm.toggleFavorite(ch, fav) })
             }
         }
     }
@@ -167,7 +205,7 @@ fun BrowseFilters(vm: BrowseViewModel, sources: List<SourceEntity>, sourceId: Lo
         Spacer(Modifier.height(8.dp))
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        val labels = listOf("All", "Favorites") + groups.map { it.ifEmpty { "Ungrouped" } }
+        val labels = listOf(stringResource(R.string.live_all), stringResource(R.string.live_favorites)) + groups.map { it.ifEmpty { stringResource(R.string.live_ungrouped) } }
         val selected = when (val f = browse.filter) {
             GroupFilter.All -> 0
             GroupFilter.Favorites -> 1
@@ -175,7 +213,11 @@ fun BrowseFilters(vm: BrowseViewModel, sources: List<SourceEntity>, sourceId: Lo
         }
         PillRow(labels, selected, { i -> vm.filter(if (i == 0) GroupFilter.All else if (i == 1) GroupFilter.Favorites else GroupFilter.Group(groups[i - 2])) }, Modifier.weight(1f))
         IconButton(vm::toggleSort) {
-            Icon(Icons.Rounded.SortByAlpha, if (browse.alphabetical) "Sort by provider order" else "Sort A to Z", tint = if (browse.alphabetical) MuxTheme.Accent else MuxTheme.TextSecondary)
+            Icon(
+                Icons.Rounded.SortByAlpha,
+                stringResource(if (browse.alphabetical) R.string.live_sort_by_provider_order else R.string.live_sort_a_to_z),
+                tint = if (browse.alphabetical) MuxTheme.Accent else MuxTheme.TextSecondary,
+            )
         }
     }
 }
@@ -183,7 +225,7 @@ fun BrowseFilters(vm: BrowseViewModel, sources: List<SourceEntity>, sourceId: Lo
 @Composable
 private fun ChannelRow(ch: ItemEntity, favorite: Boolean, onClick: () -> Unit, onFavorite: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().pressable(onClick, label = "Play ${ch.name}").padding(horizontal = Mux.ScreenPadding, vertical = 8.dp),
+        Modifier.fillMaxWidth().pressable(onClick, label = stringResource(R.string.live_play, ch.name)).padding(horizontal = Mux.ScreenPadding, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Artwork(ch.logo, ch.name, Modifier.size(width = 72.dp, height = 52.dp).clip(Mux.CardShape).background(MuxTheme.Raised).padding(6.dp), contentScale = ContentScale.Fit, monogramSize = 16)
@@ -196,7 +238,7 @@ private fun ChannelRow(ch: ItemEntity, favorite: Boolean, onClick: () -> Unit, o
         IconButton(onFavorite) {
             Icon(
                 if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                if (favorite) "Remove ${ch.name} from favorites" else "Add ${ch.name} to favorites",
+                if (favorite) stringResource(R.string.live_remove_from_favorites, ch.name) else stringResource(R.string.live_add_to_favorites, ch.name),
                 tint = if (favorite) MuxTheme.Accent else MuxTheme.TextSecondary,
             )
         }

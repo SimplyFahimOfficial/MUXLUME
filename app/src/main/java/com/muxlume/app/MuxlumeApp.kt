@@ -36,7 +36,7 @@ class AppContainer(context: Context) {
     val http by lazy { Http.client() }
     val db by lazy { MuxlumeDatabase.build(app) }
     val settings by lazy { SettingsRepository(app.settingsDataStore) }
-    val sources by lazy { SourceRepository(db, http, SecretBox(), app.contentResolver) }
+    val sources by lazy { SourceRepository(db, http, SecretBox(), app.contentResolver, app.resources) }
 
     private val controllerLock = Mutex()
     private var controller: MediaController? = null
@@ -58,8 +58,8 @@ class MuxlumeApp : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
-        // Keep the HTTP gate in sync with the sources' "allow HTTP" choices.
-        container.appScope.launch { container.db.sources().anyAllowsHttp().collect { CleartextGate.allowed = it } }
+        // Artwork isn't tied to a source: allow it over HTTP only while some source allows HTTP.
+        container.appScope.launch { container.db.sources().anyAllowsHttp().collect { CleartextGate.artworkAllowed = it } }
     }
 
     override fun newImageLoader(context: Context): ImageLoader = ImageLoader.Builder(context)

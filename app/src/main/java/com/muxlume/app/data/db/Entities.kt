@@ -1,7 +1,9 @@
 package com.muxlume.app.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Fts4
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
@@ -39,12 +41,15 @@ data class SourceEntity(
 /**
  * A live channel, movie or series of a source. Rows are replaced on every refresh; anything the
  * user creates (favorites, history) refers to [stableKey] instead of [id] so it survives refreshes.
+ *
+ * A refresh writes the new rows with [pending] = true in short batches, then swaps them in (see
+ * ItemDao.commitPending). Every read filters `pending = 0`, so a running import is invisible.
  */
 @Entity(
     tableName = "items",
     foreignKeys = [ForeignKey(entity = SourceEntity::class, parentColumns = ["id"], childColumns = ["sourceId"], onDelete = ForeignKey.CASCADE)],
     indices = [
-        Index(value = ["sourceId", "stableKey"], unique = true),
+        Index(value = ["sourceId", "stableKey", "pending"], unique = true),
         Index(value = ["sourceId", "kind", "groupTitle"]),
         Index(value = ["kind", "addedAt"]),
     ],
@@ -72,7 +77,13 @@ data class ItemEntity(
     val position: Int,
     /** When the provider added it (epoch seconds), for "Recently added". */
     val addedAt: Long? = null,
+    @ColumnInfo(defaultValue = "0") val pending: Boolean = false,
 )
+
+/** Full-text index over item names (kept in sync with `items` by Room's triggers). */
+@Fts4(contentEntity = ItemEntity::class)
+@Entity(tableName = "items_fts")
+data class ItemFtsEntity(val name: String)
 
 @Entity(
     tableName = "favorites",

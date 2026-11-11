@@ -40,6 +40,7 @@ object MediaIds {
         artwork: String?,
         kind: ItemKind,
         parentKey: String? = null,
+        list: ChannelList? = null,
     ): MediaItem = MediaItem.Builder()
         .setMediaId(mediaId)
         .setMediaMetadata(
@@ -50,13 +51,14 @@ object MediaIds {
                 .setIsPlayable(true)
                 .setIsBrowsable(false)
                 .setMediaType(if (kind == ItemKind.LIVE) MediaMetadata.MEDIA_TYPE_TV_CHANNEL else MediaMetadata.MEDIA_TYPE_VIDEO)
-                .setExtras(Bundle().apply { putString(EXTRA_KIND, kind.name); putString(EXTRA_PARENT, parentKey) })
+                .setExtras(Bundle().apply { putString(EXTRA_KIND, kind.name); putString(EXTRA_PARENT, parentKey); list?.toBundle(this) })
                 .build(),
         )
         .build()
 
-    fun request(item: ItemEntity): MediaItem =
-        request(of(item.sourceId, item.stableKey), item.name, item.groupTitle.ifEmpty { null }, item.logo, item.kind)
+    /** [list]: for live channels, the list it was picked from (channel up/down follows it). */
+    fun request(item: ItemEntity, list: ChannelList? = null): MediaItem =
+        request(of(item.sourceId, item.stableKey), item.name, item.groupTitle.ifEmpty { null }, item.logo, item.kind, list = list)
 
     fun request(entry: HistoryEntity): MediaItem =
         request(entry.mediaId, entry.title, entry.subtitle, entry.artwork, entry.kind, entry.parentKey)

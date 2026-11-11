@@ -1,5 +1,8 @@
 package com.muxlume.app.ui.vod
 
+import com.muxlume.app.R
+import android.content.res.Resources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,6 +42,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -87,7 +91,7 @@ data class Extra(
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class DetailViewModel(private val c: AppContainer, private val sourceId: Long, private val key: String) : ViewModel() {
+class DetailViewModel(private val c: AppContainer, private val res: Resources, private val sourceId: Long, private val key: String) : ViewModel() {
     val item: StateFlow<ItemEntity?> = c.db.items().observe(sourceId, key).stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val favorite = c.db.favorites().isFavorite(sourceId, key).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
     val extra = MutableStateFlow(Extra(loading = true))
@@ -115,15 +119,33 @@ class DetailViewModel(private val c: AppContainer, private val sourceId: Long, p
                 val api = c.sources.xtreamApi(source)
                 if (it.kind == ItemKind.SERIES) {
                     val info = api.seriesInfo(it.remoteId)
-                    Extra(plot = info.plot ?: it.plot, backdrop = info.cover, episodes = info.episodes, meta = listOfNotNull(it.year, it.rating?.let { r -> "★ $r" }, "${info.episodes.map { e -> e.season }.distinct().size} seasons".takeIf { info.episodes.isNotEmpty() }))
+                    Extra(
+                        plot = info.plot ?: it.plot,
+                        backdrop = info.cover,
+                        episodes = info.episodes,
+                        meta = listOfNotNull(
+                            it.year,
+                            it.rating?.let { r -> "★ $r" },
+                            info.episodes.map { e -> e.season }.distinct().size.let { n -> res.getQuantityString(R.plurals.detail_seasons, n, n) }.takeIf { info.episodes.isNotEmpty() },
+                        ),
+                    )
                 } else {
                     val info = api.vodInfo(it.remoteId)
-                    Extra(plot = info.plot ?: it.plot, backdrop = info.backdrop, meta = listOfNotNull(info.releaseDate?.take(4) ?: it.year, info.durationSec?.let { d -> "${d / 60} min" }, info.genre, it.rating?.let { r -> "★ $r" }))
+                    Extra(
+                        plot = info.plot ?: it.plot,
+                        backdrop = info.backdrop,
+                        meta = listOfNotNull(
+                            info.releaseDate?.take(4) ?: it.year,
+                            info.durationSec?.let { d -> res.getString(R.string.detail_min, d / 60) },
+                            info.genre,
+                            it.rating?.let { r -> "★ $r" },
+                        ),
+                    )
                 }
             }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            Extra(error = ErrorText.of(e), plot = it.plot, meta = listOfNotNull(it.year))
+            Extra(error = ErrorText.of(res, e), plot = it.plot, meta = listOfNotNull(it.year))
         }
     }
 
@@ -140,7 +162,8 @@ class DetailViewModel(private val c: AppContainer, private val sourceId: Long, p
 @Composable
 fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
     val context = LocalContext.current
-    val vm: DetailViewModel = viewModel(key = "$sourceId|$key") { DetailViewModel(context.container, sourceId, key) }
+    val res = LocalResources.current
+    val vm: DetailViewModel = viewModel(key = "$sourceId|$key") { DetailViewModel(context.container, context.applicationContext.resources, sourceId, key) }
     val item by vm.item.collectAsStateWithLifecycle()
     val extra by vm.extra.collectAsStateWithLifecycle()
     val favorite by vm.favorite.collectAsStateWithLifecycle()
@@ -176,9 +199,13 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
                             if (it.kind == ItemKind.MOVIE) {
                                 val h = history[MediaIds.of(it.sourceId, it.stableKey)]
                                 val resume = h != null && h.positionMs > 30_000 && (h.durationMs <= 0 || h.positionMs < h.durationMs * 0.95)
-                                PrimaryButton(if (resume) "Resume" else "Play", { scope.launch { if (context.play(listOf(MediaIds.request(it)))) nav.player() } }, icon = Icons.Rounded.PlayArrow)
+                                PrimaryButton(
+                                    stringResource(if (resume) R.string.detail_resume else R.string.detail_play),
+                                    { scope.launch { if (context.play(listOf(MediaIds.request(it)))) nav.player() } },
+                                    icon = Icons.Rounded.PlayArrow,
+                                )
                             } else if (episodes.isNotEmpty()) {
-                                val next = nextEpisode(extra.episodes, history, it)
+                                val next = nextEpisode(extra.episodes, history, it, res)
                                 PrimaryButton(next.second, {
                                     scope.launch {
                                         val ep = next.first
@@ -187,7 +214,11 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
                                     }
                                 }, icon = Icons.Rounded.PlayArrow)
                             }
-                            SecondaryButton(if (favorite) "In watchlist" else "Watchlist", vm::toggleFavorite, icon = if (favorite) Icons.Rounded.Check else Icons.Rounded.Add)
+                            SecondaryButton(
+                                stringResource(if (favorite) R.string.detail_in_watchlist else R.string.detail_watchlist),
+                                vm::toggleFavorite,
+                                icon = if (favorite) Icons.Rounded.Check else Icons.Rounded.Add,
+                            )
                         }
                         extra.plot?.let { plot ->
                             Spacer(Modifier.height(18.dp))
@@ -199,15 +230,15 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
                         }
                         extra.error?.let { e ->
                             Spacer(Modifier.height(18.dp))
-                            Text("Details couldn't be loaded. $e", style = MaterialTheme.typography.bodyMedium, color = MuxTheme.Error)
-                            Text("Retry", color = MuxTheme.Primary, modifier = Modifier.clip(Mux.PillShape).pressable({ vm.load() }).padding(vertical = 10.dp))
+                            Text(stringResource(R.string.detail_details_couldn_t_be_loaded, e), style = MaterialTheme.typography.bodyMedium, color = MuxTheme.Error)
+                            Text(stringResource(R.string.detail_retry), color = MuxTheme.Primary, modifier = Modifier.clip(Mux.PillShape).pressable({ vm.load() }).padding(vertical = 10.dp))
                         }
                     }
                 }
                 if (seasons.size > 1) {
                     item {
                         Spacer(Modifier.height(24.dp))
-                        PillRow(seasons.map { s -> "Season $s" }, seasons.indexOf(season), { i -> vm.season.value = seasons[i] })
+                        PillRow(seasons.map { s -> stringResource(R.string.detail_season, s) }, seasons.indexOf(season), { i -> vm.season.value = seasons[i] })
                     }
                 }
                 if (episodes.isNotEmpty()) {
@@ -222,23 +253,28 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
         IconButton(
             nav::back,
             Modifier.windowInsetsPadding(WindowInsets.statusBars).padding(8.dp).clip(Mux.PillShape).background(MuxTheme.Scrim),
-        ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = androidx.compose.ui.graphics.Color.White) } // on the dark scrim in any theme
+        ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.detail_back), tint = androidx.compose.ui.graphics.Color.White) } // on the dark scrim in any theme
     }
 }
 
 /** The first unfinished episode after the last one watched, or the first episode. */
-private fun nextEpisode(all: List<XtreamEpisode>, history: Map<String, HistoryEntity>, series: ItemEntity): Pair<XtreamEpisode, String> {
+private fun nextEpisode(all: List<XtreamEpisode>, history: Map<String, HistoryEntity>, series: ItemEntity, res: Resources): Pair<XtreamEpisode, String> {
     val idOf = { e: XtreamEpisode -> MediaIds.of(series.sourceId, MediaIds.episodeKey(e.id, e.extension)) }
-    val last = all.withIndex().filter { history[idOf(it.value)] != null }.maxByOrNull { history[idOf(it.value)]!!.updatedAt } ?: return all.first() to "Play S${all.first().season} E${all.first().number ?: 1}"
+    val first = all.first()
+    val last = all.withIndex().filter { history[idOf(it.value)] != null }.maxByOrNull { history[idOf(it.value)]!!.updatedAt }
+        ?: return first to res.getString(R.string.detail_play_s_e, first.season.toString(), (first.number ?: 1).toString())
     val h = history[idOf(last.value)]!!
     val finished = h.durationMs > 0 && h.positionMs >= h.durationMs * 0.95
     val ep = if (finished) all.getOrNull(last.index + 1) ?: last.value else last.value
-    return ep to "${if (ep == last.value && !finished) "Resume" else "Play"} S${ep.season} E${ep.number ?: "?"}"
+    return ep to res.getString(if (ep == last.value && !finished) R.string.detail_resume_s_e else R.string.detail_play_s_e, ep.season.toString(), ep.number?.toString() ?: "?")
 }
 
 @Composable
 private fun EpisodeRow(ep: XtreamEpisode, h: HistoryEntity?, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().pressable(onClick, label = "Play ${ep.title}").padding(horizontal = Mux.ScreenPadding, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().pressable(onClick, label = stringResource(R.string.detail_play_2, ep.title)).padding(horizontal = Mux.ScreenPadding, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Box(Modifier.width(132.dp).aspectRatio(16f / 9f).clip(Mux.CardShape)) {
             Artwork(ep.image, ep.title, Modifier.fillMaxSize(), monogramSize = 18)
             if (h != null && h.durationMs > 0) {
@@ -249,9 +285,9 @@ private fun EpisodeRow(ep: XtreamEpisode, h: HistoryEntity?, onClick: () -> Unit
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text("Episode ${ep.number ?: "?"}", style = SectionLabel, color = MuxTheme.TextSecondary)
+            Text(stringResource(R.string.detail_episode, ep.number ?: "?"), style = SectionLabel, color = MuxTheme.TextSecondary)
             Text(ep.title, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            ep.durationSec?.takeIf { it > 0 }?.let { Text("${it / 60} min", style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary) }
+            ep.durationSec?.takeIf { it > 0 }?.let { Text(stringResource(R.string.detail_min, it / 60), style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary) }
         }
     }
 }

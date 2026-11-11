@@ -1,11 +1,14 @@
 package com.muxlume.app.ui
 
+import com.muxlume.app.R
+import androidx.compose.ui.res.stringResource
 import android.content.Context
 import android.widget.Toast
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import com.muxlume.app.container
 import com.muxlume.app.data.db.ItemEntity
+import com.muxlume.app.playback.ChannelList
 import com.muxlume.app.playback.MediaIds
 
 /** Starts playback in the service and returns true once the controller accepted it. */
@@ -19,20 +22,13 @@ suspend fun Context.play(items: List<MediaItem>, startIndex: Int = 0, positionMs
         true
     } catch (e: Exception) {
         if (e is kotlinx.coroutines.CancellationException) throw e
-        Toast.makeText(this, "Playback couldn't start.", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.playback_playback_couldn_t_start), Toast.LENGTH_SHORT).show()
         false
     }
 }
 
 /**
- * The channel at [index] plus its neighbours, so next/previous (and the system media controls)
- * switch channels within the list the user picked from.
- * shortcut: capped at [QUEUE_SIZE] channels around the selection; switching beyond that needs a new pick.
+ * Plays a live channel. [list] is the list it was picked from: channel up/down (app, remote, media
+ * notification) moves through that list, looked up on demand by the playback service.
  */
-suspend fun Context.playFromList(list: List<ItemEntity>, index: Int): Boolean {
-    val from = (index - QUEUE_SIZE / 2).coerceAtLeast(0)
-    val to = (from + QUEUE_SIZE).coerceAtMost(list.size)
-    return play(list.subList(from, to).map(MediaIds::request), index - from)
-}
-
-private const val QUEUE_SIZE = 300
+suspend fun Context.playChannel(item: ItemEntity, list: ChannelList? = null): Boolean = play(listOf(MediaIds.request(item, list)))

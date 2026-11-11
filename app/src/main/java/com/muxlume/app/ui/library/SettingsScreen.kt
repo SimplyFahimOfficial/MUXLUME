@@ -1,5 +1,7 @@
 package com.muxlume.app.ui.library
 
+import com.muxlume.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -53,37 +56,38 @@ import kotlinx.coroutines.withContext
 @Composable
 fun SettingsScreen(nav: Nav) {
     val context = LocalContext.current
+    val res = LocalResources.current
     val c = context.container
     val settings by c.settings.settings.collectAsStateWithLifecycle(AppSettings())
     val scope = rememberCoroutineScope()
     var confirm by remember { mutableStateOf<String?>(null) }
 
     Column(Modifier.fillMaxSize().background(MuxTheme.Background)) {
-        TopHeader("Settings", onSearch = null, onBack = { nav.back() })
+        TopHeader(stringResource(R.string.settings_settings), onSearch = null, onBack = { nav.back() })
         Column(Modifier.verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 24.dp)) {
-            LinkRow(Icons.Rounded.Palette, "Appearance", "Theme, accent colour, AMOLED, motion", nav::appearance)
+            LinkRow(Icons.Rounded.Palette, stringResource(R.string.settings_appearance), stringResource(R.string.settings_theme_accent_colour_amoled_motion), nav::appearance)
             Spacer(Modifier.height(16.dp))
-            SectionHeader("Playback")
-            Toggle("Background audio", "Keep the sound playing after you leave the app. Off: playback pauses (picture-in-picture keeps playing).", settings.backgroundPlayback) {
+            SectionHeader(stringResource(R.string.settings_playback))
+            Toggle(stringResource(R.string.settings_background_audio), stringResource(R.string.settings_keep_the_sound_playing_after), settings.backgroundPlayback) {
                 scope.launch { c.settings.setBackgroundPlayback(it) }
             }
             Spacer(Modifier.height(16.dp))
-            SectionHeader("Privacy and data")
+            SectionHeader(stringResource(R.string.settings_privacy_and_data))
             Text(
-                "MUXLUME has no account, ads, analytics or trackers. It only connects to the playlists, provider servers and artwork links you add. " +
-                    "Playlist links and provider passwords are encrypted with a key that stays in this device's secure hardware, and nothing is included in Android backups.",
+                stringResource(R.string.settings_muxlume_has_no_account_ads) +
+                    stringResource(R.string.settings_playlist_links_and_provider_passwords),
                 style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary, modifier = Modifier.padding(horizontal = Mux.ScreenPadding, vertical = 8.dp),
             )
-            LinkRow(Icons.Rounded.History, "Clear watch history", "Resume positions and recently watched", { confirm = "history" })
-            LinkRow(Icons.Rounded.DeleteForever, "Delete all data", "Playlists, credentials, favorites, history and cached images", { confirm = "all" })
+            LinkRow(Icons.Rounded.History, stringResource(R.string.settings_clear_watch_history), stringResource(R.string.settings_resume_positions_and_recently_watched), { confirm = "history" })
+            LinkRow(Icons.Rounded.DeleteForever, stringResource(R.string.settings_delete_all_data), stringResource(R.string.settings_playlists_credentials_favorites_history_and), { confirm = "all" })
         }
     }
 
     confirm?.let { what ->
         AlertDialog(
             onDismissRequest = { confirm = null },
-            title = { Text(if (what == "all") "Delete all data?" else "Clear watch history?") },
-            text = { Text(if (what == "all") "Everything MUXLUME stored on this device is removed. This can't be undone." else "Resume positions and the recently watched list are removed.") },
+            title = { Text(stringResource(if (what == "all") R.string.settings_delete_all_data_2 else R.string.settings_clear_watch_history_2)) },
+            text = { Text(stringResource(if (what == "all") R.string.settings_everything_muxlume_stored_on_this else R.string.settings_resume_positions_and_the_recently)) },
             confirmButton = {
                 TextButton({
                     confirm = null
@@ -99,12 +103,12 @@ fun SettingsScreen(nav: Nav) {
                                 c.db.history().clear()
                             }
                         }
-                        Toast.makeText(context, if (what == "all") "All data deleted" else "Watch history cleared", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, res.getString(if (what == "all") R.string.settings_all_data_deleted else R.string.settings_watch_history_cleared), Toast.LENGTH_SHORT).show()
                         if (what == "all") nav.home()
                     }
-                }) { Text(if (what == "all") "Delete" else "Clear", color = MuxTheme.Error) }
+                }) { Text(stringResource(if (what == "all") R.string.settings_delete else R.string.settings_clear), color = MuxTheme.Error) }
             },
-            dismissButton = { TextButton({ confirm = null }) { Text("Cancel", color = MuxTheme.Primary) } },
+            dismissButton = { TextButton({ confirm = null }) { Text(stringResource(R.string.settings_cancel), color = MuxTheme.Primary) } },
             containerColor = MuxTheme.Raised,
         )
     }

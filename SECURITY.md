@@ -29,9 +29,11 @@ secrets (playlist links that often embed tokens, provider usernames and password
 
 Many IPTV servers only offer HTTP and their hosts are user-defined, so the network security config
 must permit cleartext at the platform level. The control is in-app: every request goes through one
-OkHttp client whose `CleartextGate` refuses plain HTTP unless the user ticked "allow unencrypted
-HTTP" for at least one source after reading the warning. RTSP (which bypasses OkHttp) is only played
-for sources with that opt-in. Known limit: the opt-in is app-wide once any source has it.
+OkHttp client whose `CleartextGate` refuses plain HTTP unless the request's own source allows it.
+Playlist downloads, provider API calls and stream/segment requests carry their source's setting as
+a request tag, so one source's opt-in never covers another. Artwork isn't tied to one source and
+carries no credentials; it may use HTTP while any source allows HTTP. RTSP (which bypasses OkHttp)
+is only played for sources with the opt-in.
 
 `scripts/ci/apk_audit.py` records this as the only reviewed exception and fails on any other
 network-config weakening (user CAs, `usesCleartextTraffic`).

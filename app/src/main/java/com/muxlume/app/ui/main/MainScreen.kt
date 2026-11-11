@@ -1,5 +1,8 @@
 package com.muxlume.app.ui.main
 
+import com.muxlume.app.R
+import androidx.annotation.StringRes
+import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
@@ -58,12 +61,12 @@ import com.muxlume.app.ui.theme.MuxTheme
 import com.muxlume.app.ui.vod.VodScreen
 import com.muxlume.app.data.db.ItemKind
 
-enum class Tab(val label: String, val icon: ImageVector) {
-    HOME("Home", Icons.Rounded.Home),
-    LIVE("Live TV", Icons.Rounded.LiveTv),
-    MOVIES("Movies", Icons.Rounded.Movie),
-    SERIES("Series", Icons.Rounded.VideoLibrary),
-    LIBRARY("Library", Icons.Rounded.CollectionsBookmark),
+enum class Tab(@StringRes val label: Int, val icon: ImageVector) {
+    HOME(R.string.main_home, Icons.Rounded.Home),
+    LIVE(R.string.main_live_tv, Icons.Rounded.LiveTv),
+    MOVIES(R.string.main_movies, Icons.Rounded.Movie),
+    SERIES(R.string.main_series, Icons.Rounded.VideoLibrary),
+    LIBRARY(R.string.main_library, Icons.Rounded.CollectionsBookmark),
 }
 
 /** The five primary sections: a floating bottom bar on phones, a rail on wide screens. */
@@ -127,7 +130,7 @@ private fun BottomBar(selected: Int, modifier: Modifier, onSelect: (Int) -> Unit
                     verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
                 ) {
                     Icon(t.icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
-                    Text(t.label, color = color, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    Text(stringResource(t.label), color = color, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }
             }
         }
@@ -151,7 +154,7 @@ private fun Rail(selected: Int, onSelect: (Int) -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(t.icon, null, tint = if (on) MuxTheme.OnPrimary else MuxTheme.TextSecondary)
-                Text(t.label, color = if (on) MuxTheme.OnPrimary else MuxTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text(stringResource(t.label), color = if (on) MuxTheme.OnPrimary else MuxTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
             }
         }
     }

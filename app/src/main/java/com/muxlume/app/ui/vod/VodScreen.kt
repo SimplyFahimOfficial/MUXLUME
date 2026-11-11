@@ -1,12 +1,13 @@
 package com.muxlume.app.ui.vod
 
+import com.muxlume.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,6 +25,9 @@ import com.muxlume.app.ui.components.PosterCard
 import com.muxlume.app.ui.live.BrowseFilters
 import com.muxlume.app.ui.live.BrowseViewModel
 import com.muxlume.app.ui.live.GroupFilter
+import com.muxlume.app.ui.live.isLoadedEmpty
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
 import com.muxlume.app.ui.main.BottomBarSpace
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.theme.Mux
@@ -37,29 +41,28 @@ fun VodScreen(kind: ItemKind, nav: Nav) {
     val sourceId by vm.sourceId.collectAsStateWithLifecycle()
     val browse by vm.browse.collectAsStateWithLifecycle()
     val groups by vm.groups.collectAsStateWithLifecycle()
-    val items by vm.items.collectAsStateWithLifecycle()
+    val items = vm.items.collectAsLazyPagingItems()
     val gridState = rememberLazyGridState()
     LaunchedEffect(browse, sourceId) { gridState.scrollToItem(0) }
-    val title = if (kind == ItemKind.MOVIE) "Movies" else "Series"
+    val title = stringResource(if (kind == ItemKind.MOVIE) R.string.vod_movies else R.string.vod_series)
 
     Column(Modifier.fillMaxSize()) {
         TopHeader(title, onSearch = nav::search)
         val list = sources ?: return@Column
         if (list.isEmpty()) {
             EmptyState(
-                "No ${title.lowercase()} yet",
-                if (kind == ItemKind.SERIES) "Series come from Xtream Codes-compatible accounts that include them."
-                else "Movies come from Xtream Codes-compatible accounts, or from playlist entries that point to video files.",
-                action = "Add a source", onAction = { nav.addSource() },
+                stringResource(R.string.vod_no_yet, title.lowercase()),
+                if (kind == ItemKind.SERIES) stringResource(R.string.vod_series_come_from_xtream_codes)
+                else stringResource(R.string.vod_movies_come_from_xtream_codes),
+                action = stringResource(R.string.vod_add_a_source), onAction = { nav.addSource() },
             )
             return@Column
         }
         BrowseFilters(vm, list, sourceId, browse, groups)
-        val all = items ?: return@Column
-        if (all.isEmpty()) {
+        if (items.isLoadedEmpty) {
             EmptyState(
-                if (browse.filter is GroupFilter.Favorites) "Your watchlist is empty" else "Nothing here",
-                if (browse.filter is GroupFilter.Favorites) "Add titles to your watchlist from their detail page." else "This source has no ${title.lowercase()} in this category.",
+                stringResource(if (browse.filter is GroupFilter.Favorites) R.string.vod_your_watchlist_is_empty else R.string.vod_nothing_here),
+                if (browse.filter is GroupFilter.Favorites) stringResource(R.string.vod_add_titles_to_your_watchlist) else stringResource(R.string.vod_this_source_has_no_in, title.lowercase()),
             )
             return@Column
         }
@@ -70,7 +73,8 @@ fun VodScreen(kind: ItemKind, nav: Nav) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            items(all, key = { it.id }) { item ->
+            items(items.itemCount, key = items.itemKey { it.id }) { i ->
+                val item = items[i] ?: return@items // placeholder while the page loads
                 PosterCard(item.name, item.logo, { nav.detail(item.sourceId, item.stableKey) }, subtitle = item.year, width = null)
             }
         }

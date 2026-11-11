@@ -44,4 +44,4 @@ provider XMLTV guide (planned with the EPG).
 AndroidX Media3 ExoPlayer with HLS, DASH, RTSP and progressive extractors (MPEG-TS, MP4, MKV, …).
 Codec support depends on the device's decoders; there is no software decoder extension. Not
 supported: RTMP, DRM-protected streams, MMS/UDP multicast. URLs without an `.m3u8`/`.mpd` extension
-are treated as progressive, so extension-less HLS links may fail.
+are first tried as progressive; if that fails as an unknown container they are retried once as HLS.

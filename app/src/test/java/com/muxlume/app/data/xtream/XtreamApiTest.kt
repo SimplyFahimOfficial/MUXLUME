@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import com.muxlume.app.core.net.CleartextBlockedException
 import com.muxlume.app.core.net.CleartextGate
 import com.muxlume.app.core.net.Http
+import com.muxlume.app.core.net.HttpPolicy
 import com.muxlume.app.core.net.HttpStatusException
 import kotlinx.serialization.json.JsonObject
 import mockwebserver3.MockResponse
@@ -19,15 +20,13 @@ class XtreamApiTest {
 
     @Before
     fun setUp() {
-        CleartextGate.allowed = true // MockWebServer is plain HTTP on localhost
-        server.start()
-        api = XtreamApi(Http.client(), server.url("/"), "user name", "p@ss/word")
+        server.start() // plain HTTP on localhost, so this test source allows HTTP
+        api = XtreamApi(Http.client(), server.url("/"), "user name", "p@ss/word", HttpPolicy.ALLOW_HTTP)
     }
 
     @After
     fun tearDown() {
         server.close()
-        CleartextGate.allowed = false
     }
 
     private fun enqueue(body: String, code: Int = 200) = server.enqueue(MockResponse.Builder().code(code).body(body).build())
@@ -126,9 +125,11 @@ class XtreamApiTest {
     }
 
     @Test
-    fun `plain http is refused unless allowed`() {
-        CleartextGate.allowed = false
-        assertThrows(CleartextBlockedException::class.java) { api.account() }
+    fun `plain http is refused unless the source allows it`() {
+        val httpsOnly = XtreamApi(Http.client(), server.url("/"), "u", "p", HttpPolicy.HTTPS_ONLY)
+        CleartextGate.artworkAllowed = true // another source allowing HTTP must not matter
+        assertThrows(CleartextBlockedException::class.java) { httpsOnly.account() }
+        CleartextGate.artworkAllowed = false
         assertThat(server.requestCount).isEqualTo(0)
     }
 }

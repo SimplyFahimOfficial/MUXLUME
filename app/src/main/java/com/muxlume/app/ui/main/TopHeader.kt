@@ -1,5 +1,7 @@
 package com.muxlume.app.ui.main
 
+import com.muxlume.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -34,7 +36,7 @@ fun TopHeader(title: String?, onSearch: (() -> Unit)?, modifier: Modifier = Modi
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (onBack != null) {
-            IconButton(onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = MuxTheme.TextPrimary) }
+            IconButton(onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.top_header_back), tint = MuxTheme.TextPrimary) }
         }
         if (title == null) {
             Wordmark(Modifier.weight(1f))
@@ -43,7 +45,7 @@ fun TopHeader(title: String?, onSearch: (() -> Unit)?, modifier: Modifier = Modi
         }
         if (onSearch != null) {
             IconButton(onSearch, Modifier.size(48.dp).clip(Mux.PillShape).background(MuxTheme.Raised)) {
-                Icon(Icons.Rounded.Search, "Search", tint = MuxTheme.TextPrimary)
+                Icon(Icons.Rounded.Search, stringResource(R.string.top_header_search), tint = MuxTheme.TextPrimary)
             }
         }
     }

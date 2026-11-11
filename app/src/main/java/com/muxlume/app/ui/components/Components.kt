@@ -1,5 +1,6 @@
 package com.muxlume.app.ui.components
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
@@ -70,7 +71,7 @@ fun Wordmark(modifier: Modifier = Modifier, logoSize: Dp = 30.dp) {
     Row(modifier.semantics(mergeDescendants = true) { contentDescription = "MUXLUME" }, verticalAlignment = Alignment.CenterVertically) {
         MuxLogo(size = logoSize)
         Spacer(Modifier.width(8.dp))
-        Text("MUXLUME", fontSize = (logoSize.value * 0.62f).sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = MuxTheme.TextPrimary)
+        Text(stringResource(R.string.components_muxlume), fontSize = (logoSize.value * 0.62f).sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = MuxTheme.TextPrimary)
     }
 }
 
@@ -232,7 +233,7 @@ fun LiveBadge(modifier: Modifier = Modifier) {
     Row(modifier.clip(Mux.PillShape).background(MuxTheme.Scrim).padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(8.dp).clip(Mux.PillShape).background(MuxTheme.Accent))
         Spacer(Modifier.width(6.dp))
-        Text("LIVE", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, letterSpacing = 1.sp) // always on the dark scrim
+        Text(stringResource(R.string.components_live), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, letterSpacing = 1.sp) // always on the dark scrim
     }
 }
 
