@@ -25,7 +25,8 @@ The app connects only to:
 - the playlist links and provider servers you add (to download lists, metadata and streams);
 - the TV guide link, only for playlists where you turned the guide on (downloaded when you enable it and about every 12 hours on Wi-Fi unless you change that);
 - the artwork (logo, poster) addresses those lists contain;
-- links you open yourself from the Support screen, in your browser.
+- links you open yourself from the Support screen, in your browser;
+- only in the GitHub build, `api.github.com`, when you tap **Check for updates** in Help & about (never in the background).
 
 There are no analytics, advertising, crash-reporting or tracking SDKs. Servers you connect to see
 your IP address and what you request, as with any streaming app; their own privacy policies apply.

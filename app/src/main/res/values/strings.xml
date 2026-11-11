@@ -385,6 +385,10 @@
     <string name="error_backup_too_new">This backup was made by a newer version of MUXLUME. Update the app first.</string>
     <string name="error_backup_too_large">This backup is too large.</string>
     <string name="error_backup_weak_passphrase">Use a passphrase of at least 8 characters.</string>
+    <string name="about_check_for_updates">Check for updates</string>
+    <string name="about_you_have_the_latest_version">You have the latest version.</string>
+    <string name="about_version_available">Version %1$s is available.</string>
+    <string name="about_view_release">View release on GitHub</string>
     <!-- TV guide -->
     <string name="guide_title">TV guide</string>
     <string name="guide_settings_title">TV guide</string>

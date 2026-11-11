@@ -37,12 +37,19 @@ There are no app screenshots yet; they will be added from real devices.
 
 Details: [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md).
 
+## Builds
+
+One app, three builds (Gradle flavors). `fdroid` is the clean FLOSS build for F-Droid. `github` (APKs on
+GitHub Releases) and `play` (Play Store) may carry features F-Droid would not accept; a CI check keeps
+proprietary libraries out of `fdroid`. Today the only difference is a manual **Check for updates** button in
+the `github` build (it contacts GitHub only when tapped).
+
 ## Build
 
 Requirements: JDK 21 and the Android SDK (platform 37, build tools 36).
 
 ```sh
-./gradlew assembleDebug            # app/build/outputs/apk/debug/
+./gradlew assembleDebug            # app/build/outputs/apk/<flavor>/debug/
 ./gradlew testDebugUnitTest lintDebug
 ```
 

@@ -10,6 +10,8 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
   and logins), favorites, watch history and settings, encrypted with a passphrase you choose
   (AES-256-GCM, PBKDF2-SHA256). Nothing is uploaded. Playlists that point to a file on the device are
   left out.
+- Three builds from one source: `fdroid` (clean), `github` and `play`. The GitHub build has a manual
+  "Check for updates" button in Help & about.
 - TV guide (XMLTV), off until enabled per playlist: guide link on the playlist form or the one the
   playlist announces, matching by id, name or by hand, now/next in Live TV and the player, a timeline
   guide with programme details, a 12-hourly Wi-Fi-only background refresh, and reminders (a
