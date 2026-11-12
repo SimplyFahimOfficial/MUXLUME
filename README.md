@@ -22,7 +22,7 @@ everything else is planned.
 | Live TV | Groups, favorites, recently watched, A–Z sort, search, channel up/down in the player, now/next | Hidden channels, custom order |
 | Movies and series | Poster grids by category, detail pages with provider metadata, seasons and episodes, watchlist, resume, continue watching, next episode | Optional third-party metadata |
 | Appearance | Dark and light themes, System option, five accents, Material You (Android 12+), AMOLED black, reduced motion | Layout density, shared-element transitions |
-| Playback | Media3 ExoPlayer: HLS, DASH, RTSP, progressive (TS/MP4/MKV…); audio and subtitle tracks; picture size; speed (VOD); PiP; optional background audio; media notification; reconnect with backoff; diagnostics without links | Buffer settings, decoder preferences, catch-up, timeshift, recording |
+| Playback | Media3 ExoPlayer: HLS, DASH, RTSP, progressive (TS/MP4/MKV…); audio and subtitle tracks; picture size; speed (VOD); PiP; sleep timer; buffer size setting; optional background audio; media notification; reconnect with backoff; diagnostics without links | Decoder preferences, catch-up, timeshift, recording |
 | EPG | XMLTV (opt-in per playlist): matching by id, name or by hand, timeline guide, now/next, 12-hourly background refresh, reminders | Programme search |
 | Other | Onboarding, settings, help & about, Support (native UPI), data deletion, encrypted local backup and restore | Parental PIN, Android TV layout |
 

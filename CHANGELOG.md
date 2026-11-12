@@ -6,6 +6,8 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 ## [Unreleased]
 
 ### Added
+- Sleep timer in the player options (15 to 90 minutes, then pauses).
+- Buffering setting (Settings → Buffering): normal, more or less buffer ahead.
 - Local backup and restore (Settings → Backup and restore): one file with playlists (including links
   and logins), favorites, watch history and settings, encrypted with a passphrase you choose
   (AES-256-GCM, PBKDF2-SHA256). Nothing is uploaded. Playlists that point to a file on the device are

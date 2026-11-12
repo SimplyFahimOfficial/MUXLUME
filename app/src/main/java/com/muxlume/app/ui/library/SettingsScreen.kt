@@ -45,6 +45,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.widget.Toast
 import com.muxlume.app.container
 import com.muxlume.app.data.AppSettings
+import com.muxlume.app.data.BufferMode
+import com.muxlume.app.ui.components.PillRow
 import com.muxlume.app.ui.Nav
 import com.muxlume.app.ui.components.SectionHeader
 import com.muxlume.app.ui.components.Toggle
@@ -75,6 +77,19 @@ fun SettingsScreen(nav: Nav) {
             Toggle(stringResource(R.string.settings_background_audio), stringResource(R.string.settings_keep_the_sound_playing_after), settings.backgroundPlayback) {
                 scope.launch { c.settings.setBackgroundPlayback(it) }
             }
+            Text(
+                stringResource(R.string.settings_buffering), style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary,
+                modifier = Modifier.padding(horizontal = Mux.ScreenPadding).padding(top = 8.dp),
+            )
+            Text(
+                stringResource(R.string.settings_buffering_body), style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary,
+                modifier = Modifier.padding(horizontal = Mux.ScreenPadding, vertical = 4.dp),
+            )
+            PillRow(
+                listOf(R.string.settings_buffer_normal, R.string.settings_buffer_large, R.string.settings_buffer_small).map { stringResource(it) },
+                BufferMode.entries.indexOf(settings.buffer),
+                { scope.launch { c.settings.setBuffer(BufferMode.entries[it]) } },
+            )
             Spacer(Modifier.height(16.dp))
             SectionHeader(stringResource(R.string.settings_privacy_and_data))
             Text(

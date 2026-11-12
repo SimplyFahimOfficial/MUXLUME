@@ -437,6 +437,7 @@ private fun OptionsSheet(ui: PlayerUi, p: Player) {
                 { i -> p.setPlaybackSpeed(listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)[i]) },
             )
         }
+        SleepTimerSection()
         Text(stringResource(R.string.player_playback_info), style = SectionLabel, color = MuxTheme.TextSecondary, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
         val info = diagnostics(ui, p, res)
         Text(info, style = MaterialTheme.typography.bodySmall, color = MuxTheme.Primary)
@@ -522,4 +523,22 @@ private fun diagnostics(ui: PlayerUi, p: Player, res: Resources): String {
 private fun time(ms: Long): String {
     val s = ms / 1000
     return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
+}
+
+private val SLEEP_MINUTES = listOf(0, 15, 30, 45, 60, 90)
+
+@Composable
+private fun SleepTimerSection() {
+    val timer = LocalContext.current.container.sleepTimer
+    val active by timer.state.collectAsStateWithLifecycle()
+    Text(stringResource(R.string.player_sleep_timer), style = SectionLabel, color = MuxTheme.TextSecondary, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
+    com.muxlume.app.ui.components.PillRow(
+        SLEEP_MINUTES.map { if (it == 0) stringResource(R.string.player_sleep_off) else stringResource(R.string.player_sleep_minutes, it) },
+        SLEEP_MINUTES.indexOf(active?.minutes ?: 0),
+        { timer.start(SLEEP_MINUTES[it]) },
+    )
+    active?.let {
+        val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(it.endsAt))
+        Text(stringResource(R.string.player_sleep_stops_at, time), style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary, modifier = Modifier.padding(top = 8.dp))
+    }
 }
