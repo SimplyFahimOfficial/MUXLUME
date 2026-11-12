@@ -190,7 +190,7 @@ fun GuideScreen(nav: Nav) {
     var selected by remember { mutableStateOf<Picked?>(null) }
     var options by remember { mutableStateOf<ItemEntity?>(null) }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().background(MuxTheme.Background)) {
         TopHeader(
             stringResource(R.string.guide_title), onSearch = null, onBack = nav::back,
             actions = {
