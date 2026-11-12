@@ -39,15 +39,15 @@ data class ChannelList(val order: Order, val group: String?, val favoritesSource
 /** The channel after (or before) [item] in [list], or null at the end of the list. */
 suspend fun MuxlumeDatabase.neighbour(item: ItemEntity, list: ChannelList, forward: Boolean): ItemEntity? {
     val items = items()
-    val hasGroup = list.group != null
-    val group = list.group.orEmpty()
+    val group = list.group
+    val pinned = if (list.order == ChannelList.Order.FAVORITES) false else channelPrefs().isPinned(item.sourceId, item.stableKey)
     return when (list.order) {
         ChannelList.Order.PROVIDER ->
-            if (forward) items.nextByPosition(item.sourceId, hasGroup, group, item.position)
-            else items.previousByPosition(item.sourceId, hasGroup, group, item.position)
+            if (forward) items.nextByPosition(item.sourceId, group, pinned, item.position)
+            else items.previousByPosition(item.sourceId, group, pinned, item.position)
         ChannelList.Order.NAME ->
-            if (forward) items.nextByName(item.sourceId, hasGroup, group, item.name, item.position)
-            else items.previousByName(item.sourceId, hasGroup, group, item.name, item.position)
+            if (forward) items.nextByName(item.sourceId, group, pinned, item.name, item.position)
+            else items.previousByName(item.sourceId, group, pinned, item.name, item.position)
         ChannelList.Order.FAVORITES -> {
             val fav = favorites().get(item.sourceId, item.stableKey) ?: return null
             if (forward) items.nextFavorite(list.favoritesSourceId, fav.addedAt, item.id)

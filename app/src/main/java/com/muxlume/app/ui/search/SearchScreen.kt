@@ -50,6 +50,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.muxlume.app.AppContainer
 import com.muxlume.app.container
+import com.muxlume.app.data.db.EpgDao
 import com.muxlume.app.data.db.ItemDao
 import com.muxlume.app.data.db.ItemEntity
 import com.muxlume.app.data.db.ItemKind
@@ -76,7 +77,7 @@ class SearchViewModel(c: AppContainer) : ViewModel() {
     val query = MutableStateFlow("")
     val results = query.debounce(250).flatMapLatest { q ->
         val match = ItemDao.ftsQuery(q).takeIf { q.trim().length >= 2 }
-        if (match == null) flowOf(null) else c.db.items().search(match, 300)
+        if (match == null) flowOf(null) else c.db.items().search(match, "%${EpgDao.likeEscape(q.trim())}%", 300)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 }
 

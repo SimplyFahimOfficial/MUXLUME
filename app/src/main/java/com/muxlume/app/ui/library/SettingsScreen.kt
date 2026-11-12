@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -72,6 +73,7 @@ fun SettingsScreen(nav: Nav) {
             LinkRow(Icons.Rounded.Palette, stringResource(R.string.settings_appearance), stringResource(R.string.settings_theme_accent_colour_amoled_motion), nav::appearance)
             LinkRow(Icons.Rounded.CalendarMonth, stringResource(R.string.guide_settings_title), stringResource(R.string.guide_settings_summary), nav::guideSettings)
             LinkRow(Icons.Rounded.Backup, stringResource(R.string.backup_title), stringResource(R.string.backup_summary), nav::backup)
+            LinkRow(Icons.Rounded.VisibilityOff, stringResource(R.string.hidden_title), stringResource(R.string.hidden_summary), nav::hiddenChannels)
             Spacer(Modifier.height(16.dp))
             SectionHeader(stringResource(R.string.settings_playback))
             Toggle(stringResource(R.string.settings_background_audio), stringResource(R.string.settings_keep_the_sound_playing_after), settings.backgroundPlayback) {

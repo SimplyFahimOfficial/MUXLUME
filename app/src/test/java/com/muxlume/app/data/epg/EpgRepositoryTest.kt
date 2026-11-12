@@ -11,6 +11,7 @@ import com.muxlume.app.Xmltv.NOW
 import com.muxlume.app.core.net.Http
 import com.muxlume.app.data.SourceInput
 import com.muxlume.app.data.SourceRepository
+import com.muxlume.app.data.db.EpgDao
 import com.muxlume.app.data.db.MuxlumeDatabase
 import kotlinx.coroutines.runBlocking
 import mockwebserver3.MockResponse
@@ -99,6 +100,37 @@ class EpgRepositoryTest {
         assertThat(source.epgPrograms).isEqualTo(5)
         assertThat(source.epgError).isNull()
         assertThat(source.epgUrl).isNull() // links live in the sealed secret
+    }
+
+    @Test
+    fun `programme search finds upcoming titles on visible channels and takes wildcards literally`(): Unit = runBlocking {
+        val id = addSource()
+        serve(
+            Xmltv.feed(
+                Xmltv.channel("bbc1.uk", "BBC One HD"),
+                Xmltv.channel("news24", "News 24"),
+                Xmltv.programme("bbc1.uk", NOW + hour, NOW + 2 * hour, "100% Wolf"),
+                Xmltv.programme("news24", NOW, NOW + hour, "Wolfpack Live"),
+                Xmltv.programme("news24", NOW + hour, NOW + 2 * hour, "Snow_White"),
+                Xmltv.programme("news24", NOW - 3 * hour, NOW - 2 * hour, "Old Wolf"), // already over
+            ),
+        )
+        epg.refresh(id)
+        fun search(q: String) = runBlocking { db.epg().searchPrograms(id, EpgDao.likeEscape(q), NOW, 50) }
+
+        val wolves = search("wolf")
+        assertThat(wolves.map { it.program.title }).containsExactly("Wolfpack Live", "100% Wolf").inOrder() // by start time; the finished one is gone
+        assertThat(wolves.map { it.channelName }).containsExactly("News 24 FHD", "BBC One").inOrder()
+        assertThat(wolves.last().stableKey).isEqualTo(key(id, "BBC One"))
+        assertThat(search("%").map { it.program.title }).containsExactly("100% Wolf") // not "anything"
+        assertThat(search("_").map { it.program.title }).containsExactly("Snow_White")
+        assertThat(search("w_lf")).isEmpty()
+        assertThat(search("nothing like it")).isEmpty()
+
+        db.channelPrefs().edit(id, key(id, "BBC One")) { it.copy(hidden = true) }
+        assertThat(search("wolf").map { it.program.title }).containsExactly("Wolfpack Live") // hidden channel: not offered
+        db.channelPrefs().edit(id, key(id, "News 24 FHD")) { it.copy(customName = "News Plus") }
+        assertThat(search("wolf").map { it.channelName }).containsExactly("News Plus")
     }
 
     @Test

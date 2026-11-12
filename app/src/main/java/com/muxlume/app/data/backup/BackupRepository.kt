@@ -10,6 +10,7 @@ import com.muxlume.app.data.SourceInput
 import com.muxlume.app.data.SourceRepository
 import com.muxlume.app.data.SourceSecret
 import com.muxlume.app.data.ThemeMode
+import com.muxlume.app.data.db.ChannelPrefEntity
 import com.muxlume.app.data.db.FavoriteEntity
 import com.muxlume.app.data.db.HistoryEntity
 import com.muxlume.app.data.db.ItemKind
@@ -35,6 +36,7 @@ data class BackupData(
     val favorites: List<BackupFavorite> = emptyList(),
     val history: List<BackupHistory> = emptyList(),
     val settings: BackupSettings = BackupSettings(),
+    val channelPrefs: List<BackupChannelPref> = emptyList(),
 ) {
     companion object {
         const val VERSION = 1
@@ -47,6 +49,10 @@ data class BackupSource(val name: String, val type: SourceType, val secret: Sour
 /** [source] is an index into [BackupData.sources]. */
 @Serializable
 data class BackupFavorite(val source: Int, val stableKey: String, val addedAt: Long)
+
+/** Hidden, renamed and pinned channels. [source] is an index into [BackupData.sources]. */
+@Serializable
+data class BackupChannelPref(val source: Int, val stableKey: String, val hidden: Boolean = false, val customName: String? = null, val pinned: Boolean = false)
 
 @Serializable
 data class BackupHistory(
@@ -98,11 +104,15 @@ class BackupRepository(
             val key = MediaIds.parse(h.mediaId)?.second ?: return@mapNotNull null
             BackupHistory(i, key, h.kind, h.title, h.subtitle, h.artwork, h.positionMs, h.durationMs, h.updatedAt, h.parentKey)
         }
+        val prefs = db.channelPrefs().all().mapNotNull { p ->
+            index[p.sourceId]?.let { BackupChannelPref(it, p.stableKey, p.hidden, p.customName, p.pinned) }
+        }
         val data = BackupData(
             sources = portable.map { BackupSource(it.name, it.type, sources.secretOf(it), it.allowHttp, it.guideEnabled) },
             favorites = favorites,
             history = history,
             settings = settings.current().toBackup(),
+            channelPrefs = prefs,
         )
         out.write(BackupCrypto.encrypt(JSON.encodeToString(BackupData.serializer(), data).toByteArray(), passphrase))
         out.flush()
@@ -121,9 +131,8 @@ class BackupRepository(
             throw BackupException(BackupException.Reason.NOT_A_BACKUP).apply { initCause(e) }
         }
         if (data.version > BackupData.VERSION) throw BackupException(BackupException.Reason.TOO_NEW)
-        if (data.sources.size > MAX_SOURCES || data.favorites.size > MAX_ROWS || data.history.size > MAX_ROWS) {
-            throw BackupException(BackupException.Reason.TOO_LARGE)
-        }
+        val rows = maxOf(data.favorites.size, data.history.size, data.channelPrefs.size)
+        if (data.sources.size > MAX_SOURCES || rows > MAX_ROWS) throw BackupException(BackupException.Reason.TOO_LARGE)
         restore(data)
     }
 
@@ -153,6 +162,13 @@ class BackupRepository(
             val id = ids.getOrNull(f.source) ?: return@forEach
             db.favorites().add(FavoriteEntity(id, f.stableKey, f.addedAt))
             favorites++
+        }
+        data.channelPrefs.forEach { p ->
+            val id = ids.getOrNull(p.source) ?: return@forEach
+            val name = p.customName?.trim()?.take(ChannelPrefEntity.MAX_NAME)?.ifEmpty { null }
+            val pref = ChannelPrefEntity(id, p.stableKey, p.hidden, name, p.pinned)
+            if (p.stableKey.isBlank() || p.stableKey.length > MAX_KEY || pref.isDefault()) return@forEach
+            db.channelPrefs().upsert(pref)
         }
         var history = 0
         data.history.forEach { h ->
@@ -201,6 +217,7 @@ class BackupRepository(
         const val MAX_FILE = 64L * 1024 * 1024
         const val MAX_SOURCES = 500
         const val MAX_ROWS = 500_000
+        const val MAX_KEY = 512
         val JSON = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     }
 }

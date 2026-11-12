@@ -6,6 +6,11 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 ## [Unreleased]
 
 ### Added
+- Hide, rename and pin channels: press and hold a channel in Live TV or the guide. Hidden channels leave
+  the lists, search, the guide, channel up/down and recent channels; Settings → Hidden channels brings them
+  back one by one or all at once. Pinned channels come first in lists, the guide and channel up/down.
+  Your choices survive playlist refreshes and are part of the backup.
+- Guide search: find upcoming programmes by title on the guide screen and open their details.
 - Sleep timer in the player options (15 to 90 minutes, then pauses).
 - Buffering setting (Settings → Buffering): normal, more or less buffer ahead.
 - Local backup and restore (Settings → Backup and restore): one file with playlists (including links

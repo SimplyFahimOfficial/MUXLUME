@@ -3,35 +3,37 @@ package com.muxlume.app.data.db
 import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.RewriteQueriesToDropUnusedColumns
 import kotlinx.coroutines.flow.Flow
 
 /** Which live channels have a guide (for the guide and the matching screen), and each source's guide state. */
 @Dao
+@RewriteQueriesToDropUnusedColumns
 interface GuideDao {
-    /** Live channels that have guide data, in provider order. */
+    /** Live channels that have guide data, pinned first, then in provider order. */
     @Query(
-        """SELECT i.* FROM items i JOIN epg_links l ON l.sourceId = i.sourceId AND l.stableKey = i.stableKey
-           WHERE i.sourceId = :sourceId AND i.kind = 'LIVE' AND i.pending = 0 AND (:group IS NULL OR i.groupTitle = :group)
-           ORDER BY i.position""",
+        """SELECT i.* FROM visible_items i JOIN epg_links l ON l.sourceId = i.sourceId AND l.stableKey = i.stableKey
+           WHERE i.sourceId = :sourceId AND i.kind = 'LIVE' AND (:group IS NULL OR i.groupTitle = :group)
+           ORDER BY i.pinned DESC, i.position""",
     )
     fun linkedPage(sourceId: Long, group: String?): PagingSource<Int, ItemEntity>
 
     @Query(
-        """SELECT * FROM items WHERE sourceId = :sourceId AND kind = 'LIVE' AND pending = 0
-           AND NOT EXISTS (SELECT 1 FROM epg_links l WHERE l.sourceId = items.sourceId AND l.stableKey = items.stableKey)
+        """SELECT * FROM visible_items WHERE sourceId = :sourceId AND kind = 'LIVE'
+           AND NOT EXISTS (SELECT 1 FROM epg_links l WHERE l.sourceId = visible_items.sourceId AND l.stableKey = visible_items.stableKey)
            ORDER BY position""",
     )
     fun unmatchedPage(sourceId: Long): PagingSource<Int, ItemEntity>
 
     @Query(
-        """SELECT i.* FROM items i JOIN epg_links l ON l.sourceId = i.sourceId AND l.stableKey = i.stableKey
-           WHERE l.sourceId = :sourceId AND l.manual = 1 AND i.kind = 'LIVE' AND i.pending = 0 ORDER BY i.position""",
+        """SELECT i.* FROM visible_items i JOIN epg_links l ON l.sourceId = i.sourceId AND l.stableKey = i.stableKey
+           WHERE l.sourceId = :sourceId AND l.manual = 1 AND i.kind = 'LIVE' ORDER BY i.position""",
     )
     fun manualPage(sourceId: Long): PagingSource<Int, ItemEntity>
 
     @Query(
-        """SELECT COUNT(*) FROM items WHERE sourceId = :sourceId AND kind = 'LIVE' AND pending = 0
-           AND NOT EXISTS (SELECT 1 FROM epg_links l WHERE l.sourceId = items.sourceId AND l.stableKey = items.stableKey)""",
+        """SELECT COUNT(*) FROM visible_items WHERE sourceId = :sourceId AND kind = 'LIVE'
+           AND NOT EXISTS (SELECT 1 FROM epg_links l WHERE l.sourceId = visible_items.sourceId AND l.stableKey = visible_items.stableKey)""",
     )
     fun unmatchedCount(sourceId: Long): Flow<Int>
 

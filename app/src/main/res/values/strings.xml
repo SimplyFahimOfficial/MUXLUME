@@ -366,7 +366,7 @@
     <!-- Backup -->
     <string name="backup_title">Backup and restore</string>
     <string name="backup_summary">Save or restore playlists, favorites, history and settings</string>
-    <string name="backup_intro">A backup is one file you keep wherever you like. It holds your playlists (including links and logins), favorites, watch history and settings, encrypted with a passphrase. Channel lists are not saved; they download again after a restore.</string>
+    <string name="backup_intro">A backup is one file you keep wherever you like. It holds your playlists (including links and logins), favorites, watch history, hidden, renamed and pinned channels, and settings, encrypted with a passphrase. Channel lists are not saved; they download again after a restore.</string>
     <string name="backup_create">Create a backup</string>
     <string name="backup_passphrase">Passphrase</string>
     <string name="backup_repeat_passphrase">Repeat passphrase</string>
@@ -454,4 +454,29 @@
         <item quantity="one">%1$d channel unmatched</item>
         <item quantity="other">%1$d channels unmatched</item>
     </plurals>
+    <!-- Channel preferences -->
+    <string name="channel_options">Channel options</string>
+    <string name="channel_pin">Pin to top</string>
+    <string name="channel_unpin">Unpin</string>
+    <string name="channel_rename">Rename</string>
+    <string name="channel_hide">Hide</string>
+    <string name="channel_hidden">%1$s hidden. Bring it back in Settings → Hidden channels.</string>
+    <string name="channel_rename_title">Rename channel</string>
+    <string name="channel_rename_label">Name</string>
+    <string name="channel_rename_hint">Leave empty to use the playlist\'s name.</string>
+    <string name="channel_save">Save</string>
+    <string name="channel_cancel">Cancel</string>
+    <string name="hidden_title">Hidden channels</string>
+    <string name="hidden_summary">Channels you hid from lists, search and the guide</string>
+    <string name="hidden_empty_title">No hidden channels</string>
+    <string name="hidden_empty_body">Press and hold a channel in Live TV or the guide to hide it.</string>
+    <string name="hidden_show">Show</string>
+    <string name="hidden_show_named">Show %1$s again</string>
+    <string name="hidden_restore_all">Restore all</string>
+    <string name="hidden_restored">All channels are visible again.</string>
+    <string name="guide_search">Search programmes</string>
+    <string name="guide_search_hint">Programme title</string>
+    <string name="guide_search_close">Close search</string>
+    <string name="guide_search_none">No programmes found</string>
+    <string name="guide_search_none_body">No upcoming programme has \"%1$s\" in its title.</string>
 </resources>

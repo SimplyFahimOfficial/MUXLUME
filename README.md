@@ -19,12 +19,12 @@ everything else is planned.
 | Area | Implemented | Planned |
 |---|---|---|
 | Sources | M3U/M3U8 from a link or a local file (SAF), Xtream Codes-compatible login with connection test, edit, refresh, remove, multiple sources | Periodic background refresh, other provider formats |
-| Live TV | Groups, favorites, recently watched, A–Z sort, search, channel up/down in the player, now/next | Hidden channels, custom order |
+| Live TV | Groups, favorites, recently watched, A–Z sort, search, channel up/down in the player, now/next, hide, rename and pin channels | Custom order |
 | Movies and series | Poster grids by category, detail pages with provider metadata, seasons and episodes, watchlist, resume, continue watching, next episode | Optional third-party metadata |
 | Appearance | Dark and light themes, System option, five accents, Material You (Android 12+), AMOLED black, reduced motion | Layout density, shared-element transitions |
 | Playback | Media3 ExoPlayer: HLS, DASH, RTSP, progressive (TS/MP4/MKV…); audio and subtitle tracks; picture size; speed (VOD); PiP; sleep timer; buffer size setting; optional background audio; media notification; reconnect with backoff; diagnostics without links | Decoder preferences, catch-up, timeshift, recording |
-| EPG | XMLTV (opt-in per playlist): matching by id, name or by hand, timeline guide, now/next, 12-hourly background refresh, reminders | Programme search |
-| Other | Onboarding, settings, help & about, Support (native UPI), data deletion, encrypted local backup and restore | Parental PIN, Android TV layout |
+| EPG | XMLTV (opt-in per playlist): matching by id, name or by hand, timeline guide, now/next, 12-hourly background refresh, reminders, programme search | — |
+| Other | Onboarding, settings, help & about, Support (native UPI), data deletion, encrypted local backup and restore (including your channel choices) | Parental PIN, Android TV layout |
 
 There are no app screenshots yet; they will be added from real devices.
 

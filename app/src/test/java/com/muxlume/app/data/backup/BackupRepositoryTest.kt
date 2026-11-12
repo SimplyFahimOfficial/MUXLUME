@@ -13,7 +13,9 @@ import com.muxlume.app.data.Accent
 import com.muxlume.app.data.SettingsRepository
 import com.muxlume.app.data.SourceInput
 import com.muxlume.app.data.SourceRepository
+import com.muxlume.app.data.SourceSecret
 import com.muxlume.app.data.ThemeMode
+import com.muxlume.app.data.db.ChannelPrefEntity
 import com.muxlume.app.data.db.FavoriteEntity
 import com.muxlume.app.data.db.HistoryEntity
 import com.muxlume.app.data.db.ItemKind
@@ -27,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Assert.assertThrows
 import org.junit.Rule
@@ -73,6 +76,8 @@ class BackupRepositoryTest {
         db.favorites().add(FavoriteEntity(m3u, "chan-1", 5))
         db.favorites().add(FavoriteEntity(file, "chan-9", 6)) // belongs to a file playlist: not saved
         db.history().upsert(HistoryEntity(MediaIds.of(xtream, "movie-1"), xtream, ItemKind.MOVIE, "A Movie", "2020", null, 60_000, 600_000, 1_000))
+        db.channelPrefs().edit(m3u, "chan-1") { it.copy(hidden = true, customName = "My News", pinned = true) }
+        db.channelPrefs().edit(file, "chan-9") { it.copy(hidden = true) } // belongs to a file playlist: not saved
         settings.setTheme(ThemeMode.LIGHT)
         settings.setAccent(Accent.TEAL)
         return listOf(m3u, xtream, file)
@@ -103,6 +108,44 @@ class BackupRepositoryTest {
         assertThat(b.db.history().get(MediaIds.of(provider, "movie-1"))!!.positionMs).isEqualTo(60_000)
         assertThat(b.settings.current().theme).isEqualTo(ThemeMode.LIGHT)
         assertThat(b.settings.current().accent).isEqualTo(Accent.TEAL)
+    }
+
+    @Test
+    fun `hidden, renamed and pinned channels come back on another device`(): Unit = runBlocking {
+        val a = device("a")
+        a.seed()
+        val b = device("b")
+
+        b.import(a.export())
+
+        val home = b.db.sources().allNow().first { it.name == "Home" }.id
+        assertThat(b.db.channelPrefs().all()).containsExactly(ChannelPrefEntity(home, "chan-1", hidden = true, customName = "My News", pinned = true))
+    }
+
+    @Test
+    fun `restored channel preferences are checked like any other input`(): Unit = runBlocking {
+        val b = device("b")
+        val source = BackupSource("Home", SourceType.M3U_URL, SourceSecret(url = "https://example.com/list.m3u"), allowHttp = false, guideEnabled = false)
+        val data = BackupData(
+            sources = listOf(source),
+            channelPrefs = listOf(
+                BackupChannelPref(0, "long-name", customName = "x".repeat(500)),
+                BackupChannelPref(0, "padded", customName = "  Spaced  "),
+                BackupChannelPref(0, "blank-name-only", customName = "   "), // nothing left: dropped
+                BackupChannelPref(0, "", hidden = true), // no key
+                BackupChannelPref(0, "k".repeat(600), hidden = true), // key too long
+                BackupChannelPref(7, "no-such-source", hidden = true),
+                BackupChannelPref(0, "defaults"),
+            ),
+        )
+        val file = BackupCrypto.encrypt(Json.encodeToString(BackupData.serializer(), data).toByteArray(), pass)
+
+        b.import(file)
+
+        val saved = b.db.channelPrefs().all().associateBy { it.stableKey }
+        assertThat(saved.keys).containsExactly("long-name", "padded")
+        assertThat(saved.getValue("long-name").customName).hasLength(ChannelPrefEntity.MAX_NAME)
+        assertThat(saved.getValue("padded").customName).isEqualTo("Spaced")
     }
 
     @Test

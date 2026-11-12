@@ -18,18 +18,24 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -38,8 +44,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -47,6 +56,7 @@ import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -63,9 +73,11 @@ import androidx.paging.compose.itemKey
 import com.muxlume.app.AppContainer
 import com.muxlume.app.R
 import com.muxlume.app.container
+import com.muxlume.app.data.db.EpgDao
 import com.muxlume.app.data.db.ItemEntity
 import com.muxlume.app.data.db.ItemKind
 import com.muxlume.app.data.db.ProgramEntity
+import com.muxlume.app.data.db.ProgramHit
 import com.muxlume.app.data.db.SourceEntity
 import com.muxlume.app.data.epg.EpgTime
 import com.muxlume.app.playback.ChannelList
@@ -74,19 +86,23 @@ import com.muxlume.app.ui.components.Artwork
 import com.muxlume.app.ui.components.EmptyState
 import com.muxlume.app.ui.components.PillRow
 import com.muxlume.app.ui.components.pressable
+import com.muxlume.app.ui.live.ChannelOptionsSheet
 import com.muxlume.app.ui.live.isLoadedEmpty
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.playChannel
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -119,6 +135,18 @@ class GuideViewModel(private val c: AppContainer) : ViewModel() {
     val group = MutableStateFlow<String?>(null)
     val day = MutableStateFlow(0)
 
+    val query = MutableStateFlow("")
+
+    /** Upcoming programmes of the chosen source whose title contains the query; null until it has two letters. */
+    @OptIn(FlowPreview::class)
+    val hits: StateFlow<List<ProgramHit>?> = combine(sourceId, query.debounce(SEARCH_DEBOUNCE_MS)) { id, q -> id to q.trim() }
+        .flatMapLatest<_, List<ProgramHit>?> { (id, q) ->
+            if (id == null || q.length < MIN_QUERY) flowOf(null)
+            else flow { emit(c.db.epg().searchPrograms(id, EpgDao.likeEscape(q), System.currentTimeMillis() / MILLIS, MAX_HITS)) }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    suspend fun channelOf(hit: ProgramHit): ItemEntity? = c.db.items().byKey(hit.program.sourceId, hit.stableKey)
+
     val groups: StateFlow<List<String>> = sourceId.flatMapLatest { id -> if (id == null) flowOf(emptyList()) else c.db.items().groups(id, ItemKind.LIVE) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -133,8 +161,16 @@ class GuideViewModel(private val c: AppContainer) : ViewModel() {
 
     private companion object {
         const val PAGE_SIZE = 40
+        const val SEARCH_DEBOUNCE_MS = 250L
+        const val MAX_HITS = 100
     }
 }
+
+private const val MIN_QUERY = 2
+private const val MAX_QUERY_LENGTH = 100
+
+/** A programme picked in the timeline or in search, with the channel list its Watch button plays from. */
+private data class Picked(val item: ItemEntity, val program: ProgramEntity, val list: ChannelList)
 
 /** Channels down the side, time across: one shared horizontal scroll for the ruler and every row. */
 @Composable
@@ -148,11 +184,19 @@ fun GuideScreen(nav: Nav) {
     val groups by vm.groups.collectAsStateWithLifecycle()
     val channels = vm.channels.collectAsLazyPagingItems()
     val scope = rememberCoroutineScope()
+    val query by vm.query.collectAsStateWithLifecycle()
+    val hits by vm.hits.collectAsStateWithLifecycle()
+    var searching by rememberSaveable { mutableStateOf(false) }
+    var selected by remember { mutableStateOf<Picked?>(null) }
+    var options by remember { mutableStateOf<ItemEntity?>(null) }
 
     Column(Modifier.fillMaxSize()) {
         TopHeader(
             stringResource(R.string.guide_title), onSearch = null, onBack = nav::back,
             actions = {
+                IconButton({ searching = !searching; vm.query.value = "" }) {
+                    Icon(Icons.Rounded.Search, stringResource(if (searching) R.string.guide_search_close else R.string.guide_search), tint = if (searching) MuxTheme.Accent else MuxTheme.TextPrimary)
+                }
                 IconButton(nav::guideSettings) { Icon(Icons.Rounded.Settings, stringResource(R.string.guide_settings_title), tint = MuxTheme.TextPrimary) }
             },
         )
@@ -163,6 +207,15 @@ fun GuideScreen(nav: Nav) {
                 action = stringResource(R.string.guide_none_action), onAction = nav::guideSettings,
             )
             return@Column
+        }
+        if (searching) {
+            SearchField(query) { vm.query.value = it.take(MAX_QUERY_LENGTH) }
+            if (query.trim().length >= MIN_QUERY) {
+                SearchResults(hits, query.trim()) { hit ->
+                    scope.launch { vm.channelOf(hit)?.let { selected = Picked(it, hit.program, ChannelList(ChannelList.Order.PROVIDER, it.groupTitle)) } }
+                }
+                return@Column
+            }
         }
         val source = list.firstOrNull { it.id == sourceId }
         if (list.size > 1) PillRow(list.map { it.name }, list.indexOfFirst { it.id == sourceId }, { vm.pick(list[it].id) })
@@ -202,7 +255,6 @@ fun GuideScreen(nav: Nav) {
             val hours = if (day == 0) ((nowSeconds - dayStart) / SECONDS_PER_HOUR - 0.5f).coerceAtLeast(0f) else MORNING_HOUR
             scroll.scrollTo((hours * hourPx).toInt())
         }
-        var selected by remember { mutableStateOf<Pair<ItemEntity, ProgramEntity>?>(null) }
 
         Ruler(dayStart, dayEnd, dayWidth, scroll)
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -214,16 +266,58 @@ fun GuideScreen(nav: Nav) {
                 ChannelRow(
                     item, programs, dayStart, dayEnd, dayWidth, scroll, nowSeconds,
                     onChannel = { scope.launch { if (context.playChannel(item, ChannelList(ChannelList.Order.PROVIDER, group))) nav.player() } },
-                    onProgram = { selected = item to it },
+                    onOptions = { options = item },
+                    onProgram = { selected = Picked(item, it, ChannelList(ChannelList.Order.PROVIDER, group)) },
                 )
             }
         }
-        selected?.let { (item, program) ->
-            ProgramSheet(
-                item, program,
-                onWatch = { scope.launch { selected = null; if (context.playChannel(item, ChannelList(ChannelList.Order.PROVIDER, group))) nav.player() } },
-                onDismiss = { selected = null },
-            )
+    }
+    selected?.let { (item, program, channels) ->
+        ProgramSheet(
+            item, program,
+            onWatch = { scope.launch { selected = null; if (context.playChannel(item, channels)) nav.player() } },
+            onDismiss = { selected = null },
+        )
+    }
+    options?.let { ChannelOptionsSheet(it) { options = null } }
+}
+
+@Composable
+private fun SearchField(query: String, onChange: (String) -> Unit) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    TextField(
+        query, onChange,
+        Modifier.fillMaxWidth().padding(horizontal = Mux.ScreenPadding, vertical = 4.dp).focusRequester(focus),
+        placeholder = { Text(stringResource(R.string.guide_search_hint)) },
+        leadingIcon = { Icon(Icons.Rounded.Search, null, tint = MuxTheme.TextSecondary) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        shape = Mux.PillShape,
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = MuxTheme.Raised, unfocusedContainerColor = MuxTheme.Raised, cursorColor = MuxTheme.Accent,
+            focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+        ),
+    )
+}
+
+@Composable
+private fun SearchResults(hits: List<ProgramHit>?, query: String, onPick: (ProgramHit) -> Unit) {
+    when {
+        hits == null -> Unit // still searching
+        hits.isEmpty() -> EmptyState(stringResource(R.string.guide_search_none), stringResource(R.string.guide_search_none_body, query))
+        else -> LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+            items(hits, key = { it.program.id }) { hit ->
+                val p = hit.program
+                val range = "${EpgTime.date(p.start)} · ${EpgTime.range(p.start, p.stop)}"
+                Column(
+                    Modifier.fillMaxWidth().pressable({ onPick(hit) }, label = p.title).padding(horizontal = Mux.ScreenPadding, vertical = 10.dp)
+                        .semantics(mergeDescendants = true) { contentDescription = "${p.title}, ${hit.channelName}, $range" },
+                ) {
+                    Text(p.title, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text("${hit.channelName} · $range", style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
         }
     }
 }
@@ -267,6 +361,7 @@ private fun ChannelRow(
     scroll: androidx.compose.foundation.ScrollState,
     nowSeconds: Long,
     onChannel: () -> Unit,
+    onOptions: () -> Unit,
     onProgram: (ProgramEntity) -> Unit,
 ) {
     val accent = MuxTheme.Accent
@@ -274,7 +369,9 @@ private fun ChannelRow(
     val nowLine = with(LocalDensity.current) { 2.dp.toPx() }
     Row(Modifier.fillMaxWidth().height(ROW_HEIGHT)) {
         Row(
-            Modifier.width(NAME_WIDTH).fillMaxHeight().pressable(onChannel, label = stringResource(R.string.live_play, item.name)).padding(horizontal = 8.dp),
+            Modifier.width(NAME_WIDTH).fillMaxHeight()
+                .pressable(onChannel, label = stringResource(R.string.live_play, item.name), onLongClick = onOptions, longClickLabel = stringResource(R.string.channel_options))
+                .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Artwork(item.logo, item.name, Modifier.size(32.dp).clip(Mux.CardShape).background(MuxTheme.Raised).padding(3.dp), contentScale = ContentScale.Fit, monogramSize = 10)

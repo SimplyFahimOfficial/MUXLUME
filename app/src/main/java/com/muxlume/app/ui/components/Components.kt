@@ -7,6 +7,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -77,16 +78,35 @@ fun Wordmark(modifier: Modifier = Modifier, logoSize: Dp = 30.dp) {
     }
 }
 
-/** Gentle press feedback: scales to 97% while pressed (none with reduced motion). */
+/**
+ * Gentle press feedback: scales to 97% while pressed (none with reduced motion). With [onLongClick] the
+ * long press is also announced to accessibility services as an action called [longClickLabel].
+ */
 @Composable
-fun Modifier.pressable(onClick: () -> Unit, label: String? = null, role: Role = Role.Button, enabled: Boolean = true): Modifier {
+fun Modifier.pressable(
+    onClick: () -> Unit,
+    label: String? = null,
+    role: Role = Role.Button,
+    enabled: Boolean = true,
+    onLongClick: (() -> Unit)? = null,
+    longClickLabel: String? = null,
+): Modifier {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val reduced = MuxTheme.reducedMotion
     val scale by animateFloatAsState(if (pressed && !reduced) 0.97f else 1f, Motion.spec(Motion.SHORT, reduced), label = "press")
     return this
         .graphicsLayer { scaleX = scale; scaleY = scale }
-        .clickable(interactionSource = source, indication = androidx.compose.material3.ripple(), enabled = enabled, onClickLabel = label, role = role, onClick = onClick)
+        .then(
+            if (onLongClick == null) {
+                Modifier.clickable(interactionSource = source, indication = androidx.compose.material3.ripple(), enabled = enabled, onClickLabel = label, role = role, onClick = onClick)
+            } else {
+                Modifier.combinedClickable(
+                    interactionSource = source, indication = androidx.compose.material3.ripple(), enabled = enabled, onClickLabel = label, role = role,
+                    onLongClickLabel = longClickLabel, onLongClick = onLongClick, onClick = onClick,
+                )
+            },
+        )
 }
 
 /**
