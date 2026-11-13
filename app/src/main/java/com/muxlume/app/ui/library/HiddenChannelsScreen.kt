@@ -48,13 +48,17 @@ import com.muxlume.app.ui.live.isLoadedEmpty
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class HiddenChannelsViewModel(c: AppContainer) : ViewModel() {
-    val channels = Pager(PagingConfig(pageSize = PAGE_SIZE)) { c.db.channelPrefs().hiddenPage() }.flow.cachedIn(viewModelScope)
-    val count = c.db.channelPrefs().hiddenCount().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+    val channels = c.lock.unlocked.flatMapLatest { unlocked -> Pager(PagingConfig(pageSize = PAGE_SIZE)) { c.db.channelPrefs().hiddenPage(unlocked) }.flow }
+        .cachedIn(viewModelScope)
+    val count = c.lock.unlocked.flatMapLatest { c.db.channelPrefs().hiddenCount(it) }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     private companion object {
         const val PAGE_SIZE = 40

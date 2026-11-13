@@ -118,7 +118,8 @@ data class ChannelPrefEntity(
 
 /**
  * The rows lists, search, the guide and channel up/down show: the `items` columns with the user's
- * rename applied and hidden channels and staged (pending) rows removed, plus [pinned] for ordering.
+ * rename applied and hidden channels and staged (pending) rows removed, plus [pinned] for ordering and [isLocked]
+ * (its group is under the parental PIN; queries show it only when asked with `:unlocked`).
  * Every read of items for display goes through this view. The columns must stay the same as
  * `items` (a test checks), because queries map the rows onto [ItemEntity].
  */
@@ -126,11 +127,20 @@ data class ChannelPrefEntity(
     viewName = "visible_items",
     value = """SELECT i.id, i.sourceId, i.kind, i.stableKey, COALESCE(p.customName, i.name) AS name, i.groupTitle, i.logo, i.url,
         i.remoteId, i.extension, i.tvgId, i.number, i.headers, i.plot, i.year, i.rating, i.position, i.addedAt, 0 AS pending,
-        COALESCE(p.pinned, 0) AS pinned
+        COALESCE(p.pinned, 0) AS pinned,
+        EXISTS (SELECT 1 FROM locked_groups lg WHERE lg.sourceId = i.sourceId AND lg.groupTitle = i.groupTitle) AS isLocked
         FROM items i LEFT JOIN channel_prefs p ON p.sourceId = i.sourceId AND p.stableKey = i.stableKey
         WHERE i.pending = 0 AND COALESCE(p.hidden, 0) = 0""",
 )
-data class VisibleItem(@Embedded val item: ItemEntity, val pinned: Boolean)
+data class VisibleItem(@Embedded val item: ItemEntity, val pinned: Boolean, val isLocked: Boolean)
+
+/** A group (category) the parental PIN covers, in every list, search and the guide. */
+@Entity(
+    tableName = "locked_groups",
+    primaryKeys = ["sourceId", "groupTitle"],
+    foreignKeys = [ForeignKey(entity = SourceEntity::class, parentColumns = ["id"], childColumns = ["sourceId"], onDelete = ForeignKey.CASCADE)],
+)
+data class LockedGroupEntity(val sourceId: Long, val groupTitle: String)
 
 @Entity(
     tableName = "favorites",

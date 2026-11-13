@@ -65,6 +65,8 @@ import com.muxlume.app.ui.main.BottomBarSpace
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -72,11 +74,13 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class LibraryViewModel(private val c: AppContainer) : ViewModel() {
     val sources = c.sources.sources.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val refreshing = MutableStateFlow<Set<Long>>(emptySet())
-    val watchlist = combine(c.db.items().favorites(ItemKind.MOVIE, null), c.db.items().favorites(ItemKind.SERIES, null)) { m, s -> m + s }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val watchlist = c.lock.unlocked.flatMapLatest { unlocked ->
+        combine(c.db.items().favorites(ItemKind.MOVIE, null, unlocked), c.db.items().favorites(ItemKind.SERIES, null, unlocked)) { m, s -> m + s }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Refreshes in the app scope, so leaving the screen doesn't abort a long import. */
     fun refresh(id: Long) {

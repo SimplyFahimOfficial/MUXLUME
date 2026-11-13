@@ -96,7 +96,7 @@ class SourceRepositoryTest {
 
         serve(playlist("b", "a", "c"))
         repo.refresh(id)
-        assertThat(db.items().favorites(ItemKind.LIVE, id).first().map { it.name }).containsExactly("a")
+        assertThat(db.items().favorites(ItemKind.LIVE, id, true).first().map { it.name }).containsExactly("a")
 
         serve("", code = 500)
         assertThrows(HttpStatusException::class.java) { runBlocking { repo.refresh(id) } }
@@ -155,8 +155,8 @@ class SourceRepositoryTest {
         repo.refresh(id)
         db.favorites().add(FavoriteEntity(id, key(id, "a"), 1))
         repo.delete(id)
-        assertThat(db.items().favorites(ItemKind.LIVE, null).first()).isEmpty()
-        assertThat(db.items().search(ItemDao.ftsQuery("a")!!, "", 10).first()).isEmpty()
+        assertThat(db.items().favorites(ItemKind.LIVE, null, true).first()).isEmpty()
+        assertThat(db.items().search(ItemDao.ftsQuery("a")!!, "", 10, true).first()).isEmpty()
     }
 
     @Test
@@ -164,7 +164,7 @@ class SourceRepositoryTest {
         val id = addM3u()
         serve(playlist("BBC One HD", "Sky News", "Cartoon Network"))
         repo.refresh(id)
-        fun find(q: String) = runBlocking { db.items().search(ItemDao.ftsQuery(q)!!, "", 10).first().map { it.name } }
+        fun find(q: String) = runBlocking { db.items().search(ItemDao.ftsQuery(q)!!, "", 10, true).first().map { it.name } }
         assertThat(find("bbc on")).containsExactly("BBC One HD")
         assertThat(find("NEW")).containsExactly("Sky News")
         assertThat(find("net")).containsExactly("Cartoon Network")
@@ -188,10 +188,10 @@ class SourceRepositoryTest {
         serve("""[{"series_id":30,"name":"S","cover":"https://img/s.png"}]""")
         val r = repo.refresh(id)
         assertThat(listOf(r.live, r.movies, r.series)).containsExactly(1, 1, 1).inOrder()
-        val live = db.items().byKey(id, "live:10")!!
+        val live = db.items().byKey(id, "live:10", true)!!
         assertThat(live.groupTitle).isEqualTo("News")
         assertThat(live.url).isNull()
         assertThat(repo.get(id)!!.liveExtension).isEqualTo("ts")
-        assertThat(db.items().recentlyAdded(ItemKind.MOVIE, 5).first().single().extension).isEqualTo("mkv")
+        assertThat(db.items().recentlyAdded(ItemKind.MOVIE, 5, true).first().single().extension).isEqualTo("mkv")
     }
 }

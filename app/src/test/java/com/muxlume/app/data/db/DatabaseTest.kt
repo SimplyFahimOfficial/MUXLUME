@@ -46,13 +46,13 @@ class DatabaseTest {
         url = "https://x/$name", position = position, pending = pending,
     )
 
-    private suspend fun item(name: String) = db.items().byKey(source, name)!!
+    private suspend fun item(name: String) = db.items().byKey(source, name, true)!!
 
     /** Walks the whole list from [start] in one direction. */
     private suspend fun walk(start: String, list: ChannelList, forward: Boolean): List<String> {
         val out = mutableListOf(start)
         var cur = item(start)
-        while (true) cur = db.neighbour(cur, list, forward)?.also { out += it.name } ?: return out
+        while (true) cur = db.neighbour(cur, list, forward, true)?.also { out += it.name } ?: return out
     }
 
     @Test
@@ -103,6 +103,9 @@ class DatabaseTest {
                 old.execSQL(e.jsonObject.getValue("createSql").jsonPrimitive.content.replace("\${TABLE_NAME}", table))
                 e.jsonObject["indices"]?.jsonArray?.forEach { old.execSQL(it.jsonObject.getValue("createSql").jsonPrimitive.content.replace("\${TABLE_NAME}", table)) }
             }
+            schema["views"]?.jsonArray?.forEach { v ->
+                old.execSQL(v.jsonObject.getValue("createSql").jsonPrimitive.content.replace("\${VIEW_NAME}", v.jsonObject.getValue("viewName").jsonPrimitive.content))
+            }
             schema.getValue("setupQueries").jsonArray.forEach { old.execSQL(it.jsonPrimitive.content) }
             old.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '${schema.getValue("identityHash").jsonPrimitive.content}')")
             fill(old)
@@ -131,7 +134,7 @@ class DatabaseTest {
         }
         val migrated = openCurrent()
         try {
-            val found = runBlocking { migrated.items().search(ItemDao.ftsQuery("news")!!, "", 10).first() }
+            val found = runBlocking { migrated.items().search(ItemDao.ftsQuery("news")!!, "", 10, true).first() }
             assertThat(found.map { it.name }).containsExactly("Sky News HD")
             assertThat(found.single().pending).isFalse()
             val source = runBlocking { migrated.sources().get(1) }!!
@@ -167,11 +170,11 @@ class DatabaseTest {
     private suspend fun edit(key: String, change: (ChannelPrefEntity) -> ChannelPrefEntity) = prefs.edit(source, key, change)
 
     private suspend fun listed(group: String? = null, alphabetical: Boolean = false): List<String> {
-        val page = db.items().page(source, ItemKind.LIVE, group, alphabetical).load(PagingSource.LoadParams.Refresh(null, 100, false))
+        val page = db.items().page(source, ItemKind.LIVE, group, alphabetical, true).load(PagingSource.LoadParams.Refresh(null, 100, false))
         return (page as PagingSource.LoadResult.Page).data.map { it.name }
     }
 
-    private fun find(q: String) = runBlocking { db.items().search(ItemDao.ftsQuery(q)!!, "%${EpgDao.likeEscape(q)}%", 10).first().map { it.name } }
+    private fun find(q: String) = runBlocking { db.items().search(ItemDao.ftsQuery(q)!!, "%${EpgDao.likeEscape(q)}%", 10, true).first().map { it.name } }
 
     @Test
     fun `preferences survive a refresh, which replaces the item rows`(): Unit = runBlocking {
@@ -186,7 +189,7 @@ class DatabaseTest {
         db.items().commitPending(source)
 
         assertThat(listed()).containsExactly("Bravo HD", "Alpha", "charlie", "alpha").inOrder() // pinned first, delta hidden
-        assertThat(db.items().byKey(source, "delta")).isNull()
+        assertThat(db.items().byKey(source, "delta", true)).isNull()
     }
 
     @Test
@@ -195,23 +198,23 @@ class DatabaseTest {
         db.favorites().add(FavoriteEntity(source, "bravo", 200))
         db.favorites().add(FavoriteEntity(source, "delta", 300))
         db.history().upsert(HistoryEntity(MediaIds.of(source, "delta"), source, ItemKind.LIVE, "delta", null, null, 0, 0, 1))
-        assertThat(db.history().recentChannels(10).first()).hasSize(1)
+        assertThat(db.history().recentChannels(10, true).first()).hasSize(1)
 
         edit("charlie") { it.copy(hidden = true) }
         edit("Alpha") { it.copy(hidden = true) }
         edit("delta") { it.copy(hidden = true) }
 
         assertThat(listed()).containsExactly("bravo", "alpha").inOrder()
-        assertThat(db.items().groups(source, ItemKind.LIVE).first()).containsExactly("News") // "Sport" had only Alpha
+        assertThat(db.items().groups(source, ItemKind.LIVE, true).first()).containsExactly("News") // "Sport" had only Alpha
         assertThat(find("charlie")).isEmpty()
         assertThat(find("bravo")).containsExactly("bravo")
-        assertThat(db.items().favorites(ItemKind.LIVE, null).first().map { it.name }).containsExactly("bravo")
-        assertThat(db.history().recentChannels(10).first()).isEmpty()
+        assertThat(db.items().favorites(ItemKind.LIVE, null, true).first().map { it.name }).containsExactly("bravo")
+        assertThat(db.history().recentChannels(10, true).first()).isEmpty()
         assertThat(walk("bravo", ChannelList(Order.PROVIDER, null), true)).containsExactly("bravo", "alpha").inOrder()
         assertThat(walk("alpha", ChannelList(Order.NAME, null), false)).containsExactly("alpha")
 
         edit("delta") { it.copy(hidden = false) }
-        assertThat(db.history().recentChannels(10).first()).hasSize(1) // the history row was kept
+        assertThat(db.history().recentChannels(10, true).first()).hasSize(1) // the history row was kept
         assertThat(walk("delta", ChannelList(Order.FAVORITES, null, source), true)).containsExactly("delta", "bravo").inOrder() // charlie stays hidden
         assertThat(walk("delta", ChannelList(Order.PROVIDER, "News"), true)).containsExactly("delta", "bravo", "alpha").inOrder()
     }
@@ -253,13 +256,13 @@ class DatabaseTest {
         edit("bravo") { it.copy(hidden = true, customName = "B") }
         edit("delta") { it.copy(hidden = true) }
         edit("alpha") { it.copy(pinned = true) }
-        assertThat(prefs.hiddenCount().first()).isEqualTo(2)
+        assertThat(prefs.hiddenCount(true).first()).isEqualTo(2)
 
         prefs.restoreAll()
 
         assertThat(listed()).containsExactly("alpha", "delta", "Alpha", "charlie", "B").inOrder()
         assertThat(prefs.all().map { it.stableKey }).containsExactly("bravo", "alpha") // delta's row had nothing left
-        assertThat(prefs.hiddenCount().first()).isEqualTo(0)
+        assertThat(prefs.hiddenCount(true).first()).isEqualTo(0)
     }
 
     @Test
@@ -275,11 +278,11 @@ class DatabaseTest {
             generateSequence { if (c.moveToNext()) c.getString(c.getColumnIndexOrThrow("name")) else null }.toList()
         }
         assertThat(columns("visible_items")).containsAtLeastElementsIn(columns("items"))
-        assertThat(columns("visible_items") - columns("items").toSet()).containsExactly("pinned")
+        assertThat(columns("visible_items") - columns("items").toSet()).containsExactly("pinned", "isLocked")
     }
 
     @Test
-    fun `migration 3 to 4 keeps the channels and adds preferences`() {
+    fun `migration 3 to 5 keeps the channels and adds preferences and locks`() {
         createAt(3) { old ->
             sql(
                 old,
@@ -292,15 +295,45 @@ class DatabaseTest {
         val migrated = openCurrent()
         try {
             suspend fun names(): List<String> {
-                val page = migrated.items().page(1, ItemKind.LIVE, null, false).load(PagingSource.LoadParams.Refresh(null, 10, false))
+                val page = migrated.items().page(1, ItemKind.LIVE, null, false, true).load(PagingSource.LoadParams.Refresh(null, 10, false))
                 return (page as PagingSource.LoadResult.Page).data.map { it.name }
             }
             runBlocking {
                 assertThat(names()).containsExactly("Alpha", "Bravo").inOrder()
-                assertThat(migrated.items().search(ItemDao.ftsQuery("bra")!!, "", 10).first().map { it.name }).containsExactly("Bravo")
+                assertThat(migrated.items().search(ItemDao.ftsQuery("bra")!!, "", 10, true).first().map { it.name }).containsExactly("Bravo")
                 migrated.channelPrefs().edit(1, "a") { it.copy(hidden = true) }
                 migrated.channelPrefs().edit(1, "b") { it.copy(customName = "Beta") }
                 assertThat(names()).containsExactly("Beta")
+            }
+        } finally {
+            migrated.close()
+        }
+    }
+
+    @Test
+    fun `migration 4 to 5 keeps hidden and renamed channels and adds locked groups`() {
+        createAt(4) { old ->
+            sql(
+                old,
+                "INSERT INTO sources (id, name, type, secret, label, allowHttp, createdAt, liveCount, movieCount, seriesCount) VALUES (1, 'S', 'M3U_URL', 'x', 'l', 0, 0, 3, 0, 0)",
+                "INSERT INTO items (sourceId, kind, stableKey, name, groupTitle, position) VALUES (1, 'LIVE', 'a', 'Alpha', 'News', 0)",
+                "INSERT INTO items (sourceId, kind, stableKey, name, groupTitle, position) VALUES (1, 'LIVE', 'b', 'Bravo', 'Adult', 1)",
+                "INSERT INTO items (sourceId, kind, stableKey, name, groupTitle, position) VALUES (1, 'LIVE', 'c', 'Charlie', 'News', 2)",
+                "INSERT INTO channel_prefs (sourceId, stableKey, hidden, customName, pinned) VALUES (1, 'c', 1, NULL, 0)",
+                "INSERT INTO channel_prefs (sourceId, stableKey, hidden, customName, pinned) VALUES (1, 'a', 0, 'Alfa', 0)",
+            )
+        }
+        val migrated = openCurrent()
+        try {
+            suspend fun names(unlocked: Boolean): List<String> {
+                val page = migrated.items().page(1, ItemKind.LIVE, null, false, unlocked).load(PagingSource.LoadParams.Refresh(null, 10, false))
+                return (page as PagingSource.LoadResult.Page).data.map { it.name }
+            }
+            runBlocking {
+                assertThat(names(false)).containsExactly("Alfa", "Bravo").inOrder() // Charlie is still hidden
+                migrated.lockedGroups().add(LockedGroupEntity(1, "Adult"))
+                assertThat(names(false)).containsExactly("Alfa")
+                assertThat(names(true)).containsExactly("Alfa", "Bravo").inOrder()
             }
         } finally {
             migrated.close()

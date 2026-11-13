@@ -66,9 +66,10 @@ fun GuideMappingScreen(sourceId: Long, onBack: () -> Unit) {
     val c = context.container
     val scope = rememberCoroutineScope()
     var tab by remember { mutableIntStateOf(0) }
-    val unmatchedCount by c.db.guide().unmatchedCount(sourceId).collectAsStateWithLifecycle(0)
-    val pager = remember(sourceId, tab) {
-        Pager(PagingConfig(pageSize = PAGE_SIZE)) { if (tab == 0) c.db.guide().unmatchedPage(sourceId) else c.db.guide().manualPage(sourceId) }.flow
+    val unlocked by c.lock.unlocked.collectAsStateWithLifecycle()
+    val unmatchedCount by c.db.guide().unmatchedCount(sourceId, unlocked).collectAsStateWithLifecycle(0)
+    val pager = remember(sourceId, tab, unlocked) {
+        Pager(PagingConfig(pageSize = PAGE_SIZE)) { if (tab == 0) c.db.guide().unmatchedPage(sourceId, unlocked) else c.db.guide().manualPage(sourceId, unlocked) }.flow
     }
     val items = pager.collectAsLazyPagingItems()
     var picking by remember { mutableStateOf<ItemEntity?>(null) }

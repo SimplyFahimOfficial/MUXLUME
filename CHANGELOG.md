@@ -10,6 +10,13 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
   the lists, search, the guide, channel up/down and recent channels; Settings → Hidden channels brings them
   back one by one or all at once. Pinned channels come first in lists, the guide and channel up/down.
   Your choices survive playlist refreshes and are part of the backup.
+- Parental controls (Settings → Parental controls): a 4 to 8 digit PIN and a choice of groups to lock per
+  playlist. Locked groups disappear from lists, search, the guide, history, continue watching, recent
+  channels, reminders and playback (also from the media notification and Bluetooth) until you enter the PIN.
+  The app locks again after 5 minutes in the background or on "Lock now". Five wrong tries lock the PIN out for
+  30 seconds, doubling each time. A forgotten PIN is reset only by Settings → Delete all data. Backups keep
+  which groups are locked, never the PIN. It keeps casual users and children out; it is not protection against
+  someone who can read the app's files.
 - Guide search: find upcoming programmes by title on the guide screen and open their details.
 - Sleep timer in the player options (15 to 90 minutes, then pauses).
 - Buffering setting (Settings → Buffering): normal, more or less buffer ahead.

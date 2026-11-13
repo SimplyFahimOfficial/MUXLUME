@@ -10,6 +10,7 @@ MUXLUME is a local media player. It has no user accounts and the developer runs 
   in your device's Android Keystore), and the channel, movie and series lists they contain.
 - Favorites, watch history and resume positions.
 - Which channels you hid, renamed or pinned.
+- If you set a parental PIN: a salted hash of it (never the PIN) and the groups it covers.
 - If you turn the TV guide on for a playlist: its programme data and your reminders, stored only on
   the device.
 - Settings, and cached artwork images.

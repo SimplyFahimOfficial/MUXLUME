@@ -116,7 +116,7 @@ class EpgRepositoryTest {
             ),
         )
         epg.refresh(id)
-        fun search(q: String) = runBlocking { db.epg().searchPrograms(id, EpgDao.likeEscape(q), NOW, 50) }
+        fun search(q: String) = runBlocking { db.epg().searchPrograms(id, EpgDao.likeEscape(q), NOW, 50, true) }
 
         val wolves = search("wolf")
         assertThat(wolves.map { it.program.title }).containsExactly("Wolfpack Live", "100% Wolf").inOrder() // by start time; the finished one is gone

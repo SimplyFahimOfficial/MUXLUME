@@ -63,7 +63,8 @@ class ReminderReceiver : BroadcastReceiver() {
                 when (intent.action) {
                     ReminderScheduler.ACTION_FIRE -> {
                         val id = intent.getLongExtra(ReminderScheduler.EXTRA_ID, -1)
-                        dao.reminder(id)?.let { Notifications.show(context, it) }
+                        container.lock.load()
+                        dao.reminder(id, container.lock.unlockedNow())?.let { Notifications.show(context, it) } // none while its group is locked
                         dao.deleteReminder(id)
                     }
                     Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED ->

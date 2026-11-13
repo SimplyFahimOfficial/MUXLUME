@@ -366,7 +366,7 @@
     <!-- Backup -->
     <string name="backup_title">Backup and restore</string>
     <string name="backup_summary">Save or restore playlists, favorites, history and settings</string>
-    <string name="backup_intro">A backup is one file you keep wherever you like. It holds your playlists (including links and logins), favorites, watch history, hidden, renamed and pinned channels, and settings, encrypted with a passphrase. Channel lists are not saved; they download again after a restore.</string>
+    <string name="backup_intro">A backup is one file you keep wherever you like. It holds your playlists (including links and logins), favorites, watch history, hidden, renamed and pinned channels, the groups you locked (never the PIN) and settings, encrypted with a passphrase. Channel lists are not saved; they download again after a restore.</string>
     <string name="backup_create">Create a backup</string>
     <string name="backup_passphrase">Passphrase</string>
     <string name="backup_repeat_passphrase">Repeat passphrase</string>
@@ -479,4 +479,27 @@
     <string name="guide_search_close">Close search</string>
     <string name="guide_search_none">No programmes found</string>
     <string name="guide_search_none_body">No upcoming programme has \"%1$s\" in its title.</string>
+    <!-- Parental PIN -->
+    <string name="parental_title">Parental controls</string>
+    <string name="parental_summary">Hide groups behind a PIN</string>
+    <string name="parental_set_intro">Choose a PIN of 4 to 8 digits. Groups you lock disappear from lists, search, the guide, history and reminders until the PIN is entered. If you forget it, the only way back is Settings → Delete all data.</string>
+    <string name="parental_enter_intro">Enter your PIN to unlock locked groups and change these settings.</string>
+    <string name="parental_pin">PIN</string>
+    <string name="parental_pin_repeat">Repeat PIN</string>
+    <string name="parental_set_pin">Set PIN</string>
+    <string name="parental_pin_invalid">Use 4 to 8 digits.</string>
+    <string name="parental_pin_mismatch">The two PINs are different.</string>
+    <string name="parental_unlock">Unlock</string>
+    <string name="parental_wrong">Wrong PIN. %1$d tries left.</string>
+    <string name="parental_locked_out">Too many wrong tries. Try again in %1$s.</string>
+    <string name="parental_unlocked_note">Unlocked. The app locks again after 5 minutes in the background.</string>
+    <string name="parental_lock_now">Lock now</string>
+    <string name="parental_change_pin">Change PIN</string>
+    <string name="parental_current_pin">Current PIN</string>
+    <string name="parental_new_pin">New PIN</string>
+    <string name="parental_groups">Locked groups</string>
+    <string name="parental_groups_body">A locked group is hidden everywhere while the app is locked.</string>
+    <string name="parental_no_groups">Add a playlist to choose groups to lock.</string>
+    <string name="parental_group_locked">Locked</string>
+    <string name="parental_group_open">Not locked</string>
 </resources>

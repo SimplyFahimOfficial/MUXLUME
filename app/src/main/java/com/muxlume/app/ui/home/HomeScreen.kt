@@ -60,6 +60,8 @@ import com.muxlume.app.ui.playChannel
 import com.muxlume.app.ui.theme.OnMedia
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -76,15 +78,17 @@ data class HomeState(
     val newSeries: List<ItemEntity> = emptyList(),
 )
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModel(c: AppContainer) : ViewModel() {
-    val state: StateFlow<HomeState> = combine(
-        c.sources.sources,
-        c.db.history().continueWatching(12),
-        c.db.history().recentChannels(12),
-        c.db.items().favorites(ItemKind.LIVE, null),
-        combine(c.db.items().recentlyAdded(ItemKind.MOVIE, 16), c.db.items().recentlyAdded(ItemKind.SERIES, 16)) { m, s -> m to s },
-    ) { sources, cw, rc, fav, (movies, series) -> HomeState(true, sources, cw, rc, fav, movies, series) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeState())
+    val state: StateFlow<HomeState> = c.lock.unlocked.flatMapLatest { unlocked ->
+        combine(
+            c.sources.sources,
+            c.db.history().continueWatching(12, unlocked),
+            c.db.history().recentChannels(12, unlocked),
+            c.db.items().favorites(ItemKind.LIVE, null, unlocked),
+            combine(c.db.items().recentlyAdded(ItemKind.MOVIE, 16, unlocked), c.db.items().recentlyAdded(ItemKind.SERIES, 16, unlocked)) { m, s -> m to s },
+        ) { sources, cw, rc, fav, (movies, series) -> HomeState(true, sources, cw, rc, fav, movies, series) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeState())
 }
 
 /** Only sections with real data are shown; an empty install gets one clear call to action. */
