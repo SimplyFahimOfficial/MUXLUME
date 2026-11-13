@@ -396,6 +396,8 @@
     <string name="error_backup_weak_passphrase">Use a passphrase of at least 8 characters.</string>
     <string name="about_check_for_updates">Check for updates</string>
     <string name="about_update_now">Update in Google Play</string>
+    <string name="about_share_crash">Share last crash</string>
+    <string name="about_crash_note">The app closed unexpectedly. A report was saved on this device: the error, the app version and your phone model, with web links removed. It is sent nowhere unless you share it. Look it over first.</string>
     <string name="about_you_have_the_latest_version">You have the latest version.</string>
     <string name="about_version_available">Version %1$s is available.</string>
     <string name="about_view_release">View release on GitHub</string>

@@ -94,6 +94,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 modifier = Modifier.padding(horizontal = Mux.ScreenPadding),
             )
             Extras.updates(context, context.container.http)?.let { UpdateRow(it) }
+            CrashRow()
             Spacer(Modifier.height(20.dp))
             SectionHeader(stringResource(R.string.about_troubleshooting))
             faq.forEach { (q, a) -> Expandable(stringResource(q), stringResource(a)) }
@@ -127,6 +128,19 @@ private fun Expandable(question: String, answer: String) {
 }
 
 /** Manual update check (GitHub build only): contacts GitHub when tapped, never in the background. */
+/** After a crash: the report stays on the device until the user shares it. */
+@Composable
+private fun CrashRow() {
+    val context = LocalContext.current
+    val log = context.container.crashLog
+    if (!log.exists()) return
+    val title = stringResource(R.string.about_share_crash)
+    Column(Modifier.padding(horizontal = Mux.ScreenPadding, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.about_crash_note), style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary)
+        SecondaryButton(title, { log.read()?.let { SupportIntents.shareText(context, it, title) } })
+    }
+}
+
 @Composable
 private fun UpdateRow(checker: UpdateChecker) {
     val context = LocalContext.current
