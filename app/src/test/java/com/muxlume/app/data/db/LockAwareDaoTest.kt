@@ -10,7 +10,7 @@ import java.io.File
  * it is safe. Reads the DAO sources, so adding a query without thinking about the lock fails here.
  */
 class LockAwareDaoTest {
-    private val guarded = listOf("ItemEntity", "HistoryEntity", "ReminderEntity", "ProgramHit")
+    private val guarded = listOf("ItemEntity", "HistoryEntity", "ReminderEntity", "ProgramHit", "RecordingEntity")
 
     /** "Dao.method" to why it may ignore the lock. */
     private val exempt = mapOf(
@@ -20,6 +20,9 @@ class LockAwareDaoTest {
         "ReminderDao.remindersAfter" to "re-arms alarms only; the notification itself asks ReminderDao.reminder",
         "ReminderDao.findReminder" to "keyed by a channel and programme the user is looking at",
         "ReminderDao.reminderFor" to "keyed by a channel and programme the user is looking at",
+        "RecordingDao.get" to "the service, receiver and screens look up the recording they were started for; the service resolves its stream lock-aware",
+        "RecordingDao.find" to "keyed by a channel and programme the user is looking at",
+        "RecordingDao.scheduledAfter" to "re-arms alarms only; nothing is shown",
     )
 
     private data class Query(val dao: String, val method: String, val returns: String, val sql: String)

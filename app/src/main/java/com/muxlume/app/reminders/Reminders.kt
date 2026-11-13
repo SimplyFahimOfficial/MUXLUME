@@ -68,7 +68,7 @@ class ReminderReceiver : BroadcastReceiver() {
                         dao.deleteReminder(id)
                     }
                     Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED ->
-                        dao.remindersAfter(System.currentTimeMillis() / MILLIS).forEach { ReminderScheduler(context).schedule(it) }
+                        dao.remindersAfter(System.currentTimeMillis() / MILLIS).forEach { ReminderScheduler(context).schedule(it) }.also { container.recordings.rearm() }
                 }
             } finally {
                 pending.finish()
@@ -83,10 +83,13 @@ class ReminderReceiver : BroadcastReceiver() {
 
 object Notifications {
     private const val CHANNEL = "reminders"
+    const val RECORDING_CHANNEL = "recording"
 
     fun createChannels(context: Context) {
         val channel = NotificationChannel(CHANNEL, context.getString(R.string.reminders_channel_name), NotificationManager.IMPORTANCE_DEFAULT)
-        context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
+        manager.createNotificationChannel(NotificationChannel(RECORDING_CHANNEL, context.getString(R.string.recording_channel_name), NotificationManager.IMPORTANCE_LOW))
     }
 
     /** True if notifications can be shown (on Android 13+ the user has granted the permission). */

@@ -10,6 +10,14 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
   the lists, search, the guide, channel up/down and recent channels; Settings → Hidden channels brings them
   back one by one or all at once. Pinned channels come first in lists, the guide and channel up/down.
   Your choices survive playlist refreshes and are part of the backup.
+- Recording (programme sheet → Record, Settings → Recordings): copies a live stream byte for byte into a
+  folder you choose, with no re-encoding and no storage permission. Direct TS and progressive streams, and HLS
+  with TS segments; DASH, RTSP, DRM, encrypted and fragmented-MP4 streams are refused with the reason. A recording
+  starts at once or at the programme's start. With the "Alarms & reminders" permission it starts by itself;
+  without it you get a notification to tap. Recordings run in a foreground service with a Stop button, keep the
+  partial file if the connection drops or the storage fills, and are cut at Android's 6 hour limit for such
+  services (on Android 15 and later) with a note saying so. Play, stop and delete them in the Recordings screen.
+  Recordings are not part of the backup.
 - Parental controls (Settings → Parental controls): a 4 to 8 digit PIN and a choice of groups to lock per
   playlist. Locked groups disappear from lists, search, the guide, history, continue watching, recent
   channels, reminders and playback (also from the media notification and Bluetooth) until you enter the PIN.

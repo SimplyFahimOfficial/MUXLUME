@@ -53,8 +53,8 @@ internal const val HISTORY_LOCKED = """EXISTS (SELECT 1 FROM items li JOIN locke
     WHERE li.sourceId = h.sourceId AND li.pending = 0
     AND (li.stableKey = substr(h.mediaId, instr(h.mediaId, '|') + 1) OR li.stableKey = h.parentKey))"""
 
-/** SQL: the reminder `r` is on a channel in a locked group. */
-internal const val REMINDER_LOCKED = """EXISTS (SELECT 1 FROM items li JOIN locked_groups lg ON lg.sourceId = li.sourceId AND lg.groupTitle = li.groupTitle
+/** SQL: the reminder or recording `r` is on a channel in a locked group. */
+internal const val CHANNEL_LOCKED = """EXISTS (SELECT 1 FROM items li JOIN locked_groups lg ON lg.sourceId = li.sourceId AND lg.groupTitle = li.groupTitle
     WHERE li.sourceId = r.sourceId AND li.stableKey = r.stableKey AND li.pending = 0)"""
 
 /**
@@ -258,6 +258,51 @@ abstract class ChannelPrefDao {
 }
 
 @Dao
+abstract class RecordingDao {
+    /** -1 when the programme is already there. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    abstract suspend fun insert(recording: RecordingEntity): Long
+
+    @Query("SELECT * FROM recordings WHERE id = :id")
+    abstract suspend fun get(id: Long): RecordingEntity?
+
+    @Query("SELECT * FROM recordings WHERE sourceId = :sourceId AND stableKey = :stableKey AND startAt = :startAt")
+    abstract suspend fun find(sourceId: Long, stableKey: String, startAt: Long): RecordingEntity?
+
+    @Query("SELECT * FROM recordings r WHERE (:unlocked OR NOT $CHANNEL_LOCKED) ORDER BY r.startAt DESC")
+    abstract fun all(unlocked: Boolean): Flow<List<RecordingEntity>>
+
+    /** A recording with a file, for playback ("rec|<id>"). */
+    @Query("SELECT * FROM recordings r WHERE r.id = :id AND r.fileUri IS NOT NULL AND r.bytes > 0 AND (:unlocked OR NOT $CHANNEL_LOCKED)")
+    abstract suspend fun playable(id: Long, unlocked: Boolean): RecordingEntity?
+
+    @Query("SELECT * FROM recordings WHERE state = 'SCHEDULED' AND startAt > :now")
+    abstract suspend fun scheduledAfter(now: Long): List<RecordingEntity>
+
+    @Query("UPDATE recordings SET state = 'FAILED', error = 'MISSED' WHERE state = 'SCHEDULED' AND endAt <= :now")
+    abstract suspend fun markMissed(now: Long)
+
+    /** Rows left "recording" by a process that died. */
+    @Query("UPDATE recordings SET state = 'FAILED', error = 'INTERRUPTED' WHERE state = 'RECORDING'")
+    abstract suspend fun failRunning()
+
+    @Query("UPDATE recordings SET state = 'RECORDING', fileUri = :fileUri, error = NULL WHERE id = :id")
+    abstract suspend fun start(id: Long, fileUri: String)
+
+    @Query("UPDATE recordings SET bytes = :bytes WHERE id = :id")
+    abstract suspend fun setBytes(id: Long, bytes: Long)
+
+    @Query("UPDATE recordings SET state = :state, bytes = :bytes, error = :error WHERE id = :id")
+    abstract suspend fun finish(id: Long, state: RecordingState, bytes: Long, error: String?)
+
+    @Query("DELETE FROM recordings WHERE id = :id")
+    abstract suspend fun delete(id: Long)
+
+    @Query("SELECT COALESCE(SUM(bytes), 0) FROM recordings")
+    abstract fun totalBytes(): Flow<Long>
+}
+
+@Dao
 interface LockedGroupDao {
     @Query("SELECT groupTitle FROM locked_groups WHERE sourceId = :sourceId")
     fun titles(sourceId: Long): Flow<List<String>>
@@ -332,16 +377,17 @@ interface HistoryDao {
     entities = [
         SourceEntity::class, ItemEntity::class, ItemFtsEntity::class, FavoriteEntity::class, HistoryEntity::class,
         EpgChannelEntity::class, ProgramEntity::class, EpgLinkEntity::class, ReminderEntity::class, ChannelPrefEntity::class,
-        LockedGroupEntity::class,
+        LockedGroupEntity::class, RecordingEntity::class,
     ],
     views = [VisibleItem::class],
-    version = 5,
+    version = 6,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = MuxlumeDatabase.Migration1To2::class),
         AutoMigration(from = 2, to = 3, spec = MuxlumeDatabase.Migration2To3::class),
         AutoMigration(from = 3, to = 4),
         AutoMigration(from = 4, to = 5),
+        AutoMigration(from = 5, to = 6),
     ],
 )
 abstract class MuxlumeDatabase : RoomDatabase() {
@@ -350,6 +396,7 @@ abstract class MuxlumeDatabase : RoomDatabase() {
     abstract fun favorites(): FavoriteDao
     abstract fun channelPrefs(): ChannelPrefDao
     abstract fun lockedGroups(): LockedGroupDao
+    abstract fun recordings(): RecordingDao
     abstract fun history(): HistoryDao
     abstract fun epg(): EpgDao
 

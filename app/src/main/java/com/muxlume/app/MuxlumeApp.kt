@@ -27,6 +27,8 @@ import com.muxlume.app.reminders.ReminderScheduler
 import com.muxlume.app.data.db.MuxlumeDatabase
 import com.muxlume.app.data.settingsDataStore
 import com.muxlume.app.playback.PlaybackService
+import com.muxlume.app.playback.StreamResolver
+import com.muxlume.app.recording.Recordings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -52,6 +54,8 @@ class AppContainer(context: Context) {
     private val linker by lazy { EpgLinker(db) }
     val sources by lazy { SourceRepository(db, http, SecretBox(), app.contentResolver, app.resources, linker) }
     val backup by lazy { BackupRepository(db, sources, settings, epg) }
+    val streams by lazy { StreamResolver(db, sources) }
+    val recordings by lazy { Recordings(app, db, settings) }
     val epg by lazy { EpgRepository(db, sources, linker, http, app.resources) }
     val sleepTimer by lazy { SleepTimer(appScope) { player().pause() } }
     val reminders by lazy { ReminderScheduler(app) }
@@ -82,6 +86,7 @@ class MuxlumeApp : Application(), SingletonImageLoader.Factory, Configuration.Pr
         // Artwork isn't tied to a source: allow it over HTTP only while some source allows HTTP.
         container.appScope.launch { container.db.sources().anyAllowsHttp().collect { CleartextGate.artworkAllowed = it } }
         Notifications.createChannels(this)
+        container.appScope.launch { container.recordings.cleanUpAfterCrash() } // rows a dead process left "recording"
         // Background guide refresh runs only while some source has its guide on.
         container.appScope.launch {
             combine(container.db.sources().all().map { list -> list.any { it.guideEnabled } }, container.settings.settings.map { it.guideWifiOnly }, ::Pair)

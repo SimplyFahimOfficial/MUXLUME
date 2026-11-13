@@ -134,6 +134,31 @@ data class ChannelPrefEntity(
 )
 data class VisibleItem(@Embedded val item: ItemEntity, val pinned: Boolean, val isLocked: Boolean)
 
+enum class RecordingState { SCHEDULED, RECORDING, DONE, FAILED }
+
+/**
+ * A recording, scheduled or finished. Times are epoch seconds. [fileUri] is the document in the folder the
+ * user chose (never a stream URL); [error] is a `RecordingException.Reason` name, so it can never hold a URL.
+ */
+@Entity(
+    tableName = "recordings",
+    foreignKeys = [ForeignKey(entity = SourceEntity::class, parentColumns = ["id"], childColumns = ["sourceId"], onDelete = ForeignKey.CASCADE)],
+    indices = [Index(value = ["sourceId", "stableKey", "startAt"], unique = true)],
+)
+data class RecordingEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val sourceId: Long,
+    val stableKey: String,
+    val channelName: String,
+    val title: String,
+    val startAt: Long,
+    val endAt: Long,
+    val state: RecordingState,
+    val fileUri: String? = null,
+    @ColumnInfo(defaultValue = "0") val bytes: Long = 0,
+    val error: String? = null,
+)
+
 /** A group (category) the parental PIN covers, in every list, search and the guide. */
 @Entity(
     tableName = "locked_groups",

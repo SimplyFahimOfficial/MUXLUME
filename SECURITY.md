@@ -24,6 +24,7 @@ secrets (playlist links that often embed tokens, provider usernames and password
 | Arbitrary URLs through the media session | The UI sends only ids; the service resolves URLs from the database. The service is not exported | `playback/PlaybackService.kt` |
 | Exported components | Only the launcher activity (no deep links yet) | `AndroidManifest.xml`, `scripts/ci/apk_audit.py` |
 | Parental PIN | PBKDF2-HMAC-SHA256 hash with a random salt (150,000 rounds), constant-time comparison; 5 wrong tries lock out for 30 s, doubling each time (kept across restarts); unlocked state lives in memory only and ends after 5 minutes in the background; locked groups are filtered in the database view and in every item, history, reminder and programme query, and the playback service refuses their items (a test lists every such query) | `data/lock/ParentalLock.kt`, `data/db/MuxlumeDatabase.kt`, `playback/PlaybackService.kt` |
+| Recording | Streams are copied byte for byte by `RecordingService`, which resolves them itself from an id: the UI, notifications and logs never hold a stream URL, and a failed recording stores only a reason (`RecordingException.Reason`), never a message that could contain one. DASH, RTSP, DRM, encrypted and fragmented-MP4 streams are refused. Requests carry the source's HTTP setting like playback does. Recordings of a channel in a locked group are hidden and refused while locked | `recording/`, `playback/StreamResolver.kt` |
 | Storage | Storage Access Framework only, read access persisted per file, released on removal | `ui/onboarding/AddSourceScreen.kt` |
 
 ### Cleartext HTTP (reviewed exception)
@@ -71,9 +72,8 @@ passphrase: a short one can be guessed offline by anyone who gets the file.
 ## Permissions
 
 `INTERNET`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `WAKE_LOCK` (only while
-playing), and `ACCESS_NETWORK_STATE` merged from Media3. `POST_NOTIFICATIONS` (asked the first time you
+playing), `FOREGROUND_SERVICE_DATA_SYNC` (the recording service), `SCHEDULE_EXACT_ALARM` (lets a scheduled recording start by itself; Android denies it by default and the user decides, without it a notification starts the recording), and `ACCESS_NETWORK_STATE` merged from Media3. `POST_NOTIFICATIONS` (asked the first time you
 set a guide reminder) and `RECEIVE_BOOT_COMPLETED` (re-arms reminders after a restart; the receiver is
-not exported). No storage, location or contacts permission. Reminders use inexact alarms, so no
-exact-alarm permission. XMLTV guides are parsed with size, depth and entity limits (see
+not exported). No storage, location or contacts permission (recordings go to a folder the user picks through the system picker). Reminders use inexact alarms. XMLTV guides are parsed with size, depth and entity limits (see
 `docs/IPTV_FORMATS.md`). A new permission fails CI until
 it's reviewed in `scripts/ci/apk_audit.py`.

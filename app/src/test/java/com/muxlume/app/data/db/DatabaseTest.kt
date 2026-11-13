@@ -340,6 +340,27 @@ class DatabaseTest {
         }
     }
 
+    @Test
+    fun `migration 5 to 6 keeps the channels and adds recordings`() {
+        createAt(5) { old ->
+            sql(
+                old,
+                "INSERT INTO sources (id, name, type, secret, label, allowHttp, createdAt, liveCount, movieCount, seriesCount) VALUES (1, 'S', 'M3U_URL', 'x', 'l', 0, 0, 1, 0, 0)",
+                "INSERT INTO items (sourceId, kind, stableKey, name, groupTitle, position) VALUES (1, 'LIVE', 'a', 'Alpha', 'News', 0)",
+            )
+        }
+        val migrated = openCurrent()
+        try {
+            runBlocking {
+                assertThat(migrated.items().byKey(1, "a", true)!!.name).isEqualTo("Alpha")
+                val id = migrated.recordings().insert(RecordingEntity(sourceId = 1, stableKey = "a", channelName = "Alpha", title = "Show", startAt = 1, endAt = 2, state = RecordingState.SCHEDULED))
+                assertThat(migrated.recordings().get(id)!!.title).isEqualTo("Show")
+            }
+        } finally {
+            migrated.close()
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }
