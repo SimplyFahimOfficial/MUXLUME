@@ -23,7 +23,7 @@ contacted.
 | `RecordingsTest`, `RecordingDbTest`, `StreamResolverTest` (Robolectric) | Start rules (now / exact alarm / notification), file names, no folder / over / duplicate, alarm and service intents, re-arming and giving up after a restart; recordings hidden and unplayable while their channel is locked, one row per programme, cascade; URLs, headers and HTTP setting per source, RTSP gate, locked / hidden / missing items, episodes through their series |
 | `SleepTimerTest` | Timer fires once after the chosen minutes, restart replaces it, 0 cancels; buffer modes satisfy ExoPlayer's ordering rules |
 | `BackupCryptoTest`, `BackupRepositoryTest` | Round trip, no plaintext in the file, wrong passphrase, tampered header or body, non-backup files, restore on a second database (sources, favorites, history keys remapped, channel preferences, settings), channel preferences validated (blank or over-long keys, over-long names, unknown playlists), locked groups kept and the PIN never saved, no duplicates on a second restore, newer history kept, file playlists left out |
-| `UpdatesTest`, `GithubUpdatesTest` (github flavor) | Version comparison; newer, up-to-date and foreign-link release responses |
+| `UpdatesTest`, `GithubUpdatesTest` (github flavor), `PlayUpdatesTest` (play flavor) | Version comparison; newer, up-to-date and foreign-link release responses; which Google Play states offer an update. The Play flow itself needs a build installed from Play and is by hand |
 | `SupportUiTest` | Highlighted entries, QR dialog with payee and UPI ID, personal links gone |
 | `UiSmokeTest` (Robolectric Compose) | First launch shows the disclaimer, HTTP acknowledgement gate, Xtream form validation, masked password |
 

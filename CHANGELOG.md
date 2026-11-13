@@ -25,6 +25,8 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
   30 seconds, doubling each time. A forgotten PIN is reset only by Settings → Delete all data. Backups keep
   which groups are locked, never the PIN. It keeps casual users and children out; it is not protection against
   someone who can read the app's files.
+- Google Play build: "Check for updates" in Help & about uses Play in-app updates (the `play` build only; it asks
+  Google Play when you tap, and the F-Droid and GitHub builds contain none of Google's libraries).
 - Guide search: find upcoming programmes by title on the guide screen and open their details.
 - Sleep timer in the player options (15 to 90 minutes, then pauses).
 - Buffering setting (Settings → Buffering): normal, more or less buffer ahead.

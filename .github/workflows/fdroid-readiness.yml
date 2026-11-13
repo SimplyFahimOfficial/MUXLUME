@@ -40,8 +40,11 @@ jobs:
 
           if [[ -f LICENSE || -f LICENSE.md || -f COPYING ]]; then ok "Root licence file present"; else warn "No LICENSE file: choose a FLOSS licence before submission"; fi
 
+          # The play flavor's in-app update library (alias play-app-update, used only as "playImplementation") is the one
+          # reviewed exception. That the fdroid build really has none is checked on its classpath in android-ci.yml.
           if grep -RniE '(com\.google\.android\.gms|com\.google\.firebase|play-services|firebase-|crashlytics|com\.google\.android\.play|admob|appcenter|onesignal)' \
-              --include='*.kts' --include='*.toml' --include='*.gradle' app gradle build.gradle.kts settings.gradle.kts; then
+              --include='*.kts' --include='*.toml' --include='*.gradle' app gradle build.gradle.kts settings.gradle.kts \
+              | grep -viE 'play-app-update|libs\.play\.app\.update'; then
             warn "Proprietary SDK reference in the build files (list above)"; hard=1
           else ok "No Google Play services, Firebase, ads or analytics SDKs"; fi
 

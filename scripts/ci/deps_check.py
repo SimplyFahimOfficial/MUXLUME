@@ -24,9 +24,14 @@ LEVELS = ["unknown", "low", "medium", "high", "critical"]
 
 # FLOSS licences acceptable for the shipped app (and for F-Droid). A new licence fails until reviewed.
 ALLOWED_LICENSES = {"Apache-2.0", "MIT", "BSD-2-Clause", "BSD-3-Clause", "ISC", "EPL-1.0", "EPL-2.0", "MPL-2.0", "CC0-1.0", "Unicode-3.0", "Unicode-DFS-2016"}
-# Reviewed exceptions: licence *names* (no SPDX id) for specific groups. None today: MUXLUME ships
-# no Google Play services, Firebase or other proprietary SDKs. Anything without an SPDX id needs a review.
-REVIEWED_NAMED = {}
+# Reviewed exceptions: licence *names* (no SPDX id) for specific groups. Only the Play in-app update library
+# and the Google Play services pieces it needs, which are in the `play` build alone: the `fdroid` build must
+# stay free of them, and android-ci.yml checks that on fdroidReleaseRuntimeClasspath. Anything else without an
+# SPDX id needs a review.
+REVIEWED_NAMED = {
+    "Android Software Development Kit License": ["com.google.android.gms"],
+    "Play Core Software Development Kit Terms of Service": ["com.google.android.play"],
+}
 
 
 def report(lines):

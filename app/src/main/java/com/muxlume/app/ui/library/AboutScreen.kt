@@ -93,7 +93,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
                 modifier = Modifier.padding(horizontal = Mux.ScreenPadding),
             )
-            Extras.updates(context.container.http)?.let { UpdateRow(it) }
+            Extras.updates(context, context.container.http)?.let { UpdateRow(it) }
             Spacer(Modifier.height(20.dp))
             SectionHeader(stringResource(R.string.about_troubleshooting))
             faq.forEach { (q, a) -> Expandable(stringResource(q), stringResource(a)) }
@@ -151,6 +151,6 @@ private fun UpdateRow(checker: UpdateChecker) {
             }
         }, enabled = !busy)
         message?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
-        release?.let { r -> SecondaryButton(stringResource(R.string.about_view_release), { SupportIntents.openUrl(context, r.url) }) }
+        release?.let { r -> SecondaryButton(stringResource(checker.actionLabel), { checker.open(context, r) }) }
     }
 }

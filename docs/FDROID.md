@@ -22,7 +22,10 @@ publish there. `fdroid-readiness.yml` checks the prerequisites on every pull req
 
 F-Droid builds the `fdroid` flavor (`gradle: - fdroid` in the metadata template). CI fails if that flavor
 depends on Google Play services, Firebase, Play libraries or billing. The `github` and `play` flavors share
-all code with it plus whatever is in `app/src/github` or `app/src/play`.
+all code with it plus whatever is in `app/src/github` or `app/src/play`. The `play` flavor adds Google's in-app update
+library (`"playImplementation"` in `app/build.gradle.kts`, alias `play-app-update`). F-Droid's own source scanner may
+still flag that line even though the `fdroid` flavor never builds it; if it does, handle it in the `fdroiddata` metadata
+(`scanignore` or `scandelete`), not by changing the build.
 
 ## Submitting
 
