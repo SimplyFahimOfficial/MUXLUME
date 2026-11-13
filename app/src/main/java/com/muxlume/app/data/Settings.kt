@@ -44,6 +44,8 @@ data class AppSettings(
     /** Refresh the TV guide in the background only on an unmetered (Wi-Fi) network. */
     val guideWifiOnly: Boolean = true,
     val buffer: BufferMode = BufferMode.NORMAL,
+    /** Folder (tree URI) the user picked for recordings; null until they do. */
+    val recordingFolder: String? = null,
 )
 
 class SettingsRepository(private val store: DataStore<Preferences>) {
@@ -57,6 +59,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val dynamicColor = booleanPreferencesKey("dynamic_color")
         val guideWifiOnly = booleanPreferencesKey("guide_wifi_only")
         val buffer = stringPreferencesKey("buffer")
+        val recordingFolder = stringPreferencesKey("recording_folder")
     }
 
     val settings: Flow<AppSettings> = store.data
@@ -72,6 +75,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
             dynamicColor = it[Keys.dynamicColor] ?: false,
             guideWifiOnly = it[Keys.guideWifiOnly] ?: true,
             buffer = BufferMode.entries.firstOrNull { m -> m.name == it[Keys.buffer] } ?: BufferMode.NORMAL,
+            recordingFolder = it[Keys.recordingFolder],
         )
     }
 
@@ -86,6 +90,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
     suspend fun setDynamicColor(on: Boolean) = store.edit { it[Keys.dynamicColor] = on }
     suspend fun setGuideWifiOnly(on: Boolean) = store.edit { it[Keys.guideWifiOnly] = on }
     suspend fun setBuffer(mode: BufferMode) = store.edit { it[Keys.buffer] = mode.name }
+    suspend fun setRecordingFolder(uri: String?) = store.edit { if (uri == null) it.remove(Keys.recordingFolder) else it[Keys.recordingFolder] = uri }
 
     private fun themeOf(name: String) = runCatching { ThemeMode.valueOf(name) }.getOrDefault(ThemeMode.DARK)
     private fun accentOf(name: String) = runCatching { Accent.valueOf(name) }.getOrDefault(Accent.ORANGE)

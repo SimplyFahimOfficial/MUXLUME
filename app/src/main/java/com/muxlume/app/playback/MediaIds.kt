@@ -16,8 +16,14 @@ import com.muxlume.app.data.db.ItemKind
 object MediaIds {
     const val EXTRA_KIND = "muxlume.kind"
     const val EXTRA_PARENT = "muxlume.parent"
+    private const val RECORDING_PREFIX = "rec|"
 
     fun of(sourceId: Long, stableKey: String) = "$sourceId|$stableKey"
+
+    /** A finished recording: `rec|<id>`. Resolved by the playback service from the recordings table. */
+    fun ofRecording(id: Long) = "$RECORDING_PREFIX$id"
+
+    fun parseRecording(mediaId: String): Long? = mediaId.takeIf { it.startsWith(RECORDING_PREFIX) }?.removePrefix(RECORDING_PREFIX)?.toLongOrNull()
 
     fun parse(mediaId: String): Pair<Long, String>? {
         val sourceId = mediaId.substringBefore('|', "").toLongOrNull() ?: return null

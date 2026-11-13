@@ -24,10 +24,8 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.muxlume.app.MainActivity
 import com.muxlume.app.MuxlumeApp
 import com.muxlume.app.core.net.HttpPolicy
-import com.muxlume.app.core.net.Urls
 import com.muxlume.app.data.db.HistoryEntity
 import com.muxlume.app.data.db.ItemKind
-import com.muxlume.app.data.db.SourceType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -165,41 +163,26 @@ class PlaybackService : MediaSessionService() {
      * locked group while locked. That also covers other controllers (Bluetooth, system UI): they get nothing to play.
      */
     private suspend fun resolve(request: MediaItem): MediaItem? {
+        if (MediaIds.parseRecording(request.mediaId) != null) return resolveRecording(request)
         val (sourceId, key) = MediaIds.parse(request.mediaId) ?: return null
-        val source = container.db.sources().get(sourceId) ?: return null
-        val unlocked = container.lock.unlockedNow()
-        val url: String
-        val headers: Map<String, String>
-        val episode = MediaIds.parseEpisodeKey(key)
-        if (episode != null) {
-            if (source.type != SourceType.XTREAM) return null
-            // An episode is not an item of its own: it is as locked as the series it belongs to.
-            val series = request.mediaMetadata.extras?.getString(MediaIds.EXTRA_PARENT) ?: return null
-            container.db.items().byKey(sourceId, series, unlocked) ?: return null
-            url = container.sources.xtreamApi(source).episodeUrl(episode.first, episode.second)
-            headers = emptyMap()
-        } else {
-            val item = container.db.items().byKey(sourceId, key, unlocked) ?: return null
-            url = when (source.type) {
-                SourceType.XTREAM -> {
-                    val api = container.sources.xtreamApi(source)
-                    val id = item.remoteId ?: return null
-                    if (item.kind == ItemKind.LIVE) api.liveUrl(id, source.liveExtension ?: "ts") else api.movieUrl(id, item.extension ?: "mp4")
-                }
-                else -> item.url ?: return null
-            }
-            headers = item.headers?.lines()?.mapNotNull { l -> l.split('\t', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }?.toMap().orEmpty()
-        }
-        // RTSP bypasses the HTTP client, so treat it like plain HTTP: only for sources the user allowed.
-        if (url.startsWith("rtsp", ignoreCase = true) && !source.allowHttp) return null
-        if (!Urls.isPlayable(url)) return null
-        headersByMediaId[request.mediaId] = headers
-        policyByMediaId[request.mediaId] = HttpPolicy.of(source.allowHttp)
-        val path = url.substringBefore('?').lowercase()
+        val parent = request.mediaMetadata.extras?.getString(MediaIds.EXTRA_PARENT)
+        val stream = container.streams.resolve(sourceId, key, parent, container.lock.unlockedNow()) ?: return null
+        headersByMediaId[request.mediaId] = stream.headers
+        policyByMediaId[request.mediaId] = stream.policy
+        val path = stream.url.substringBefore('?').lowercase()
         return request.buildUpon()
-            .setUri(url.toUri())
+            .setUri(stream.url.toUri())
             .setMimeType(if (path.endsWith(".m3u8")) MimeTypes.APPLICATION_M3U8 else if (path.endsWith(".mpd")) MimeTypes.APPLICATION_MPD else null)
             .build()
+    }
+
+    /** A finished recording plays from its file in the folder the user chose (no network, no headers). */
+    private suspend fun resolveRecording(request: MediaItem): MediaItem? {
+        val id = MediaIds.parseRecording(request.mediaId) ?: return null
+        val recording = container.db.recordings().playable(id, container.lock.unlockedNow()) ?: return null
+        headersByMediaId[request.mediaId] = emptyMap()
+        policyByMediaId[request.mediaId] = HttpPolicy.HTTPS_ONLY
+        return request.buildUpon().setUri(recording.fileUri!!.toUri()).setMimeType(MimeTypes.VIDEO_MP2T).build()
     }
 
     /** Playlist headers (User-Agent, Referer) and the source's HTTP setting apply to every request of the current item. */

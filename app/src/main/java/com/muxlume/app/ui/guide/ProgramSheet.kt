@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.FiberManualRecord
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -38,6 +39,7 @@ import com.muxlume.app.container
 import com.muxlume.app.data.db.ItemEntity
 import com.muxlume.app.data.db.ProgramEntity
 import com.muxlume.app.data.epg.EpgTime
+import com.muxlume.app.recording.Recordings
 import com.muxlume.app.reminders.Notifications
 import com.muxlume.app.ui.components.PrimaryButton
 import com.muxlume.app.ui.components.SecondaryButton
@@ -55,6 +57,7 @@ fun ProgramSheet(item: ItemEntity, program: ProgramEntity, onWatch: () -> Unit, 
     val scope = rememberCoroutineScope()
     val reminder by c.db.reminders().reminderFor(item.sourceId, item.stableKey, program.start).collectAsStateWithLifecycle(null)
     val canRemind = remember(program) { program.start > System.currentTimeMillis() / MILLIS }
+    val canRecord = remember(program) { program.stop > System.currentTimeMillis() / MILLIS }
 
     fun toast(id: Int, vararg args: Any) = Toast.makeText(context, res.getString(id, *args), Toast.LENGTH_SHORT).show()
 
@@ -65,6 +68,16 @@ fun ProgramSheet(item: ItemEntity, program: ProgramEntity, onWatch: () -> Unit, 
         } else {
             c.reminders.schedule(saved)
             toast(R.string.guide_reminder_set, EpgTime.time(program.start))
+        }
+    }
+
+    fun onRecord() = scope.launch {
+        when (val r = c.recordings.add(item.sourceId, item.stableKey, item.name, program)) {
+            Recordings.Result.NoFolder -> toast(R.string.recording_no_folder)
+            Recordings.Result.Ended -> toast(R.string.recording_ended)
+            Recordings.Result.Already -> toast(R.string.recording_already)
+            Recordings.Result.Started -> toast(R.string.recording_started)
+            is Recordings.Result.Scheduled -> toast(if (r.unattended) R.string.recording_scheduled else R.string.recording_scheduled_notify, EpgTime.time(program.start))
         }
     }
 
@@ -111,6 +124,10 @@ fun ProgramSheet(item: ItemEntity, program: ProgramEntity, onWatch: () -> Unit, 
                         icon = if (reminder != null) Icons.Rounded.NotificationsOff else Icons.Rounded.Notifications,
                     )
                 }
+            }
+            if (canRecord) {
+                Spacer(Modifier.height(10.dp))
+                SecondaryButton(stringResource(R.string.recording_record), ::onRecord, icon = Icons.Rounded.FiberManualRecord)
             }
         }
     }

@@ -15,7 +15,9 @@ data/epg/                      XMLTV parser, channel matching, guide refresh (Wo
 reminders/                     inexact alarms, boot re-arm, notification
 data/Settings.kt               DataStore preferences
 playback/PlaybackService.kt    Media3 MediaSessionService owning ExoPlayer; resolves ids to URLs
-playback/MediaIds.kt           "<sourceId>|<stableKey>" playback ids
+playback/MediaIds.kt           "<sourceId>|<stableKey>" playback ids; "rec|<id>" for recordings
+playback/StreamResolver.kt     id -> stream URL, headers, HTTP setting (playback and recording services only)
+recording/                     Recorder (TS/HLS copy), RecordingService (foreground, dataSync), scheduling, SAF files
 ui/                            Compose screens, one ViewModel per screen where state is non-trivial
 ```
 
@@ -61,6 +63,17 @@ retries network errors three times (2/4/8 s) and rejoins live streams that fell 
 
 Background playback: off by default; leaving the player pauses unless PiP is active. When enabled,
 the media notification keeps playback going.
+
+## Recording
+
+`Recordings.add` saves a `recordings` row and either starts `RecordingService` (the programme is on) or arms an alarm for
+its start. An exact alarm starts the service directly; without the exact-alarm permission the alarm only posts a
+notification whose tap starts it, because Android does not let an inexact alarm start a foreground service. The service
+resolves the stream with `StreamResolver` (so the lock applies), creates a file in the folder the user picked (a SAF tree
+URI), and `Recorder` copies a direct stream as it arrives or polls an HLS media playlist and appends each new segment once, in
+order. It refuses what it cannot copy faithfully and stops at the end time, on Stop, on a write error (keeping the partial
+file), or at Android 15's dataSync limit (`onTimeout`). A failure stores only a `RecordingException.Reason` name, so no URL
+reaches the database or the UI. Saved recordings play through the playback service as `rec|<id>`.
 
 ## Navigation
 

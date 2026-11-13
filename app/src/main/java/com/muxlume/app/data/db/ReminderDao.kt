@@ -15,7 +15,7 @@ interface ReminderDao {
     suspend fun deleteReminder(id: Long)
 
     /** A reminder on a channel in a locked group is not returned while locked, so it is never shown. */
-    @Query("SELECT * FROM reminders r WHERE r.id = :id AND (:unlocked OR NOT $REMINDER_LOCKED)")
+    @Query("SELECT * FROM reminders r WHERE r.id = :id AND (:unlocked OR NOT $CHANNEL_LOCKED)")
     suspend fun reminder(id: Long, unlocked: Boolean): ReminderEntity?
 
     @Query("SELECT * FROM reminders WHERE sourceId = :sourceId AND stableKey = :stableKey AND startAt = :startAt")
@@ -24,7 +24,7 @@ interface ReminderDao {
     @Query("SELECT * FROM reminders WHERE sourceId = :sourceId AND stableKey = :stableKey AND startAt = :startAt")
     fun reminderFor(sourceId: Long, stableKey: String, startAt: Long): Flow<ReminderEntity?>
 
-    @Query("SELECT * FROM reminders r WHERE r.notifyAt > :now AND (:unlocked OR NOT $REMINDER_LOCKED) ORDER BY r.notifyAt")
+    @Query("SELECT * FROM reminders r WHERE r.notifyAt > :now AND (:unlocked OR NOT $CHANNEL_LOCKED) ORDER BY r.notifyAt")
     fun upcomingReminders(now: Long, unlocked: Boolean): Flow<List<ReminderEntity>>
 
     @Query("SELECT * FROM reminders WHERE notifyAt > :now")
