@@ -41,6 +41,8 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 
 ### Fixed
 - Links to HLS streams without ".m3u8" now play (retried as HLS once).
+- Back gesture: the screen no longer shrinks and snaps at the end, and screens no longer show through each other
+  while moving between screens (the TV guide screen also got its missing background).
 
 ### Added
 - Light theme and an Appearance screen: System/Light/Dark, five accent colours, Material You accent

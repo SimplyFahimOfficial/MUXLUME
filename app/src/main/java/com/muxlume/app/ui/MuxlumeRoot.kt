@@ -16,6 +16,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -91,12 +92,17 @@ fun MuxlumeRoot() {
         val controller = rememberNavController()
         val nav = Nav(controller)
         val reduced = MuxTheme.reducedMotion
+        // The screen underneath stays opaque and still: only the screen on top fades and slides. Two translucent
+        // screens at once let the window show through and ghost each other.
         NavHost(
             controller, startDestination = startRoute,
             enterTransition = { if (reduced) EnterTransition.None else forward() },
-            exitTransition = { if (reduced) ExitTransition.None else fadeOut(Motion.spec(Motion.SHORT, false)) },
-            popEnterTransition = { if (reduced) EnterTransition.None else fadeIn(Motion.spec(Motion.MEDIUM, false)) },
+            exitTransition = { ExitTransition.KeepUntilTransitionsFinished },
+            popEnterTransition = { EnterTransition.None },
             popExitTransition = { if (reduced) ExitTransition.None else backward() },
+            // Without these the back gesture runs the library default (scale to 70%) and snaps to popExit on release.
+            predictivePopEnterTransition = { EnterTransition.None },
+            predictivePopExitTransition = { if (reduced) ExitTransition.None else backward() },
         ) {
             composable<WelcomeRoute> { WelcomeScreen(onAdd = { controller.navigate(AddSourceRoute(fromOnboarding = true)) }, onExplore = nav::home) }
             composable<AddSourceRoute> { entry ->
@@ -106,7 +112,6 @@ fun MuxlumeRoot() {
             composable<MainRoute> { MainScreen(nav) }
             composable<PlayerRoute>(
                 enterTransition = { if (reduced) EnterTransition.None else fadeIn(Motion.spec(Motion.MEDIUM, false)) },
-                popExitTransition = { if (reduced) ExitTransition.None else fadeOut(Motion.spec(Motion.SHORT, false)) },
             ) { PlayerScreen(onBack = { nav.back() }) }
             composable<SearchRoute> { SearchScreen(nav) }
             composable<DetailRoute> { entry -> entry.toRoute<DetailRoute>().let { DetailScreen(it.sourceId, it.key, nav) } }
@@ -126,5 +131,7 @@ fun MuxlumeRoot() {
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.forward() =
     fadeIn(Motion.spec(Motion.MEDIUM, false)) + slideInHorizontally(Motion.spec(Motion.MEDIUM, false)) { it / 12 }
 
+/** Leaving the player only fades, because it has no sibling to slide away from. */
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.backward() =
-    fadeOut(Motion.spec(Motion.SHORT, false)) + slideOutHorizontally(Motion.spec(Motion.MEDIUM, false)) { it / 12 }
+    if (initialState.destination.hasRoute<PlayerRoute>()) fadeOut(Motion.spec(Motion.SHORT, false))
+    else fadeOut(Motion.spec(Motion.SHORT, false)) + slideOutHorizontally(Motion.spec(Motion.MEDIUM, false)) { it / 12 }
