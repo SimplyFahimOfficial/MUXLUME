@@ -120,6 +120,7 @@ fun SettingsScreen(nav: Nav) {
                         withContext(Dispatchers.IO) {
                             if (what == "all") {
                                 c.db.clearAllTables()
+                                c.crashLog.clear()
                                 c.lock.clear() // the PIN goes with everything else; this is how a forgotten PIN is reset
                                 c.settings.setRecordingFolder(null) // the folder permission is released just below; the files stay where they are
                                 context.cacheDir.resolve("images").deleteRecursively()

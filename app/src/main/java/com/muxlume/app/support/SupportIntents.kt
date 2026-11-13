@@ -93,6 +93,18 @@ object SupportIntents {
         false
     }
 
+    /** Offers [text] to any app through the share sheet; nothing is sent unless the user picks one. */
+    fun shareText(context: Context, text: String, title: String): Boolean = try {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        context.startActivity(Intent.createChooser(send, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        true
+    } catch (_: ActivityNotFoundException) {
+        false
+    }
+
     /** Shares the QR PNG through the system share sheet with temporary read access only. */
     fun shareQr(context: Context): Boolean = try {
         val directory = File(context.cacheDir, SHARE_DIR).apply { mkdirs() }
