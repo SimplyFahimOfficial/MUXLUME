@@ -3,6 +3,7 @@ package com.muxlume.app
 import android.app.Application
 import android.content.ComponentName
 import android.content.Context
+import android.os.Build
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.work.Configuration
@@ -29,6 +30,7 @@ import com.muxlume.app.data.settingsDataStore
 import com.muxlume.app.playback.PlaybackService
 import com.muxlume.app.playback.StreamResolver
 import com.muxlume.app.recording.Recordings
+import com.muxlume.app.support.CrashLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,6 +43,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okio.Path.Companion.toOkioPath
+import java.io.File
 
 /** Manual dependency graph: everything lives for the process lifetime and is created on first use. */
 class AppContainer(context: Context) {
@@ -56,6 +59,11 @@ class AppContainer(context: Context) {
     val backup by lazy { BackupRepository(db, sources, settings, epg) }
     val streams by lazy { StreamResolver(db, sources) }
     val recordings by lazy { Recordings(app, db, settings) }
+    val crashLog by lazy {
+        CrashLog(File(app.filesDir, "crash.log")) {
+            "MUXLUME ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) on Android ${Build.VERSION.SDK_INT}, ${Build.MANUFACTURER} ${Build.MODEL}"
+        }
+    }
     val epg by lazy { EpgRepository(db, sources, linker, http, app.resources) }
     val sleepTimer by lazy { SleepTimer(appScope) { player().pause() } }
     val reminders by lazy { ReminderScheduler(app) }
@@ -83,6 +91,7 @@ class MuxlumeApp : Application(), SingletonImageLoader.Factory, Configuration.Pr
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        container.crashLog.install()
         // Artwork isn't tied to a source: allow it over HTTP only while some source allows HTTP.
         container.appScope.launch { container.db.sources().anyAllowsHttp().collect { CleartextGate.artworkAllowed = it } }
         Notifications.createChannels(this)
