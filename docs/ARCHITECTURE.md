@@ -34,6 +34,11 @@ ui/                            Compose screens, one ViewModel per screen where s
   rename applied to `name`, hidden and staged rows removed. Lists, search, the guide and channel up/down read
   it instead of `items`, so they all agree on what exists and in what order (pinned first). Anything that
   must see every row (import, guide matching) reads `items`. A test keeps its columns equal to `items`.
+- `locked_groups(sourceId, groupTitle)` is the parental lock. `visible_items.isLocked` says whether an item's group
+  is in it, and every query returning items, history, reminders or programme hits ends with
+  `AND (:unlocked OR … = 0)`. `ParentalLock` (PIN hash, lockout, in-memory unlocked state, 5-minute relock) supplies
+  `unlocked`; view models re-query when it changes, and the playback service asks it before resolving an id (an
+  episode is as locked as its series). `LockAwareDaoTest` fails if a new query of that kind has no `:unlocked`.
 
 ## Import
 

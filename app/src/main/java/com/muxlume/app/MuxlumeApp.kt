@@ -16,6 +16,7 @@ import com.muxlume.app.core.net.Http
 import com.muxlume.app.core.security.SecretBox
 import com.muxlume.app.data.backup.BackupRepository
 import com.muxlume.app.data.SettingsRepository
+import com.muxlume.app.data.lock.ParentalLock
 import com.muxlume.app.playback.SleepTimer
 import com.muxlume.app.data.SourceRepository
 import com.muxlume.app.data.epg.EpgLinker
@@ -47,6 +48,7 @@ class AppContainer(context: Context) {
     val http by lazy { Http.client() }
     val db by lazy { MuxlumeDatabase.build(app) }
     val settings by lazy { SettingsRepository(app.settingsDataStore) }
+    val lock by lazy { ParentalLock(app.settingsDataStore, appScope) }
     private val linker by lazy { EpgLinker(db) }
     val sources by lazy { SourceRepository(db, http, SecretBox(), app.contentResolver, app.resources, linker) }
     val backup by lazy { BackupRepository(db, sources, settings, epg) }

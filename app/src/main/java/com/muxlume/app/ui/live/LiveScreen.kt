@@ -114,17 +114,18 @@ class BrowseViewModel(private val c: AppContainer, val kind: ItemKind) : ViewMod
         list?.let { l -> b.sourceId?.takeIf { id -> l.any { it.id == id } } ?: (l.firstOrNull { countOf(it) > 0 } ?: l.firstOrNull())?.id }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val groups: StateFlow<List<String>> = sourceId.flatMapLatest { id -> if (id == null) flowOf(emptyList()) else c.db.items().groups(id, kind) }
+    val groups: StateFlow<List<String>> = combine(sourceId, c.lock.unlocked, ::Pair)
+        .flatMapLatest { (id, unlocked) -> if (id == null) flowOf(emptyList()) else c.db.items().groups(id, kind, unlocked) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Loaded a page at a time, so groups with hundreds of thousands of channels stay light. */
-    val items: Flow<PagingData<ItemEntity>> = combine(sourceId, browse) { id, b -> id to b }.flatMapLatest { (id, b) ->
+    val items: Flow<PagingData<ItemEntity>> = combine(sourceId, browse, c.lock.unlocked, ::Triple).flatMapLatest { (id, b, unlocked) ->
         if (id == null) {
             flowOf(PagingData.empty())
         } else {
             Pager(PagingConfig(pageSize = PAGE_SIZE)) {
-                if (b.filter is GroupFilter.Favorites) c.db.items().favoritesPage(kind, id)
-                else c.db.items().page(id, kind, (b.filter as? GroupFilter.Group)?.title, b.alphabetical)
+                if (b.filter is GroupFilter.Favorites) c.db.items().favoritesPage(kind, id, unlocked)
+                else c.db.items().page(id, kind, (b.filter as? GroupFilter.Group)?.title, b.alphabetical, unlocked)
             }.flow
         }
     }.cachedIn(viewModelScope)

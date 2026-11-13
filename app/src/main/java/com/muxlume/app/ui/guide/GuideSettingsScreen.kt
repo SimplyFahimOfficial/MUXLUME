@@ -51,6 +51,8 @@ import com.muxlume.app.ui.components.Toggle
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -62,6 +64,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class GuideSettingsViewModel(private val c: AppContainer) : ViewModel() {
     val sources: StateFlow<List<SourceEntity>> = c.sources.sources.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -72,7 +75,7 @@ class GuideSettingsViewModel(private val c: AppContainer) : ViewModel() {
 
     val refreshing = MutableStateFlow<Set<Long>>(emptySet())
 
-    val reminders: StateFlow<List<ReminderEntity>> = c.db.reminders().upcomingReminders(System.currentTimeMillis() / MILLIS)
+    val reminders: StateFlow<List<ReminderEntity>> = c.lock.unlocked.flatMapLatest { unlocked -> c.db.reminders().upcomingReminders(System.currentTimeMillis() / MILLIS, unlocked) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Runs in the app scope, so leaving the screen doesn't abort a download. */

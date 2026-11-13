@@ -19,6 +19,7 @@ import com.muxlume.app.data.db.ChannelPrefEntity
 import com.muxlume.app.data.db.FavoriteEntity
 import com.muxlume.app.data.db.HistoryEntity
 import com.muxlume.app.data.db.ItemKind
+import com.muxlume.app.data.db.LockedGroupEntity
 import com.muxlume.app.data.db.MuxlumeDatabase
 import com.muxlume.app.data.db.SourceType
 import com.muxlume.app.data.epg.EpgLinker
@@ -146,6 +147,36 @@ class BackupRepositoryTest {
         assertThat(saved.keys).containsExactly("long-name", "padded")
         assertThat(saved.getValue("long-name").customName).hasLength(ChannelPrefEntity.MAX_NAME)
         assertThat(saved.getValue("padded").customName).isEqualTo("Spaced")
+    }
+
+    @Test
+    fun `locked groups travel with a backup, the PIN does not`(): Unit = runBlocking {
+        val a = device("a")
+        val ids = a.seed()
+        a.db.lockedGroups().add(LockedGroupEntity(ids[0], "Adult"))
+        a.db.lockedGroups().add(LockedGroupEntity(ids[2], "Local only")) // file playlist: left behind with the rest of it
+        val file = a.export()
+        val json = BackupCrypto.decrypt(file, pass).decodeToString()
+        assertThat(json).contains("Adult")
+        assertThat(json.lowercase()).doesNotContain("pin_hash")
+        assertThat(json.lowercase()).doesNotContain("salt")
+
+        val b = device("b")
+        b.import(file)
+
+        val home = b.db.sources().allNow().first { it.name == "Home" }.id
+        assertThat(b.db.lockedGroups().all()).containsExactly(LockedGroupEntity(home, "Adult"))
+    }
+
+    @Test
+    fun `an over-long group title in a backup is ignored`(): Unit = runBlocking {
+        val b = device("b")
+        val source = BackupSource("Home", SourceType.M3U_URL, SourceSecret(url = "https://example.com/list.m3u"), allowHttp = false, guideEnabled = false)
+        val data = BackupData(sources = listOf(source), lockedGroups = listOf(BackupLockedGroup(0, "g".repeat(600)), BackupLockedGroup(0, "Adult"), BackupLockedGroup(9, "Nowhere")))
+
+        b.import(BackupCrypto.encrypt(Json.encodeToString(BackupData.serializer(), data).toByteArray(), pass))
+
+        assertThat(b.db.lockedGroups().all().map { it.groupTitle }).containsExactly("Adult")
     }
 
     @Test

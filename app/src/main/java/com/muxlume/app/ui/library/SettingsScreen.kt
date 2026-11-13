@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -74,6 +75,7 @@ fun SettingsScreen(nav: Nav) {
             LinkRow(Icons.Rounded.CalendarMonth, stringResource(R.string.guide_settings_title), stringResource(R.string.guide_settings_summary), nav::guideSettings)
             LinkRow(Icons.Rounded.Backup, stringResource(R.string.backup_title), stringResource(R.string.backup_summary), nav::backup)
             LinkRow(Icons.Rounded.VisibilityOff, stringResource(R.string.hidden_title), stringResource(R.string.hidden_summary), nav::hiddenChannels)
+            LinkRow(Icons.Rounded.Lock, stringResource(R.string.parental_title), stringResource(R.string.parental_summary), nav::parental)
             Spacer(Modifier.height(16.dp))
             SectionHeader(stringResource(R.string.settings_playback))
             Toggle(stringResource(R.string.settings_background_audio), stringResource(R.string.settings_keep_the_sound_playing_after), settings.backgroundPlayback) {
@@ -116,6 +118,7 @@ fun SettingsScreen(nav: Nav) {
                         withContext(Dispatchers.IO) {
                             if (what == "all") {
                                 c.db.clearAllTables()
+                                c.lock.clear() // the PIN goes with everything else; this is how a forgotten PIN is reset
                                 context.cacheDir.resolve("images").deleteRecursively()
                                 context.contentResolver.persistedUriPermissions.forEach {
                                     context.contentResolver.releasePersistableUriPermission(it.uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)

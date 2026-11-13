@@ -139,20 +139,21 @@ class GuideViewModel(private val c: AppContainer) : ViewModel() {
 
     /** Upcoming programmes of the chosen source whose title contains the query; null until it has two letters. */
     @OptIn(FlowPreview::class)
-    val hits: StateFlow<List<ProgramHit>?> = combine(sourceId, query.debounce(SEARCH_DEBOUNCE_MS)) { id, q -> id to q.trim() }
-        .flatMapLatest<_, List<ProgramHit>?> { (id, q) ->
+    val hits: StateFlow<List<ProgramHit>?> = combine(sourceId, query.debounce(SEARCH_DEBOUNCE_MS), c.lock.unlocked) { id, q, unlocked -> Triple(id, q.trim(), unlocked) }
+        .flatMapLatest<_, List<ProgramHit>?> { (id, q, unlocked) ->
             if (id == null || q.length < MIN_QUERY) flowOf(null)
-            else flow { emit(c.db.epg().searchPrograms(id, EpgDao.likeEscape(q), System.currentTimeMillis() / MILLIS, MAX_HITS)) }
+            else flow { emit(c.db.epg().searchPrograms(id, EpgDao.likeEscape(q), System.currentTimeMillis() / MILLIS, MAX_HITS, unlocked)) }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    suspend fun channelOf(hit: ProgramHit): ItemEntity? = c.db.items().byKey(hit.program.sourceId, hit.stableKey)
+    suspend fun channelOf(hit: ProgramHit): ItemEntity? = c.db.items().byKey(hit.program.sourceId, hit.stableKey, c.lock.unlockedNow())
 
-    val groups: StateFlow<List<String>> = sourceId.flatMapLatest { id -> if (id == null) flowOf(emptyList()) else c.db.items().groups(id, ItemKind.LIVE) }
+    val groups: StateFlow<List<String>> = combine(sourceId, c.lock.unlocked, ::Pair)
+        .flatMapLatest { (id, unlocked) -> if (id == null) flowOf(emptyList()) else c.db.items().groups(id, ItemKind.LIVE, unlocked) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Live channels that have guide data, a page at a time. */
-    val channels: Flow<PagingData<ItemEntity>> = combine(sourceId, group) { id, g -> id to g }.flatMapLatest { (id, g) ->
-        if (id == null) flowOf(PagingData.empty()) else Pager(PagingConfig(pageSize = PAGE_SIZE)) { c.db.guide().linkedPage(id, g) }.flow
+    val channels: Flow<PagingData<ItemEntity>> = combine(sourceId, group, c.lock.unlocked, ::Triple).flatMapLatest { (id, g, unlocked) ->
+        if (id == null) flowOf(PagingData.empty()) else Pager(PagingConfig(pageSize = PAGE_SIZE)) { c.db.guide().linkedPage(id, g, unlocked) }.flow
     }.cachedIn(viewModelScope)
 
     fun pick(id: Long) { picked.value = id; group.value = null }

@@ -66,6 +66,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        container.lock.onForeground()
+    }
+
+    override fun onStop() {
+        container.lock.onBackground()
+        super.onStop()
+    }
+
     override fun onDestroy() {
         removeOnPictureInPictureModeChangedListener(pipListener)
         super.onDestroy()

@@ -48,6 +48,15 @@ interface SourceDao {
     suspend fun allNow(): List<SourceEntity>
 }
 
+/** SQL: the history row `h` is of an item (or a series' episode) in a locked group. Used as `NOT (...)` unless `:unlocked`. */
+internal const val HISTORY_LOCKED = """EXISTS (SELECT 1 FROM items li JOIN locked_groups lg ON lg.sourceId = li.sourceId AND lg.groupTitle = li.groupTitle
+    WHERE li.sourceId = h.sourceId AND li.pending = 0
+    AND (li.stableKey = substr(h.mediaId, instr(h.mediaId, '|') + 1) OR li.stableKey = h.parentKey))"""
+
+/** SQL: the reminder `r` is on a channel in a locked group. */
+internal const val REMINDER_LOCKED = """EXISTS (SELECT 1 FROM items li JOIN locked_groups lg ON lg.sourceId = li.sourceId AND lg.groupTitle = li.groupTitle
+    WHERE li.sourceId = r.sourceId AND li.stableKey = r.stableKey AND li.pending = 0)"""
+
 /**
  * Lists read from `visible_items` (renames applied, hidden and staged rows removed); [ItemEntity] has no `pinned`,
  * so Room drops that column from `SELECT *`.
@@ -74,38 +83,49 @@ abstract class ItemDao {
         publishPending(sourceId)
     }
 
-    @Query("SELECT groupTitle FROM visible_items WHERE sourceId = :sourceId AND kind = :kind GROUP BY groupTitle ORDER BY MIN(position)")
-    abstract fun groups(sourceId: Long, kind: ItemKind): Flow<List<String>>
+    @Query("SELECT groupTitle FROM visible_items WHERE sourceId = :sourceId AND kind = :kind AND (:unlocked OR isLocked = 0) GROUP BY groupTitle ORDER BY MIN(position)")
+    abstract fun groups(sourceId: Long, kind: ItemKind, unlocked: Boolean): Flow<List<String>>
+
+    /** Whether the item [key] (a series' key, for an episode) is in a locked group, whether or not it is shown. */
+    @Query(
+        """SELECT EXISTS(SELECT 1 FROM items i JOIN locked_groups lg ON lg.sourceId = i.sourceId AND lg.groupTitle = i.groupTitle
+           WHERE i.sourceId = :sourceId AND i.stableKey = :key AND i.pending = 0)""",
+    )
+    abstract suspend fun isLockedKey(sourceId: Long, key: String): Boolean
+
+    /** Every group of a source, locked or not, for choosing which ones the PIN covers. */
+    @Query("SELECT groupTitle FROM items WHERE sourceId = :sourceId AND pending = 0 GROUP BY groupTitle ORDER BY MIN(position)")
+    abstract fun allGroups(sourceId: Long): Flow<List<String>>
 
     /** One page at a time, so groups with hundreds of thousands of channels stay light. Pinned channels first. */
     @Query(
-        """SELECT * FROM visible_items WHERE sourceId = :sourceId AND kind = :kind AND (:group IS NULL OR groupTitle = :group)
+        """SELECT * FROM visible_items WHERE sourceId = :sourceId AND kind = :kind AND (:group IS NULL OR groupTitle = :group) AND (:unlocked OR isLocked = 0)
            ORDER BY pinned DESC, CASE WHEN :alphabetical THEN name END COLLATE NOCASE, position""",
     )
-    abstract fun page(sourceId: Long, kind: ItemKind, group: String?, alphabetical: Boolean): PagingSource<Int, ItemEntity>
+    abstract fun page(sourceId: Long, kind: ItemKind, group: String?, alphabetical: Boolean, unlocked: Boolean): PagingSource<Int, ItemEntity>
 
     @Query(
         """SELECT v.* FROM visible_items v JOIN favorites f ON f.sourceId = v.sourceId AND f.stableKey = v.stableKey
-           WHERE v.kind = :kind AND (:sourceId IS NULL OR v.sourceId = :sourceId)
+           WHERE v.kind = :kind AND (:sourceId IS NULL OR v.sourceId = :sourceId) AND (:unlocked OR v.isLocked = 0)
            ORDER BY f.addedAt DESC, v.id""",
     )
-    abstract fun favoritesPage(kind: ItemKind, sourceId: Long?): PagingSource<Int, ItemEntity>
+    abstract fun favoritesPage(kind: ItemKind, sourceId: Long?, unlocked: Boolean): PagingSource<Int, ItemEntity>
 
     @Query(
         """SELECT v.* FROM visible_items v JOIN favorites f ON f.sourceId = v.sourceId AND f.stableKey = v.stableKey
-           WHERE v.kind = :kind AND (:sourceId IS NULL OR v.sourceId = :sourceId)
+           WHERE v.kind = :kind AND (:sourceId IS NULL OR v.sourceId = :sourceId) AND (:unlocked OR v.isLocked = 0)
            ORDER BY f.addedAt DESC, v.id""",
     )
-    abstract fun favorites(kind: ItemKind, sourceId: Long?): Flow<List<ItemEntity>>
+    abstract fun favorites(kind: ItemKind, sourceId: Long?, unlocked: Boolean): Flow<List<ItemEntity>>
 
-    @Query("SELECT * FROM visible_items WHERE kind = :kind AND addedAt IS NOT NULL ORDER BY addedAt DESC LIMIT :limit")
-    abstract fun recentlyAdded(kind: ItemKind, limit: Int): Flow<List<ItemEntity>>
+    @Query("SELECT * FROM visible_items WHERE kind = :kind AND addedAt IS NOT NULL AND (:unlocked OR isLocked = 0) ORDER BY addedAt DESC LIMIT :limit")
+    abstract fun recentlyAdded(kind: ItemKind, limit: Int, unlocked: Boolean): Flow<List<ItemEntity>>
 
-    @Query("SELECT * FROM visible_items WHERE sourceId = :sourceId AND stableKey = :key")
-    abstract suspend fun byKey(sourceId: Long, key: String): ItemEntity?
+    @Query("SELECT * FROM visible_items WHERE sourceId = :sourceId AND stableKey = :key AND (:unlocked OR isLocked = 0)")
+    abstract suspend fun byKey(sourceId: Long, key: String, unlocked: Boolean): ItemEntity?
 
-    @Query("SELECT * FROM items WHERE sourceId = :sourceId AND stableKey = :key AND pending = 0")
-    abstract fun observe(sourceId: Long, key: String): Flow<ItemEntity?>
+    @Query("SELECT * FROM visible_items WHERE sourceId = :sourceId AND stableKey = :key AND (:unlocked OR isLocked = 0)")
+    abstract fun observe(sourceId: Long, key: String, unlocked: Boolean): Flow<ItemEntity?>
 
     /**
      * [match] is an FTS4 MATCH expression (see [ftsQuery]) over the provider's names. [like] is a LIKE pattern
@@ -116,52 +136,55 @@ abstract class ItemDao {
            WHERE (id IN (SELECT rowid FROM items_fts WHERE items_fts MATCH :match)
                OR id IN (SELECT i.id FROM items i JOIN channel_prefs p ON p.sourceId = i.sourceId AND p.stableKey = i.stableKey
                          WHERE p.customName LIKE :like ESCAPE '\'))
+           AND (:unlocked OR isLocked = 0)
            ORDER BY kind, name COLLATE NOCASE LIMIT :limit""",
     )
-    abstract fun search(match: String, like: String, limit: Int): Flow<List<ItemEntity>>
+    abstract fun search(match: String, like: String, limit: Int, unlocked: Boolean): Flow<List<ItemEntity>>
 
     // Neighbours of a channel in the order the list showed it, for channel up/down: pinned first, then
     // provider order or name. [pinned] is the current channel's own flag (see ChannelPrefDao.isPinned).
 
     @Query(
-        """SELECT * FROM visible_items WHERE sourceId = :sourceId AND kind = 'LIVE' AND (:group IS NULL OR groupTitle = :group)
+        """SELECT * FROM visible_items WHERE sourceId = :sourceId AND kind = 'LIVE' AND (:group IS NULL OR groupTitle = :group) AND (:unlocked OR isLocked = 0)
            AND (pinned < :pinned OR (pinned = :pinned AND position > :position)) ORDER BY pinned DESC, position LIMIT 1""",
     )
-    abstract suspend fun nextByPosition(sourceId: Long, group: String?, pinned: Boolean, position: Int): ItemEntity?
+    abstract suspend fun nextByPosition(sourceId: Long, group: String?, pinned: Boolean, position: Int, unlocked: Boolean): ItemEntity?
 
     @Query(
-        """SELECT * FROM visible_items WHERE sourceId = :sourceId AND kind = 'LIVE' AND (:group IS NULL OR groupTitle = :group)
+        """SELECT * FROM visible_items WHERE sourceId = :sourceId AND kind = 'LIVE' AND (:group IS NULL OR groupTitle = :group) AND (:unlocked OR isLocked = 0)
            AND (pinned > :pinned OR (pinned = :pinned AND position < :position)) ORDER BY pinned, position DESC LIMIT 1""",
     )
-    abstract suspend fun previousByPosition(sourceId: Long, group: String?, pinned: Boolean, position: Int): ItemEntity?
+    abstract suspend fun previousByPosition(sourceId: Long, group: String?, pinned: Boolean, position: Int, unlocked: Boolean): ItemEntity?
 
     @Query(
-        """SELECT * FROM visible_items WHERE sourceId = :sourceId AND kind = 'LIVE' AND (:group IS NULL OR groupTitle = :group)
+        """SELECT * FROM visible_items WHERE sourceId = :sourceId AND kind = 'LIVE' AND (:group IS NULL OR groupTitle = :group) AND (:unlocked OR isLocked = 0)
            AND (pinned < :pinned OR (pinned = :pinned AND (name > :name COLLATE NOCASE OR (name = :name COLLATE NOCASE AND position > :position))))
            ORDER BY pinned DESC, name COLLATE NOCASE, position LIMIT 1""",
     )
-    abstract suspend fun nextByName(sourceId: Long, group: String?, pinned: Boolean, name: String, position: Int): ItemEntity?
+    @Suppress("LongParameterList") // the current channel's sort key, and the lock
+    abstract suspend fun nextByName(sourceId: Long, group: String?, pinned: Boolean, name: String, position: Int, unlocked: Boolean): ItemEntity?
 
     @Query(
-        """SELECT * FROM visible_items WHERE sourceId = :sourceId AND kind = 'LIVE' AND (:group IS NULL OR groupTitle = :group)
+        """SELECT * FROM visible_items WHERE sourceId = :sourceId AND kind = 'LIVE' AND (:group IS NULL OR groupTitle = :group) AND (:unlocked OR isLocked = 0)
            AND (pinned > :pinned OR (pinned = :pinned AND (name < :name COLLATE NOCASE OR (name = :name COLLATE NOCASE AND position < :position))))
            ORDER BY pinned, name COLLATE NOCASE DESC, position DESC LIMIT 1""",
     )
-    abstract suspend fun previousByName(sourceId: Long, group: String?, pinned: Boolean, name: String, position: Int): ItemEntity?
+    @Suppress("LongParameterList") // the current channel's sort key, and the lock
+    abstract suspend fun previousByName(sourceId: Long, group: String?, pinned: Boolean, name: String, position: Int, unlocked: Boolean): ItemEntity?
 
     @Query(
         """SELECT v.* FROM visible_items v JOIN favorites f ON f.sourceId = v.sourceId AND f.stableKey = v.stableKey
-           WHERE v.kind = 'LIVE' AND (:sourceId IS NULL OR v.sourceId = :sourceId)
+           WHERE v.kind = 'LIVE' AND (:sourceId IS NULL OR v.sourceId = :sourceId) AND (:unlocked OR v.isLocked = 0)
            AND (f.addedAt < :addedAt OR (f.addedAt = :addedAt AND v.id > :id)) ORDER BY f.addedAt DESC, v.id LIMIT 1""",
     )
-    abstract suspend fun nextFavorite(sourceId: Long?, addedAt: Long, id: Long): ItemEntity?
+    abstract suspend fun nextFavorite(sourceId: Long?, addedAt: Long, id: Long, unlocked: Boolean): ItemEntity?
 
     @Query(
         """SELECT v.* FROM visible_items v JOIN favorites f ON f.sourceId = v.sourceId AND f.stableKey = v.stableKey
-           WHERE v.kind = 'LIVE' AND (:sourceId IS NULL OR v.sourceId = :sourceId)
+           WHERE v.kind = 'LIVE' AND (:sourceId IS NULL OR v.sourceId = :sourceId) AND (:unlocked OR v.isLocked = 0)
            AND (f.addedAt > :addedAt OR (f.addedAt = :addedAt AND v.id < :id)) ORDER BY f.addedAt, v.id DESC LIMIT 1""",
     )
-    abstract suspend fun previousFavorite(sourceId: Long?, addedAt: Long, id: Long): ItemEntity?
+    abstract suspend fun previousFavorite(sourceId: Long?, addedAt: Long, id: Long, unlocked: Boolean): ItemEntity?
 
     companion object {
         private const val MAX_SEARCH_WORDS = 8
@@ -220,12 +243,33 @@ abstract class ChannelPrefDao {
     /** Hidden channels that still exist in their playlist, by name. */
     @Query(
         """SELECT i.* FROM items i JOIN channel_prefs p ON p.sourceId = i.sourceId AND p.stableKey = i.stableKey
-           WHERE p.hidden = 1 AND i.pending = 0 ORDER BY i.name COLLATE NOCASE, i.id""",
+           WHERE p.hidden = 1 AND i.pending = 0
+           AND (:unlocked OR NOT EXISTS (SELECT 1 FROM locked_groups lg WHERE lg.sourceId = i.sourceId AND lg.groupTitle = i.groupTitle))
+           ORDER BY i.name COLLATE NOCASE, i.id""",
     )
-    abstract fun hiddenPage(): PagingSource<Int, ItemEntity>
+    abstract fun hiddenPage(unlocked: Boolean): PagingSource<Int, ItemEntity>
 
-    @Query("SELECT COUNT(*) FROM channel_prefs p JOIN items i ON p.sourceId = i.sourceId AND p.stableKey = i.stableKey WHERE p.hidden = 1 AND i.pending = 0")
-    abstract fun hiddenCount(): Flow<Int>
+    @Query(
+        """SELECT COUNT(*) FROM channel_prefs p JOIN items i ON p.sourceId = i.sourceId AND p.stableKey = i.stableKey
+           WHERE p.hidden = 1 AND i.pending = 0
+           AND (:unlocked OR NOT EXISTS (SELECT 1 FROM locked_groups lg WHERE lg.sourceId = i.sourceId AND lg.groupTitle = i.groupTitle))""",
+    )
+    abstract fun hiddenCount(unlocked: Boolean): Flow<Int>
+}
+
+@Dao
+interface LockedGroupDao {
+    @Query("SELECT groupTitle FROM locked_groups WHERE sourceId = :sourceId")
+    fun titles(sourceId: Long): Flow<List<String>>
+
+    @Query("SELECT * FROM locked_groups")
+    suspend fun all(): List<LockedGroupEntity>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun add(group: LockedGroupEntity)
+
+    @Query("DELETE FROM locked_groups WHERE sourceId = :sourceId AND groupTitle = :groupTitle")
+    suspend fun remove(sourceId: Long, groupTitle: String)
 }
 
 @Dao
@@ -267,13 +311,18 @@ interface HistoryDao {
     @Query(
         """SELECT * FROM history h WHERE h.kind = 'LIVE'
            AND NOT EXISTS (SELECT 1 FROM channel_prefs p WHERE p.hidden = 1 AND p.sourceId = h.sourceId AND h.mediaId = p.sourceId || '|' || p.stableKey)
+           AND (:unlocked OR NOT $HISTORY_LOCKED)
            ORDER BY h.updatedAt DESC LIMIT :limit""",
     )
-    fun recentChannels(limit: Int): Flow<List<HistoryEntity>>
+    fun recentChannels(limit: Int, unlocked: Boolean): Flow<List<HistoryEntity>>
 
     /** Started but not finished (5% left counts as finished). */
-    @Query("SELECT * FROM history WHERE kind != 'LIVE' AND positionMs > 30000 AND (durationMs <= 0 OR positionMs < durationMs * 0.95) ORDER BY updatedAt DESC LIMIT :limit")
-    fun continueWatching(limit: Int): Flow<List<HistoryEntity>>
+    @Query(
+        """SELECT * FROM history h WHERE h.kind != 'LIVE' AND h.positionMs > 30000 AND (h.durationMs <= 0 OR h.positionMs < h.durationMs * 0.95)
+           AND (:unlocked OR NOT $HISTORY_LOCKED)
+           ORDER BY h.updatedAt DESC LIMIT :limit""",
+    )
+    fun continueWatching(limit: Int, unlocked: Boolean): Flow<List<HistoryEntity>>
 
     @Query("DELETE FROM history")
     suspend fun clear()
@@ -283,14 +332,16 @@ interface HistoryDao {
     entities = [
         SourceEntity::class, ItemEntity::class, ItemFtsEntity::class, FavoriteEntity::class, HistoryEntity::class,
         EpgChannelEntity::class, ProgramEntity::class, EpgLinkEntity::class, ReminderEntity::class, ChannelPrefEntity::class,
+        LockedGroupEntity::class,
     ],
     views = [VisibleItem::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = MuxlumeDatabase.Migration1To2::class),
         AutoMigration(from = 2, to = 3, spec = MuxlumeDatabase.Migration2To3::class),
         AutoMigration(from = 3, to = 4),
+        AutoMigration(from = 4, to = 5),
     ],
 )
 abstract class MuxlumeDatabase : RoomDatabase() {
@@ -298,6 +349,7 @@ abstract class MuxlumeDatabase : RoomDatabase() {
     abstract fun items(): ItemDao
     abstract fun favorites(): FavoriteDao
     abstract fun channelPrefs(): ChannelPrefDao
+    abstract fun lockedGroups(): LockedGroupDao
     abstract fun history(): HistoryDao
     abstract fun epg(): EpgDao
 

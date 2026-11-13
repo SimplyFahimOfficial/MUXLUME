@@ -13,6 +13,7 @@ import com.muxlume.app.data.ThemeMode
 import com.muxlume.app.data.db.ChannelPrefEntity
 import com.muxlume.app.data.db.FavoriteEntity
 import com.muxlume.app.data.db.HistoryEntity
+import com.muxlume.app.data.db.LockedGroupEntity
 import com.muxlume.app.data.db.ItemKind
 import com.muxlume.app.data.db.MuxlumeDatabase
 import com.muxlume.app.data.db.SourceEntity
@@ -37,6 +38,8 @@ data class BackupData(
     val history: List<BackupHistory> = emptyList(),
     val settings: BackupSettings = BackupSettings(),
     val channelPrefs: List<BackupChannelPref> = emptyList(),
+    /** Which groups the parental PIN covers. The PIN itself is never saved. */
+    val lockedGroups: List<BackupLockedGroup> = emptyList(),
 ) {
     companion object {
         const val VERSION = 1
@@ -53,6 +56,9 @@ data class BackupFavorite(val source: Int, val stableKey: String, val addedAt: L
 /** Hidden, renamed and pinned channels. [source] is an index into [BackupData.sources]. */
 @Serializable
 data class BackupChannelPref(val source: Int, val stableKey: String, val hidden: Boolean = false, val customName: String? = null, val pinned: Boolean = false)
+
+@Serializable
+data class BackupLockedGroup(val source: Int, val groupTitle: String)
 
 @Serializable
 data class BackupHistory(
@@ -113,6 +119,7 @@ class BackupRepository(
             history = history,
             settings = settings.current().toBackup(),
             channelPrefs = prefs,
+            lockedGroups = db.lockedGroups().all().mapNotNull { g -> index[g.sourceId]?.let { BackupLockedGroup(it, g.groupTitle) } },
         )
         out.write(BackupCrypto.encrypt(JSON.encodeToString(BackupData.serializer(), data).toByteArray(), passphrase))
         out.flush()
@@ -131,7 +138,7 @@ class BackupRepository(
             throw BackupException(BackupException.Reason.NOT_A_BACKUP).apply { initCause(e) }
         }
         if (data.version > BackupData.VERSION) throw BackupException(BackupException.Reason.TOO_NEW)
-        val rows = maxOf(data.favorites.size, data.history.size, data.channelPrefs.size)
+        val rows = maxOf(data.favorites.size, data.history.size, data.channelPrefs.size, data.lockedGroups.size)
         if (data.sources.size > MAX_SOURCES || rows > MAX_ROWS) throw BackupException(BackupException.Reason.TOO_LARGE)
         restore(data)
     }
@@ -163,13 +170,7 @@ class BackupRepository(
             db.favorites().add(FavoriteEntity(id, f.stableKey, f.addedAt))
             favorites++
         }
-        data.channelPrefs.forEach { p ->
-            val id = ids.getOrNull(p.source) ?: return@forEach
-            val name = p.customName?.trim()?.take(ChannelPrefEntity.MAX_NAME)?.ifEmpty { null }
-            val pref = ChannelPrefEntity(id, p.stableKey, p.hidden, name, p.pinned)
-            if (p.stableKey.isBlank() || p.stableKey.length > MAX_KEY || pref.isDefault()) return@forEach
-            db.channelPrefs().upsert(pref)
-        }
+        restoreChoices(data, ids)
         var history = 0
         data.history.forEach { h ->
             val id = ids.getOrNull(h.source) ?: return@forEach
@@ -180,6 +181,21 @@ class BackupRepository(
         }
         apply(data.settings)
         return ImportSummary(added, already, skipped, favorites, history)
+    }
+
+    /** Channel preferences and locked groups; [ids] maps backup source indexes to the ids they got here. */
+    private suspend fun restoreChoices(data: BackupData, ids: Array<Long?>) {
+        data.channelPrefs.forEach { p ->
+            val id = ids.getOrNull(p.source) ?: return@forEach
+            val name = p.customName?.trim()?.take(ChannelPrefEntity.MAX_NAME)?.ifEmpty { null }
+            val pref = ChannelPrefEntity(id, p.stableKey, p.hidden, name, p.pinned)
+            if (p.stableKey.isBlank() || p.stableKey.length > MAX_KEY || pref.isDefault()) return@forEach
+            db.channelPrefs().upsert(pref)
+        }
+        data.lockedGroups.forEach { g ->
+            val id = ids.getOrNull(g.source) ?: return@forEach
+            if (g.groupTitle.length <= MAX_KEY) db.lockedGroups().add(LockedGroupEntity(id, g.groupTitle))
+        }
     }
 
     /** Goes through the same validation and sealing as a playlist added by hand. */

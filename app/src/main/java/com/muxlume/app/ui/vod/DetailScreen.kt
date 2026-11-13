@@ -92,7 +92,7 @@ data class Extra(
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DetailViewModel(private val c: AppContainer, private val res: Resources, private val sourceId: Long, private val key: String) : ViewModel() {
-    val item: StateFlow<ItemEntity?> = c.db.items().observe(sourceId, key).stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val item: StateFlow<ItemEntity?> = c.lock.unlocked.flatMapLatest { c.db.items().observe(sourceId, key, it) }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val favorite = c.db.favorites().isFavorite(sourceId, key).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
     val extra = MutableStateFlow(Extra(loading = true))
     val season = MutableStateFlow<Int?>(null)
@@ -109,7 +109,7 @@ class DetailViewModel(private val c: AppContainer, private val res: Resources, p
     fun load() = viewModelScope.launch {
         extra.value = Extra(loading = true)
         val source = c.db.sources().get(sourceId)
-        val it = c.db.items().byKey(sourceId, key)
+        val it = c.db.items().byKey(sourceId, key, c.lock.unlockedNow())
         if (source?.type != SourceType.XTREAM || it?.remoteId == null) {
             extra.value = Extra(plot = it?.plot)
             return@launch

@@ -111,9 +111,10 @@ abstract class EpgDao {
            JOIN epg_links l ON l.sourceId = p.sourceId AND l.channelId = p.channelId
            JOIN visible_items v ON v.sourceId = l.sourceId AND v.stableKey = l.stableKey
            WHERE p.sourceId = :sourceId AND p.pending = 0 AND p.stop > :now AND p.title LIKE '%' || :escapedQuery || '%' ESCAPE '\'
+           AND (:unlocked OR v.isLocked = 0)
            GROUP BY p.id ORDER BY p.start, p.id LIMIT :limit""",
     )
-    abstract suspend fun searchPrograms(sourceId: Long, escapedQuery: String, now: Long, limit: Int): List<ProgramHit>
+    abstract suspend fun searchPrograms(sourceId: Long, escapedQuery: String, now: Long, limit: Int, unlocked: Boolean): List<ProgramHit>
 
     // ---- Reading the guide
 

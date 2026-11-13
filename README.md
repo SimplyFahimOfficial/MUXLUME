@@ -24,7 +24,7 @@ everything else is planned.
 | Appearance | Dark and light themes, System option, five accents, Material You (Android 12+), AMOLED black, reduced motion | Layout density, shared-element transitions |
 | Playback | Media3 ExoPlayer: HLS, DASH, RTSP, progressive (TS/MP4/MKV…); audio and subtitle tracks; picture size; speed (VOD); PiP; sleep timer; buffer size setting; optional background audio; media notification; reconnect with backoff; diagnostics without links | Decoder preferences, catch-up, timeshift, recording |
 | EPG | XMLTV (opt-in per playlist): matching by id, name or by hand, timeline guide, now/next, 12-hourly background refresh, reminders, programme search | — |
-| Other | Onboarding, settings, help & about, Support (native UPI), data deletion, encrypted local backup and restore (including your channel choices) | Parental PIN, Android TV layout |
+| Other | Onboarding, settings, help & about, Support (native UPI), data deletion, encrypted local backup and restore (including your channel choices), parental PIN for chosen groups | Android TV layout |
 
 There are no app screenshots yet; they will be added from real devices.
 

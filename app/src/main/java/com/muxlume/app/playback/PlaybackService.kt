@@ -93,6 +93,19 @@ class PlaybackService : MediaSessionService() {
             )
             .build()
         scope.launch { savePositionsWhilePlaying(player) }
+        scope.launch { container.lock.unlocked.collect { if (!it) stopIfLocked(player) } }
+    }
+
+    /** The lock closed (timeout or "Lock now") while something from a locked group is playing: stop it and clear the notification. */
+    private suspend fun stopIfLocked(player: Player) {
+        val item = player.currentMediaItem ?: return
+        val (sourceId, key) = MediaIds.parse(item.mediaId) ?: return
+        val series = item.mediaMetadata.extras?.getString(MediaIds.EXTRA_PARENT)
+        if (container.db.items().isLockedKey(sourceId, series ?: key)) {
+            saveHistory(player)
+            player.stop()
+            player.clearMediaItems()
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
@@ -147,19 +160,26 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    /** Builds the playable item for an id from the UI, or null if the source or item is gone. */
+    /**
+     * Builds the playable item for an id from the UI, or null if the source or item is gone, or it is in a
+     * locked group while locked. That also covers other controllers (Bluetooth, system UI): they get nothing to play.
+     */
     private suspend fun resolve(request: MediaItem): MediaItem? {
         val (sourceId, key) = MediaIds.parse(request.mediaId) ?: return null
         val source = container.db.sources().get(sourceId) ?: return null
+        val unlocked = container.lock.unlockedNow()
         val url: String
         val headers: Map<String, String>
         val episode = MediaIds.parseEpisodeKey(key)
         if (episode != null) {
             if (source.type != SourceType.XTREAM) return null
+            // An episode is not an item of its own: it is as locked as the series it belongs to.
+            val series = request.mediaMetadata.extras?.getString(MediaIds.EXTRA_PARENT) ?: return null
+            container.db.items().byKey(sourceId, series, unlocked) ?: return null
             url = container.sources.xtreamApi(source).episodeUrl(episode.first, episode.second)
             headers = emptyMap()
         } else {
-            val item = container.db.items().byKey(sourceId, key) ?: return null
+            val item = container.db.items().byKey(sourceId, key, unlocked) ?: return null
             url = when (source.type) {
                 SourceType.XTREAM -> {
                     val api = container.sources.xtreamApi(source)
@@ -208,9 +228,10 @@ class PlaybackService : MediaSessionService() {
             val (sourceId, key) = MediaIds.parse(current.mediaId) ?: return false
             switchJob?.cancel()
             switchJob = scope.launch {
-                val item = container.db.items().byKey(sourceId, key) ?: return@launch
+                val unlocked = container.lock.unlockedNow()
+                val item = container.db.items().byKey(sourceId, key, unlocked) ?: return@launch
                 val list = ChannelList.from(current.mediaMetadata.extras, item)
-                val next = container.db.neighbour(item, list, forward) ?: return@launch // end of the list
+                val next = container.db.neighbour(item, list, forward, unlocked) ?: return@launch // end of the list
                 val resolved = resolve(MediaIds.request(next, list)) ?: return@launch
                 saveHistory(exo)
                 applyFor(resolved.mediaId)

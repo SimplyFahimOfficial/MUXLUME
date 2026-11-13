@@ -27,6 +27,7 @@ import com.muxlume.app.ui.guide.GuideScreen
 import com.muxlume.app.ui.guide.GuideSettingsScreen
 import com.muxlume.app.ui.library.BackupScreen
 import com.muxlume.app.ui.library.HiddenChannelsScreen
+import com.muxlume.app.ui.library.ParentalScreen
 import com.muxlume.app.ui.library.AboutScreen
 import com.muxlume.app.ui.library.AppearanceScreen
 import com.muxlume.app.ui.library.SettingsScreen
@@ -56,6 +57,7 @@ import kotlinx.serialization.Serializable
 @Serializable object GuideSettingsRoute
 @Serializable object BackupRoute
 @Serializable object HiddenChannelsRoute
+@Serializable object ParentalRoute
 @Serializable data class GuideMappingRoute(val sourceId: Long)
 @Serializable object AboutRoute
 
@@ -72,6 +74,7 @@ class Nav(private val controller: NavHostController) {
     fun guideSettings() = controller.navigate(GuideSettingsRoute)
     fun backup() = controller.navigate(BackupRoute)
     fun hiddenChannels() = controller.navigate(HiddenChannelsRoute)
+    fun parental() = controller.navigate(ParentalRoute)
     fun guideMapping(sourceId: Long) = controller.navigate(GuideMappingRoute(sourceId))
     fun about() = controller.navigate(AboutRoute)
     fun back() = controller.popBackStack()
@@ -83,6 +86,7 @@ fun MuxlumeRoot() {
     val context = LocalContext.current
     val start by produceState<Any?>(null) {
         val c = context.container
+        c.lock.load() // lists need to know whether locked groups apply before the first screen
         val onboarded = c.settings.current().onboardingDone || c.db.sources().all().first().isNotEmpty()
         value = if (onboarded) MainRoute else WelcomeRoute
     }
@@ -117,6 +121,7 @@ fun MuxlumeRoot() {
             composable<GuideSettingsRoute> { GuideSettingsScreen(nav) }
             composable<BackupRoute> { BackupScreen(nav) }
             composable<HiddenChannelsRoute> { HiddenChannelsScreen(nav) }
+            composable<ParentalRoute> { ParentalScreen(nav) }
             composable<GuideMappingRoute> { entry -> GuideMappingScreen(entry.toRoute<GuideMappingRoute>().sourceId, onBack = { nav.back() }) }
             composable<AboutRoute> { AboutScreen(onBack = { nav.back() }) }
         }

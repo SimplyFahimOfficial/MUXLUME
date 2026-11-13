@@ -23,6 +23,7 @@ secrets (playlist links that often embed tokens, provider usernames and password
 | Malicious provider JSON | Lenient field reading, streamed lists, 16/256 MB limits, malformed JSON is an error, not a crash | `data/xtream/XtreamApi.kt` |
 | Arbitrary URLs through the media session | The UI sends only ids; the service resolves URLs from the database. The service is not exported | `playback/PlaybackService.kt` |
 | Exported components | Only the launcher activity (no deep links yet) | `AndroidManifest.xml`, `scripts/ci/apk_audit.py` |
+| Parental PIN | PBKDF2-HMAC-SHA256 hash with a random salt (150,000 rounds), constant-time comparison; 5 wrong tries lock out for 30 s, doubling each time (kept across restarts); unlocked state lives in memory only and ends after 5 minutes in the background; locked groups are filtered in the database view and in every item, history, reminder and programme query, and the playback service refuses their items (a test lists every such query) | `data/lock/ParentalLock.kt`, `data/db/MuxlumeDatabase.kt`, `playback/PlaybackService.kt` |
 | Storage | Storage Access Framework only, read access persisted per file, released on removal | `ui/onboarding/AddSourceScreen.kt` |
 
 ### Cleartext HTTP (reviewed exception)
@@ -51,6 +52,13 @@ network-config weakening (user CAs, `usesCleartextTraffic`).
 On a private repository without GitHub Code Security, CodeQL results aren't uploaded (the SARIF
 gate still runs) and GitHub's dependency-review action is skipped; set `CODE_SCANNING_UPLOAD` and
 `DEPENDENCY_REVIEW_ENABLED` repository variables to `true` once available.
+
+### What the parental PIN is not
+
+It keeps children and casual users out of groups you choose. A 4 to 8 digit PIN has few possibilities, so its hash cannot
+resist someone who can read the app's private files (a rooted device, or a debugger). Delete all data resets it without
+the PIN, by design: that is the only way back from a forgotten PIN. Lockout and relock timing use the device clock, so
+changing the clock shortens them. Backups include which groups are locked, never the PIN or its hash.
 
 ## Backup files
 
