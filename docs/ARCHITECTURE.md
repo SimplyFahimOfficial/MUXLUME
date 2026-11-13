@@ -10,7 +10,7 @@ core/security/SecretBox.kt     Keystore AES-GCM for source secrets
 data/m3u/M3uParser.kt          streaming, bounded M3U parser (Iterator)
 data/xtream/XtreamApi.kt       Xtream Codes-compatible player_api client, lenient JSON, streamed lists
 data/SourceRepository.kt       add/edit/remove sources, transactional import (refresh)
-data/db/                       Room: sources, items, favorites, history, guide channels/programmes/links, reminders
+data/db/                       Room: sources, items, channel_prefs, favorites, history, guide channels/programmes/links, reminders
 data/epg/                      XMLTV parser, channel matching, guide refresh (WorkManager, 12 h)
 reminders/                     inexact alarms, boot re-arm, notification
 data/Settings.kt               DataStore preferences
@@ -26,8 +26,14 @@ ui/                            Compose screens, one ViewModel per screen where s
 - `items`: live channels, movies and series of a source. Replaced on every refresh. Unique
   `(sourceId, stableKey)`: `live:<id>`/`movie:<id>`/`series:<id>` for Xtream, a hash of
   group + URL for M3U (exact duplicates merge).
-- `favorites` and `history` reference `(sourceId, stableKey)` / the playback id, so they survive
-  refreshes, and cascade when a source is removed.
+- `favorites`, `channel_prefs` and `history` reference `(sourceId, stableKey)` / the playback id, so they
+  survive refreshes, and cascade when a source is removed.
+- `channel_prefs` holds what the user did to a channel: hidden, renamed (`customName`), pinned. Rows with
+  nothing set are deleted.
+- `visible_items` is a database view over `items` and `channel_prefs`: the same columns plus `pinned`, the
+  rename applied to `name`, hidden and staged rows removed. Lists, search, the guide and channel up/down read
+  it instead of `items`, so they all agree on what exists and in what order (pinned first). Anything that
+  must see every row (import, guide matching) reads `items`. A test keeps its columns equal to `items`.
 
 ## Import
 

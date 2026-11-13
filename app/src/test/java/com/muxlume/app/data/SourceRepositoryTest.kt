@@ -156,7 +156,7 @@ class SourceRepositoryTest {
         db.favorites().add(FavoriteEntity(id, key(id, "a"), 1))
         repo.delete(id)
         assertThat(db.items().favorites(ItemKind.LIVE, null).first()).isEmpty()
-        assertThat(db.items().search(ItemDao.ftsQuery("a")!!, 10).first()).isEmpty()
+        assertThat(db.items().search(ItemDao.ftsQuery("a")!!, "", 10).first()).isEmpty()
     }
 
     @Test
@@ -164,7 +164,7 @@ class SourceRepositoryTest {
         val id = addM3u()
         serve(playlist("BBC One HD", "Sky News", "Cartoon Network"))
         repo.refresh(id)
-        fun find(q: String) = runBlocking { db.items().search(ItemDao.ftsQuery(q)!!, 10).first().map { it.name } }
+        fun find(q: String) = runBlocking { db.items().search(ItemDao.ftsQuery(q)!!, "", 10).first().map { it.name } }
         assertThat(find("bbc on")).containsExactly("BBC One HD")
         assertThat(find("NEW")).containsExactly("Sky News")
         assertThat(find("net")).containsExactly("Cartoon Network")

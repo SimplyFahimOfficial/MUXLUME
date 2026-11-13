@@ -1,6 +1,7 @@
 package com.muxlume.app.data.db
 
 import androidx.room.ColumnInfo
+import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -74,6 +75,9 @@ data class ReminderEntity(
     val startAt: Long,
     val notifyAt: Long,
 )
+
+/** A programme found by title, with the playlist channel it is shown on. */
+data class ProgramHit(@Embedded val program: ProgramEntity, val stableKey: String, val channelName: String)
 
 /** Just what channel matching needs from an item. */
 data class MatchRow(val id: Long, val stableKey: String, val name: String, val tvgId: String?)

@@ -102,6 +102,19 @@ abstract class EpgDao {
     )
     abstract suspend fun findChannels(sourceId: Long, escapedQuery: String, limit: Int): List<EpgChannelEntity>
 
+    /**
+     * Programmes (on now or later) whose title contains [escapedQuery] (see [likeEscape]), on live channels the user can
+     * see. A guide channel shared by several playlist channels yields one row, with the first of them.
+     */
+    @Query(
+        """SELECT p.*, MIN(l.stableKey) AS stableKey, v.name AS channelName FROM programs p
+           JOIN epg_links l ON l.sourceId = p.sourceId AND l.channelId = p.channelId
+           JOIN visible_items v ON v.sourceId = l.sourceId AND v.stableKey = l.stableKey
+           WHERE p.sourceId = :sourceId AND p.pending = 0 AND p.stop > :now AND p.title LIKE '%' || :escapedQuery || '%' ESCAPE '\'
+           GROUP BY p.id ORDER BY p.start, p.id LIMIT :limit""",
+    )
+    abstract suspend fun searchPrograms(sourceId: Long, escapedQuery: String, now: Long, limit: Int): List<ProgramHit>
+
     // ---- Reading the guide
 
     /** The programmes of a live channel overlapping [from, to), through its guide link. */

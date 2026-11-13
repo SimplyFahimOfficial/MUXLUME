@@ -1,6 +1,8 @@
 package com.muxlume.app.data.db
 
 import androidx.room.ColumnInfo
+import androidx.room.DatabaseView
+import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Fts4
@@ -90,6 +92,45 @@ data class ItemEntity(
 @Fts4(contentEntity = ItemEntity::class)
 @Entity(tableName = "items_fts")
 data class ItemFtsEntity(val name: String)
+
+/**
+ * What the user changed about a channel. Keyed by [stableKey] like favorites, so it survives refreshes
+ * (which replace the `items` rows). Rows that are all defaults are deleted.
+ */
+@Entity(
+    tableName = "channel_prefs",
+    primaryKeys = ["sourceId", "stableKey"],
+    foreignKeys = [ForeignKey(entity = SourceEntity::class, parentColumns = ["id"], childColumns = ["sourceId"], onDelete = ForeignKey.CASCADE)],
+)
+data class ChannelPrefEntity(
+    val sourceId: Long,
+    val stableKey: String,
+    @ColumnInfo(defaultValue = "0") val hidden: Boolean = false,
+    val customName: String? = null,
+    @ColumnInfo(defaultValue = "0") val pinned: Boolean = false,
+) {
+    fun isDefault() = !hidden && !pinned && customName == null
+
+    companion object {
+        const val MAX_NAME = 100
+    }
+}
+
+/**
+ * The rows lists, search, the guide and channel up/down show: the `items` columns with the user's
+ * rename applied and hidden channels and staged (pending) rows removed, plus [pinned] for ordering.
+ * Every read of items for display goes through this view. The columns must stay the same as
+ * `items` (a test checks), because queries map the rows onto [ItemEntity].
+ */
+@DatabaseView(
+    viewName = "visible_items",
+    value = """SELECT i.id, i.sourceId, i.kind, i.stableKey, COALESCE(p.customName, i.name) AS name, i.groupTitle, i.logo, i.url,
+        i.remoteId, i.extension, i.tvgId, i.number, i.headers, i.plot, i.year, i.rating, i.position, i.addedAt, 0 AS pending,
+        COALESCE(p.pinned, 0) AS pinned
+        FROM items i LEFT JOIN channel_prefs p ON p.sourceId = i.sourceId AND p.stableKey = i.stableKey
+        WHERE i.pending = 0 AND COALESCE(p.hidden, 0) = 0""",
+)
+data class VisibleItem(@Embedded val item: ItemEntity, val pinned: Boolean)
 
 @Entity(
     tableName = "favorites",

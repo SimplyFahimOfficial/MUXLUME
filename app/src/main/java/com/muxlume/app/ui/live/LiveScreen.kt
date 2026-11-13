@@ -28,6 +28,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -170,6 +173,7 @@ fun LiveScreen(nav: Nav) {
     val guide = sources?.firstOrNull { it.id == sourceId }?.guideEnabled == true
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    var options by remember { mutableStateOf<ItemEntity?>(null) }
     LaunchedEffect(browse, sourceId) { listState.scrollToItem(0) }
 
     Column(Modifier.fillMaxSize()) {
@@ -199,9 +203,15 @@ fun LiveScreen(nav: Nav) {
             items(channels.itemCount, key = channels.itemKey { it.id }) { i ->
                 val ch = channels[i] ?: return@items // placeholder while the page loads
                 val fav = ch.stableKey in favorites
-                ChannelRow(ch, fav, guide, onClick = { scope.launch { if (context.playChannel(ch, vm.channelList())) nav.player() } }, onFavorite = { vm.toggleFavorite(ch, fav) })
+                ChannelRow(
+                    ch, fav, guide,
+                    onClick = { scope.launch { if (context.playChannel(ch, vm.channelList())) nav.player() } },
+                    onFavorite = { vm.toggleFavorite(ch, fav) },
+                    onOptions = { options = ch },
+                )
             }
         }
+        options?.let { ChannelOptionsSheet(it) { options = null } }
     }
 }
 
@@ -230,9 +240,11 @@ fun BrowseFilters(vm: BrowseViewModel, sources: List<SourceEntity>, sourceId: Lo
 }
 
 @Composable
-private fun ChannelRow(ch: ItemEntity, favorite: Boolean, guide: Boolean, onClick: () -> Unit, onFavorite: () -> Unit) {
+private fun ChannelRow(ch: ItemEntity, favorite: Boolean, guide: Boolean, onClick: () -> Unit, onFavorite: () -> Unit, onOptions: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().pressable(onClick, label = stringResource(R.string.live_play, ch.name)).padding(horizontal = Mux.ScreenPadding, vertical = 8.dp),
+        Modifier.fillMaxWidth()
+            .pressable(onClick, label = stringResource(R.string.live_play, ch.name), onLongClick = onOptions, longClickLabel = stringResource(R.string.channel_options))
+            .padding(horizontal = Mux.ScreenPadding, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Artwork(ch.logo, ch.name, Modifier.size(width = 72.dp, height = 52.dp).clip(Mux.CardShape).background(MuxTheme.Raised).padding(6.dp), contentScale = ContentScale.Fit, monogramSize = 16)

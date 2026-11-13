@@ -9,6 +9,7 @@ MUXLUME is a local media player. It has no user accounts and the developer runs 
 - The playlists and provider accounts you add: links, usernames and passwords (encrypted with a key
   in your device's Android Keystore), and the channel, movie and series lists they contain.
 - Favorites, watch history and resume positions.
+- Which channels you hid, renamed or pinned.
 - If you turn the TV guide on for a playlist: its programme data and your reminders, stored only on
   the device.
 - Settings, and cached artwork images.
