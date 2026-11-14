@@ -42,7 +42,8 @@ Details: [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md).
 One app, three builds (Gradle flavors). `fdroid` is the clean FLOSS build for F-Droid. `github` (APKs on
 GitHub Releases) and `play` (Play Store) may carry features F-Droid would not accept; a CI check keeps
 proprietary libraries out of `fdroid`. Today the only difference is a manual **Check for updates** button in
-the `github` build (it contacts GitHub only when tapped).
+the `github` build (it contacts GitHub only when tapped) and in the `play` build (it asks Google Play only when
+tapped, through Google's in-app update library, which is proprietary).
 
 ## Build
 

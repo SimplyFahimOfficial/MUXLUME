@@ -24,7 +24,7 @@ contacted.
 | `CrashLogTest` | Links removed in messages and causes in any case, the rest of the report kept, 64 KB cap, a second crash replaces the first, the handler writes then calls the previous one, an unwritable log does not hide the crash |
 | `SleepTimerTest` | Timer fires once after the chosen minutes, restart replaces it, 0 cancels; buffer modes satisfy ExoPlayer's ordering rules |
 | `BackupCryptoTest`, `BackupRepositoryTest` | Round trip, no plaintext in the file, wrong passphrase, tampered header or body, non-backup files, restore on a second database (sources, favorites, history keys remapped, channel preferences, settings), channel preferences validated (blank or over-long keys, over-long names, unknown playlists), locked groups kept and the PIN never saved, no duplicates on a second restore, newer history kept, file playlists left out |
-| `UpdatesTest`, `GithubUpdatesTest` (github flavor) | Version comparison; newer, up-to-date and foreign-link release responses |
+| `UpdatesTest`, `GithubUpdatesTest` (github flavor), `PlayUpdatesTest` (play flavor) | Version comparison; newer, up-to-date and foreign-link release responses; which Google Play states offer an update. The Play flow itself needs a build installed from Play and is by hand |
 | `SupportUiTest` | Highlighted entries, QR dialog with payee and UPI ID, personal links gone |
 | `UiSmokeTest` (Robolectric Compose) | First launch shows the disclaimer, HTTP acknowledgement gate, Xtream form validation, masked password |
 

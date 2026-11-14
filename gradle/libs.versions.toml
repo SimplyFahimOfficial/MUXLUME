@@ -65,6 +65,8 @@ media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3" }
 media3-ui-compose = { module = "androidx.media3:media3-ui-compose", version.ref = "media3" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
+# Play in-app updates: proprietary, play flavor only (playImplementation); never in fdroid.
+play-app-update = { module = "com.google.android.play:app-update-ktx", version = "2.1.0" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 # Pure-Java QR encoder for the on-device UPI code (Apache-2.0, no network, no permissions).
 zxing-core = { module = "com.google.zxing:core", version = "3.5.4" }

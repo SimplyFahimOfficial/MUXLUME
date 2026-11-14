@@ -145,7 +145,7 @@ jobs:
         run: |
           mkdir -p build/reports/detekt
           java -jar "$RUNNER_TEMP/detekt.jar" --config detekt.yml --build-upon-default-config \
-            --input app/src/main/java,app/src/test/java,app/src/fdroid/java,app/src/github/java,app/src/play/java,app/src/testGithub/java --baseline config/detekt/baseline.xml \
+            --input app/src/main/java,app/src/test/java,app/src/fdroid/java,app/src/github/java,app/src/play/java,app/src/testGithub/java,app/src/testPlay/java --baseline config/detekt/baseline.xml \
             --report md:build/reports/detekt/detekt.md --report sarif:build/reports/detekt/detekt.sarif
 
       - name: Detekt summary

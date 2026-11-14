@@ -25,6 +25,8 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
   30 seconds, doubling each time. A forgotten PIN is reset only by Settings → Delete all data. Backups keep
   which groups are locked, never the PIN. It keeps casual users and children out; it is not protection against
   someone who can read the app's files.
+- Google Play build: "Check for updates" in Help & about uses Play in-app updates (the `play` build only; it asks
+  Google Play when you tap, and the F-Droid and GitHub builds contain none of Google's libraries).
 - Local crash report: after a crash, Help & about offers "Share last crash" (the error, app version and phone
   model, with web links removed, capped at 64 KB). It stays on the device until you share it; Delete all data
   removes it. No third-party crash reporting.

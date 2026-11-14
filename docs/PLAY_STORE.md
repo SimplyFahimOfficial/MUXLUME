@@ -45,6 +45,14 @@ higher `versionCode`.
   form's current definitions.
 - Content rating questionnaire: the app shows user-supplied content; answer honestly (it can display
   unrestricted content from the user's sources).
+- **In-app updates**: the `play` flavor links Google's Play in-app update library (`com.google.android.play:app-update-ktx`,
+  with the Google Play services pieces it needs), used only when the user taps "Check for updates" in Help & about, with
+  Play's immediate flow. It works only for a build installed from Play. These libraries are proprietary: see the licence
+  note in the pull request that added them, and `scripts/ci/deps_check.py` for the reviewed licence names.
+- **Declarations to expect**: the foreground service type `dataSync` (recordings) and the exact-alarm permission
+  `SCHEDULE_EXACT_ALARM` (a scheduled recording starting by itself) may each need a declaration in Play Console, and
+  Play restricts exact alarms for some kinds of apps. Not checked against the current policy; read it before the first
+  production upload.
 - Target API: `targetSdk = 36` meets the current requirement for phones; re-check yearly.
 - New personal developer accounts must run a closed test with a minimum number of testers and days
   before production access; check the current numbers in Play Console.
