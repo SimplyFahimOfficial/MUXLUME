@@ -558,4 +558,10 @@
     <string name="recording_error_missed">the app could not start it in time</string>
     <string name="recording_error_interrupted">the app was closed</string>
     <string name="recording_error_other">something went wrong</string>
+    <!-- Guide filters -->
+    <string name="guide_filter_on_now">On now</string>
+    <string name="guide_filter_empty_title">Nothing to show</string>
+    <string name="guide_filter_empty_favorites">None of your favorite channels in this group has guide data.</string>
+    <string name="guide_filter_empty_on_now">No channel in this group has a programme on right now.</string>
+    <string name="guide_filter_show_all">Show all channels</string>
 </resources>

@@ -129,8 +129,8 @@ class ParentalDbTest {
             ),
         )
         val guide = db.guide()
-        assertThat(guide.linkedPage(s1, null, false).names()).containsExactly("Kids One")
-        assertThat(guide.linkedPage(s1, null, true).names()).containsExactly("Kids One", "Adult One").inOrder()
+        assertThat(guide.linkedPage(s1, null, false, false, null).names()).containsExactly("Kids One")
+        assertThat(guide.linkedPage(s1, null, true, false, null).names()).containsExactly("Kids One", "Adult One").inOrder()
         assertThat(guide.unmatchedPage(s1, false).names()).containsExactly("Kids Two")
         assertThat(guide.unmatchedPage(s1, true).names()).containsExactly("Kids Two", "Adult Two").inOrder()
         assertThat(guide.manualPage(s1, false).names()).containsExactly("Kids One")

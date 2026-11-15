@@ -60,7 +60,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -134,6 +136,17 @@ class GuideViewModel(private val c: AppContainer) : ViewModel() {
 
     val group = MutableStateFlow<String?>(null)
     val day = MutableStateFlow(0)
+    val filter = MutableStateFlow(GuideFilter.ALL)
+
+    /** The moment "On now" is measured at: set when the filter is chosen and when the screen is resumed, not ticking, so the list does not shift under the finger. */
+    private val now = MutableStateFlow(System.currentTimeMillis() / MILLIS)
+
+    fun refreshNow() { now.value = System.currentTimeMillis() / MILLIS }
+
+    fun choose(f: GuideFilter) {
+        refreshNow()
+        filter.value = f
+    }
 
     val query = MutableStateFlow("")
 
@@ -152,9 +165,16 @@ class GuideViewModel(private val c: AppContainer) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Live channels that have guide data, a page at a time. */
-    val channels: Flow<PagingData<ItemEntity>> = combine(sourceId, group, c.lock.unlocked, ::Triple).flatMapLatest { (id, g, unlocked) ->
-        if (id == null) flowOf(PagingData.empty()) else Pager(PagingConfig(pageSize = PAGE_SIZE)) { c.db.guide().linkedPage(id, g, unlocked) }.flow
-    }.cachedIn(viewModelScope)
+    val channels: Flow<PagingData<ItemEntity>> = combine(sourceId, group, c.lock.unlocked, filter, now) { id, g, unlocked, f, at -> GuideQuery(id, g, unlocked, f, at) }
+        .flatMapLatest { q ->
+            if (q.sourceId == null) {
+                flowOf(PagingData.empty())
+            } else {
+                Pager(PagingConfig(pageSize = PAGE_SIZE)) {
+                    c.db.guide().linkedPage(q.sourceId, q.group, q.unlocked, q.filter == GuideFilter.FAVORITES, q.at.takeIf { q.filter == GuideFilter.ON_NOW })
+                }.flow
+            }
+        }.cachedIn(viewModelScope)
 
     fun pick(id: Long) { picked.value = id; group.value = null }
 
@@ -168,6 +188,17 @@ class GuideViewModel(private val c: AppContainer) : ViewModel() {
 }
 
 private const val MIN_QUERY = 2
+
+/** Which guide channels to list besides the group: everything, favourites, or what is airing now. */
+enum class GuideFilter { ALL, FAVORITES, ON_NOW }
+
+private val GuideFilter.label: Int get() = when (this) {
+    GuideFilter.ALL -> R.string.live_all
+    GuideFilter.FAVORITES -> R.string.live_favorites
+    GuideFilter.ON_NOW -> R.string.guide_filter_on_now
+}
+
+private data class GuideQuery(val sourceId: Long?, val group: String?, val unlocked: Boolean, val filter: GuideFilter, val at: Long)
 private const val MAX_QUERY_LENGTH = 100
 
 /** A programme picked in the timeline or in search, with the channel list its Watch button plays from. */
@@ -182,6 +213,7 @@ fun GuideScreen(nav: Nav) {
     val sourceId by vm.sourceId.collectAsStateWithLifecycle()
     val group by vm.group.collectAsStateWithLifecycle()
     val day by vm.day.collectAsStateWithLifecycle()
+    val filter by vm.filter.collectAsStateWithLifecycle()
     val groups by vm.groups.collectAsStateWithLifecycle()
     val channels = vm.channels.collectAsLazyPagingItems()
     val scope = rememberCoroutineScope()
@@ -226,6 +258,13 @@ fun GuideScreen(nav: Nav) {
         PillRow(dayLabels(today), day, { vm.day.value = it })
         val labels = listOf(stringResource(R.string.live_all)) + groups.map { it.ifEmpty { stringResource(R.string.live_ungrouped) } }
         PillRow(labels, groups.indexOf(group).let { if (it < 0) 0 else it + 1 }, { i -> vm.group.value = if (i == 0) null else groups[i - 1] })
+        // "On now" only makes sense for today; leaving today drops back to All.
+        val filters = if (day == 0) GuideFilter.entries else GuideFilter.entries - GuideFilter.ON_NOW
+        LaunchedEffect(day) { if (day != 0 && filter == GuideFilter.ON_NOW) vm.choose(GuideFilter.ALL) }
+        LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refreshNow() }
+        PillRow(
+            filters.map { stringResource(it.label) }, filters.indexOf(filter).coerceAtLeast(0), { vm.choose(filters[it]) },
+        )
 
         source?.epgRefreshedAt?.takeIf { System.currentTimeMillis() - it > STALE_AFTER_MILLIS }?.let { at ->
             Text(
@@ -235,6 +274,14 @@ fun GuideScreen(nav: Nav) {
             )
         }
 
+        if (channels.isLoadedEmpty && filter != GuideFilter.ALL) {
+            EmptyState(
+                stringResource(R.string.guide_filter_empty_title),
+                stringResource(if (filter == GuideFilter.FAVORITES) R.string.guide_filter_empty_favorites else R.string.guide_filter_empty_on_now),
+                action = stringResource(R.string.guide_filter_show_all), onAction = { vm.choose(GuideFilter.ALL) },
+            )
+            return@Column
+        }
         if (channels.isLoadedEmpty) {
             EmptyState(
                 stringResource(R.string.guide_empty_title), stringResource(R.string.guide_empty_body),

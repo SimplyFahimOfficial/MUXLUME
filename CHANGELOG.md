@@ -31,6 +31,7 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
   model, with web links removed, capped at 64 KB). It stays on the device until you share it; Delete all data
   removes it. No third-party crash reporting.
 - Guide search: find upcoming programmes by title on the guide screen and open their details.
+- Guide filters: show only your favorite channels, or only what is on now (today), together with the group and day.
 - Sleep timer in the player options (15 to 90 minutes, then pauses).
 - Buffering setting (Settings → Buffering): normal, more or less buffer ahead.
 - Local backup and restore (Settings → Backup and restore): one file with playlists (including links
