@@ -12,6 +12,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.datasource.DataSourceBitmapLoader
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -32,11 +33,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.guava.future
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import okhttp3.Call
+import java.util.Locale
 
 /**
  * Owns the player. The UI talks to it through a MediaController, which also gives system media
@@ -55,6 +59,10 @@ class PlaybackService : MediaSessionService() {
     private var retries = 0
     private var retryJob: Job? = null
     private var switchJob: Job? = null
+    private lateinit var exoPlayer: ExoPlayer
+    private lateinit var baseTrackParameters: TrackSelectionParameters
+    private var languages: Pair<String?, String?> = null to null
+    private var subtitlesOff = false
 
     /**
      * HTTP setting of the source that is playing. Stream and segment requests run on loader threads
@@ -77,7 +85,12 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
+        exoPlayer = exo
+        baseTrackParameters = exo.trackSelectionParameters
         exo.addListener(Recovery(exo))
+        scope.launch {
+            container.settings.settings.map { it.audioLanguage to it.subtitleLanguage }.distinctUntilChanged().collect { languages = it; applyLanguages(restore = true) }
+        }
         val player = ChannelSwitcher(exo)
         session = MediaSession.Builder(this, player)
             .setCallback(Callback())
@@ -185,6 +198,20 @@ class PlaybackService : MediaSessionService() {
         return request.buildUpon().setUri(recording.fileUri!!.toUri()).setMimeType(MimeTypes.VIDEO_MP2T).build()
     }
 
+    /**
+     * Puts the default audio and subtitle language on the player. At each new stream when a language is set (so a choice
+     * made by hand for the previous stream does not carry over); on a settings change always, which also undoes a language
+     * that went back to Automatic. With both Automatic and nothing applied before, the player is left as it always was.
+     */
+    private fun applyLanguages(restore: Boolean) {
+        val (audio, subtitles) = languages
+        if (!restore && TrackLanguages.isAutomatic(audio, subtitles)) return
+        val device = Locale.getDefault().language
+        exoPlayer.trackSelectionParameters =
+            TrackLanguages.apply(exoPlayer.trackSelectionParameters, baseTrackParameters, TrackLanguages.Wanted(audio, subtitles, device, subtitlesOff))
+        subtitlesOff = subtitles == TrackLanguages.OFF
+    }
+
     /** Playlist headers (User-Agent, Referer) and the source's HTTP setting apply to every request of the current item. */
     private fun applyFor(mediaId: String) {
         http.setDefaultRequestProperties(headersByMediaId[mediaId].orEmpty())
@@ -230,6 +257,7 @@ class PlaybackService : MediaSessionService() {
     private inner class Recovery(val player: Player) : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             mediaItem?.let { applyFor(it.mediaId) }
+            applyLanguages(restore = false)
             retries = 0
         }
 

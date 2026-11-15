@@ -31,6 +31,9 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
   model, with web links removed, capped at 64 KB). It stays on the device until you share it; Delete all data
   removes it. No third-party crash reporting.
 - Guide search: find upcoming programmes by title on the guide screen and open their details.
+- Default audio and subtitle language (Settings → Playback): Automatic (as before), the device language, a language from a short
+  list, or subtitles off. Used when a stream has that language; what you pick in the player's options still wins for that
+  stream. Part of the backup.
 - Guide filters: show only your favorite channels, or only what is on now (today), together with the group and day.
 - Sleep timer in the player options (15 to 90 minutes, then pauses).
 - Buffering setting (Settings → Buffering): normal, more or less buffer ahead.

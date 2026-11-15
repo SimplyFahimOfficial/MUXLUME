@@ -64,6 +64,13 @@ retries network errors three times (2/4/8 s) and rejoins live streams that fell 
 Background playback: off by default; leaving the player pauses unless PiP is active. When enabled,
 the media notification keeps playback going.
 
+## Default languages
+
+`AppSettings.audioLanguage/subtitleLanguage` (null = Automatic) are applied by `PlaybackService` through the pure
+`TrackLanguages.apply` onto the player's `TrackSelectionParameters`: on every settings change, and at each new stream when a
+language is set. The service keeps the parameters the player started with, so Automatic restores them, and remembers whether it
+turned subtitles off so it never undoes the user's own choice. A track picked by hand in the player is an override on top and wins.
+
 ## Recording
 
 `Recordings.add` saves a `recordings` row and either starts `RecordingService` (the programme is on) or arms an alarm for

@@ -180,6 +180,29 @@ class BackupRepositoryTest {
     }
 
     @Test
+    fun `default languages travel with a backup, automatic included, and bad values are ignored`(): Unit = runBlocking {
+        val a = device("a")
+        a.settings.setAudioLanguage("hi")
+        val b = device("b")
+        b.settings.setSubtitleLanguage("es") // b has its own subtitle choice; a's is Automatic, which replaces it
+        b.import(a.export())
+        assertThat(b.settings.current().audioLanguage).isEqualTo("hi")
+        assertThat(b.settings.current().subtitleLanguage).isNull()
+
+        val file = BackupCrypto.encrypt(
+            Json.encodeToString(BackupData.serializer(), BackupData(settings = BackupSettings(audioLanguage = "xx", subtitleLanguage = "off"))).toByteArray(), pass,
+        )
+        b.import(file)
+        assertThat(b.settings.current().audioLanguage).isEqualTo("hi") // "xx" is not a language: left alone
+        assertThat(b.settings.current().subtitleLanguage).isEqualTo("off")
+
+        val old = BackupCrypto.encrypt(Json.encodeToString(BackupData.serializer(), BackupData(settings = BackupSettings(theme = "DARK"))).toByteArray(), pass)
+        b.import(old) // a backup from before these settings existed leaves them as they are
+        assertThat(b.settings.current().audioLanguage).isEqualTo("hi")
+        assertThat(b.settings.current().subtitleLanguage).isEqualTo("off")
+    }
+
+    @Test
     fun `restoring twice adds nothing and keeps newer history`() = runBlocking {
         val a = device("a")
         a.seed()

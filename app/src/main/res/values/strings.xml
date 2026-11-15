@@ -564,4 +564,11 @@
     <string name="guide_filter_empty_favorites">None of your favorite channels in this group has guide data.</string>
     <string name="guide_filter_empty_on_now">No channel in this group has a programme on right now.</string>
     <string name="guide_filter_show_all">Show all channels</string>
+    <!-- Default audio and subtitle language -->
+    <string name="settings_languages_body">Default languages for channels, movies and series. Automatic keeps the stream\'s own choice. A language is used when the stream has it. What you pick in the player\'s options wins for that stream.</string>
+    <string name="settings_audio_language">Audio language</string>
+    <string name="settings_subtitle_language">Subtitles</string>
+    <string name="settings_language_automatic">Automatic</string>
+    <string name="settings_language_device">Device language</string>
+    <string name="settings_language_off">Off</string>
 </resources>
