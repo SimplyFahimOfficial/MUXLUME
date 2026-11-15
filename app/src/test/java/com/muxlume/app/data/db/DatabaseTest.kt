@@ -10,6 +10,8 @@ import com.google.common.truth.Truth.assertThat
 import com.muxlume.app.playback.ChannelList
 import com.muxlume.app.playback.MediaIds
 import com.muxlume.app.playback.ChannelList.Order
+import com.muxlume.app.playback.channelByNumber
+import com.muxlume.app.playback.listAfterJump
 import com.muxlume.app.playback.neighbour
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -190,6 +192,43 @@ class DatabaseTest {
 
         assertThat(listed()).containsExactly("Bravo HD", "Alpha", "charlie", "alpha").inOrder() // pinned first, delta hidden
         assertThat(db.items().byKey(source, "delta", true)).isNull()
+    }
+
+    @Test
+    fun `a typed number finds the channel with that number, or the place in the list when the playlist has no numbers`(): Unit = runBlocking {
+        // No numbers yet: 3 is the third channel in provider order (charlie), 6 is past the end, 0 is nothing.
+        assertThat(db.channelByNumber(source, 3, true)!!.name).isEqualTo("charlie")
+        assertThat(db.channelByNumber(source, 6, true)).isNull()
+        assertThat(db.channelByNumber(source, 0, true)).isNull()
+
+        db.openHelper.writableDatabase.execSQL("UPDATE items SET number = 7 WHERE stableKey = 'bravo'")
+        db.openHelper.writableDatabase.execSQL("UPDATE items SET number = 7 WHERE stableKey = 'alpha'") // a clash: the first in provider order wins
+        db.openHelper.writableDatabase.execSQL("UPDATE items SET number = 12 WHERE stableKey = 'delta'")
+        assertThat(db.channelByNumber(source, 7, true)!!.name).isEqualTo("bravo")
+        assertThat(db.channelByNumber(source, 12, true)!!.name).isEqualTo("delta")
+        assertThat(db.channelByNumber(source, 3, true)).isNull() // numbered playlist: places no longer count
+    }
+
+    @Test
+    fun `hidden and locked channels cannot be reached by number`(): Unit = runBlocking {
+        db.openHelper.writableDatabase.execSQL("UPDATE items SET number = position + 1")
+        edit("delta") { it.copy(hidden = true) } // number 1
+        db.lockedGroups().add(LockedGroupEntity(source, "Sport")) // Alpha, number 2
+        assertThat(db.channelByNumber(source, 1, true)).isNull()
+        assertThat(db.channelByNumber(source, 2, false)).isNull()
+        assertThat(db.channelByNumber(source, 2, true)!!.name).isEqualTo("Alpha")
+        assertThat(db.channelByNumber(source, 3, false)!!.name).isEqualTo("charlie")
+    }
+
+    @Test
+    fun `after a jump the list is kept where the target is in it, otherwise the target's own group`(): Unit = runBlocking {
+        val news = item("bravo") // group News
+        val sport = item("Alpha") // group Sport
+        assertThat(listAfterJump(ChannelList(Order.PROVIDER, null), sport, false)).isEqualTo(ChannelList(Order.PROVIDER, null))
+        assertThat(listAfterJump(ChannelList(Order.NAME, "News"), news, false)).isEqualTo(ChannelList(Order.NAME, "News"))
+        assertThat(listAfterJump(ChannelList(Order.NAME, "News"), sport, false)).isEqualTo(ChannelList(Order.PROVIDER, "Sport"))
+        assertThat(listAfterJump(ChannelList(Order.FAVORITES, null, source), news, true)).isEqualTo(ChannelList(Order.FAVORITES, null, source))
+        assertThat(listAfterJump(ChannelList(Order.FAVORITES, null, source), news, false)).isEqualTo(ChannelList(Order.PROVIDER, "News"))
     }
 
     @Test
