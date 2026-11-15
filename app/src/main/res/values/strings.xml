@@ -547,6 +547,11 @@
     <string name="player_no_channel">No channel %1$d</string>
     <string name="player_last_channel">Switch to last channel</string>
     <string name="player_no_previous">The previous channel is not available.</string>
+    <string name="player_channels">Channels</string>
+    <string name="player_channels_search">Search channels in this playlist</string>
+    <string name="player_channels_none">No channels found</string>
+    <string name="player_channels_none_body">Nothing in this playlist matches \"%1$s\".</string>
+    <string name="player_channels_playing">Playing now: %1$s</string>
     <string name="recording_used">Recordings use %1$s</string>
     <string name="recording_empty_title">No recordings</string>
     <string name="recording_empty_body">Open a programme in the guide and tap Record.</string>

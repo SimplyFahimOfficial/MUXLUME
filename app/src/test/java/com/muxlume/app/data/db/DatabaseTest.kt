@@ -1,11 +1,11 @@
 package com.muxlume.app.data.db
 
 import android.content.Context
-import androidx.paging.PagingSource
 import androidx.room.Room
 import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.paging.PagingSource
 import com.google.common.truth.Truth.assertThat
 import com.muxlume.app.playback.ChannelList
 import com.muxlume.app.playback.MediaIds
@@ -13,6 +13,7 @@ import com.muxlume.app.playback.ChannelList.Order
 import com.muxlume.app.playback.channelByNumber
 import com.muxlume.app.playback.listAfterJump
 import com.muxlume.app.playback.neighbour
+import com.muxlume.app.playback.pagingSource
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -192,6 +193,45 @@ class DatabaseTest {
 
         assertThat(listed()).containsExactly("Bravo HD", "Alpha", "charlie", "alpha").inOrder() // pinned first, delta hidden
         assertThat(db.items().byKey(source, "delta", true)).isNull()
+    }
+
+    private suspend fun pageOf(list: ChannelList, unlocked: Boolean = true): List<String> =
+        (list.pagingSource(db, source, unlocked).load(PagingSource.LoadParams.Refresh(null, 50, false)) as PagingSource.LoadResult.Page).data.map { it.name }
+
+    @Test
+    fun `the picker lists a list in the order channel up and down follows, without hidden or locked channels`(): Unit = runBlocking {
+        db.favorites().add(FavoriteEntity(source, "bravo", 200))
+        db.favorites().add(FavoriteEntity(source, "delta", 300))
+        assertThat(pageOf(ChannelList(Order.PROVIDER, null))).containsExactly("delta", "Alpha", "charlie", "bravo", "alpha").inOrder()
+        assertThat(pageOf(ChannelList(Order.PROVIDER, "News"))).containsExactly("delta", "charlie", "bravo", "alpha").inOrder()
+        assertThat(pageOf(ChannelList(Order.NAME, "News"))).containsExactly("alpha", "bravo", "charlie", "delta").inOrder()
+        assertThat(pageOf(ChannelList(Order.FAVORITES, null, source))).containsExactly("delta", "bravo").inOrder() // newest first
+
+        edit("bravo") { it.copy(hidden = true) }
+        db.lockedGroups().add(LockedGroupEntity(source, "Sport"))
+        assertThat(pageOf(ChannelList(Order.PROVIDER, null), unlocked = false)).containsExactly("delta", "charlie", "alpha").inOrder()
+        assertThat(pageOf(ChannelList(Order.PROVIDER, null))).containsExactly("delta", "Alpha", "charlie", "alpha").inOrder()
+        assertThat(pageOf(ChannelList(Order.FAVORITES, null, source))).containsExactly("delta")
+    }
+
+    @Test
+    fun `picker search finds live channels of one playlist, by provider name and by renamed name, without hidden or locked ones`(): Unit = runBlocking {
+        val other = db.sources().insert(SourceEntity(name = "O", type = SourceType.M3U_URL, secret = "x", label = "l", allowHttp = false, createdAt = 1))
+        db.items().insertAll(listOf(live("charlie other", "News", 0).copy(sourceId = other, stableKey = "co"), live("charlie movie", "Films", 9).copy(kind = ItemKind.MOVIE)))
+        fun search(q: String, unlocked: Boolean = true) = runBlocking {
+            db.channelPrefs().searchLive(ItemDao.ftsQuery(q)!!, "%${EpgDao.likeEscape(q)}%", source, 20, unlocked).first().map { it.name }
+        }
+        assertThat(search("charl")).containsExactly("charlie") // not the other playlist, not the movie
+
+        edit("delta") { it.copy(customName = "Zulu One") }
+        assertThat(search("zulu")).containsExactly("Zulu One") // found by the name the user gave, shown by it
+        assertThat(search("delta")).containsExactly("Zulu One")
+
+        edit("charlie") { it.copy(hidden = true) }
+        db.lockedGroups().add(LockedGroupEntity(source, "Sport"))
+        assertThat(search("charl")).isEmpty()
+        assertThat(search("alpha", unlocked = false)).containsExactly("alpha")
+        assertThat(search("alpha")).containsExactly("Alpha", "alpha")
     }
 
     @Test

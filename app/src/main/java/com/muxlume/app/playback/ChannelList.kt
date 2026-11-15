@@ -1,7 +1,9 @@
 package com.muxlume.app.playback
 
 import android.os.Bundle
+import androidx.paging.PagingSource
 import com.muxlume.app.data.db.ItemEntity
+import com.muxlume.app.data.db.ItemKind
 import com.muxlume.app.data.db.MuxlumeDatabase
 
 /**
@@ -34,6 +36,13 @@ data class ChannelList(val order: Order, val group: String?, val favoritesSource
             return ChannelList(order, group, favSource)
         }
     }
+}
+
+/** The channels of this list, in the order channel up/down follows, loaded in pages. [sourceId] is the playlist of the channel playing. */
+fun ChannelList.pagingSource(db: MuxlumeDatabase, sourceId: Long, unlocked: Boolean): PagingSource<Int, ItemEntity> = when (order) {
+    ChannelList.Order.PROVIDER -> db.items().page(sourceId, ItemKind.LIVE, group, false, unlocked)
+    ChannelList.Order.NAME -> db.items().page(sourceId, ItemKind.LIVE, group, true, unlocked)
+    ChannelList.Order.FAVORITES -> db.items().favoritesPage(ItemKind.LIVE, favoritesSourceId, unlocked)
 }
 
 /** The channel after (or before) [item] in [list], or null at the end of the list. */

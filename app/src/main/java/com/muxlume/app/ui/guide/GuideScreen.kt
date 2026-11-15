@@ -331,13 +331,13 @@ fun GuideScreen(nav: Nav) {
 }
 
 @Composable
-private fun SearchField(query: String, onChange: (String) -> Unit) {
+fun SearchField(query: String, hint: Int = R.string.guide_search_hint, autoFocus: Boolean = true, onChange: (String) -> Unit) {
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    LaunchedEffect(Unit) { if (autoFocus) runCatching { focus.requestFocus() } }
     TextField(
         query, onChange,
         Modifier.fillMaxWidth().padding(horizontal = Mux.ScreenPadding, vertical = 4.dp).focusRequester(focus),
-        placeholder = { Text(stringResource(R.string.guide_search_hint)) },
+        placeholder = { Text(stringResource(hint)) },
         leadingIcon = { Icon(Icons.Rounded.Search, null, tint = MuxTheme.TextSecondary) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),

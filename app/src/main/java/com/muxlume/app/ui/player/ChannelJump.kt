@@ -73,15 +73,16 @@ suspend fun Context.jumpToChannel(player: Player, number: Int): Boolean {
 
 /** Plays [target] ("previous channel" and number jumps) with the list the current channel came from. */
 suspend fun Context.playLike(player: Player, target: ItemEntity, unlocked: Boolean): Boolean {
-    val c = container
-    val current = player.currentMediaItem
-    val currentItem = current?.mediaId?.let(MediaIds::parse)?.let { (s, k) -> c.db.items().byKey(s, k, unlocked) }
-    val list = if (current != null && currentItem != null) {
-        listAfterJump(ChannelList.from(current.mediaMetadata.extras, currentItem), target, c.db.favorites().get(target.sourceId, target.stableKey) != null)
-    } else {
-        null
-    }
+    val list = currentList(player, unlocked)?.let { listAfterJump(it, target, container.db.favorites().get(target.sourceId, target.stableKey) != null) }
     return playChannel(target, list)
+}
+
+/** The list the channel playing now was picked from (its own group in provider order if it came from nowhere in particular), or null if nothing live plays. */
+suspend fun Context.currentList(player: Player, unlocked: Boolean): ChannelList? {
+    val current = player.currentMediaItem ?: return null
+    val (sourceId, key) = MediaIds.parse(current.mediaId) ?: return null
+    val item = container.db.items().byKey(sourceId, key, unlocked) ?: return null
+    return ChannelList.from(current.mediaMetadata.extras, item)
 }
 
 /** A number pad for touch: shows what was typed, Go plays it. */

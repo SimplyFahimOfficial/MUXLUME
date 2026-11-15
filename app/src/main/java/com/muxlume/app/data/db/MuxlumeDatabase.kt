@@ -251,6 +251,18 @@ abstract class ChannelPrefDao {
         deleteDefaults()
     }
 
+    /** [search] for the channel picker: only the live channels of one playlist. */
+    @Query(
+        """SELECT * FROM visible_items
+           WHERE kind = 'LIVE' AND sourceId = :sourceId
+           AND (id IN (SELECT rowid FROM items_fts WHERE items_fts MATCH :match)
+               OR id IN (SELECT i.id FROM items i JOIN channel_prefs p ON p.sourceId = i.sourceId AND p.stableKey = i.stableKey
+                         WHERE p.customName LIKE :like ESCAPE '\'))
+           AND (:unlocked OR isLocked = 0)
+           ORDER BY name COLLATE NOCASE, position LIMIT :limit""",
+    )
+    abstract fun searchLive(match: String, like: String, sourceId: Long, limit: Int, unlocked: Boolean): Flow<List<ItemEntity>>
+
     /** Hidden channels that still exist in their playlist, by name. */
     @Query(
         """SELECT i.* FROM items i JOIN channel_prefs p ON p.sourceId = i.sourceId AND p.stableKey = i.stableKey

@@ -34,6 +34,9 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - Default audio and subtitle language (Settings → Playback): Automatic (as before), the device language, a language from a short
   list, or subtitles off. Used when a stream has that language; what you pick in the player's options still wins for that
   stream. Part of the backup.
+- Channel picker: the Channels button in the live player lists the channels of the list you came from (provider order,
+  A to Z, a group or favourites) over the video, which keeps playing until you choose one. Typing searches the live channels
+  of the same playlist. Hidden channels, and locked ones while locked, are not listed; channel up and down keep that list.
 - Channel number jump: in the live player, type the number on a remote or keyboard (it plays after a short pause or on
   Enter; Back clears it) or tap "Go to channel" for a number pad. The number is the channel's number in its playlist
   (tvg-chno or the provider's number); a playlist without numbers counts channels in provider order. "No channel N"
