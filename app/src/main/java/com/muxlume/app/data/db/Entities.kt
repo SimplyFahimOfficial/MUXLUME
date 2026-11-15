@@ -157,7 +157,13 @@ data class RecordingEntity(
     val fileUri: String? = null,
     @ColumnInfo(defaultValue = "0") val bytes: Long = 0,
     val error: String? = null,
-)
+    /** Recording starts [leadSeconds] before [startAt] and ends [trailSeconds] after [endAt]; [startAt] and [endAt] stay the programme's own times. */
+    @ColumnInfo(defaultValue = "0") val leadSeconds: Long = 0,
+    @ColumnInfo(defaultValue = "0") val trailSeconds: Long = 0,
+) {
+    val paddedStart: Long get() = startAt - leadSeconds
+    val paddedEnd: Long get() = endAt + trailSeconds
+}
 
 /** A group (category) the parental PIN covers, in every list, search and the guide. */
 @Entity(

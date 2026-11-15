@@ -530,6 +530,10 @@
     <string name="recording_choose_folder">Choose folder</string>
     <string name="recording_exact_note">Allow alarms so scheduled recordings can start by themselves. Without it you get a notification to tap.</string>
     <string name="recording_allow_alarms">Allow alarms</string>
+    <string name="recording_lead">Start earlier</string>
+    <string name="recording_trail">Stop later</string>
+    <string name="recording_minutes">%1$d min</string>
+    <string name="recording_padding_note">Programmes rarely start and end on time, so recordings begin and end a little outside them. Applies to recordings you schedule from now on. If the connection drops, MUXLUME keeps trying for up to two minutes. Some providers allow only one stream at a time; recording while watching may stop one of them.</string>
     <string name="recording_used">Recordings use %1$s</string>
     <string name="recording_empty_title">No recordings</string>
     <string name="recording_empty_body">Open a programme in the guide and tap Record.</string>

@@ -108,8 +108,35 @@ class RecordingsAddTest {
         val r = recordings().add(source, "k", "Chan", program(now + 600, now + 4200))
         assertThat((r as Recordings.Result.Scheduled).unattended).isTrue()
         val alarm = alarms.peekNextScheduledAlarm()!!
-        assertThat(alarm.triggerAtMs).isEqualTo((now + 600) * 1000)
+        assertThat(alarm.triggerAtMs).isEqualTo((now + 600 - 60) * 1000) // 1 minute early by default
         assertThat(shadowOf(alarm.operation).isForegroundService).isTrue()
+    }
+
+    @Test
+    fun `padding is copied from the settings, and the alarm and the immediate start use the padded start`(): Unit = runBlocking {
+        chooseFolder()
+        settings.setRecordLeadMinutes(2)
+        settings.setRecordTrailMinutes(10)
+        recordings().add(source, "k", "Chan", program(now + 600, now + 4200))
+        val saved = db.recordings().find(source, "k", now + 600)!!
+        assertThat(saved.leadSeconds).isEqualTo(120)
+        assertThat(saved.trailSeconds).isEqualTo(600)
+        assertThat(saved.startAt).isEqualTo(now + 600) // the programme's own times stay as they are
+        assertThat(alarms.peekNextScheduledAlarm()!!.triggerAtMs).isEqualTo((now + 600 - 120) * 1000)
+
+        // 60 s before the programme with a 2 minute lead: already inside the recording window, so it starts now.
+        assertThat(recordings().add(source, "j", "Chan", program(now + 60, now + 4200))).isEqualTo(Recordings.Result.Started)
+    }
+
+    @Test
+    fun `a recording is given up only after its padded end`(): Unit = runBlocking {
+        fun row(key: String, end: Long, trail: Long) =
+            RecordingEntity(sourceId = source, stableKey = key, channelName = "C", title = key, startAt = now - 3000, endAt = end, state = RecordingState.SCHEDULED, trailSeconds = trail)
+        val padded = db.recordings().insert(row("padded", now - 100, 300)) // ended 100 s ago, but 300 s of trail left
+        val over = db.recordings().insert(row("over", now - 400, 300))
+        recordings().rearm()
+        assertThat(db.recordings().get(padded)!!.state).isEqualTo(RecordingState.SCHEDULED)
+        assertThat(db.recordings().get(over)!!.error).isEqualTo("MISSED")
     }
 
     @Test

@@ -83,4 +83,17 @@ class RecordingDbTest {
         db.sources().delete(source)
         assertThat(db.recordings().all(true).first()).isEmpty()
     }
+
+    @Test
+    fun `the next padded start on the same channel limits the end of a recording`(): Unit = runBlocking {
+        fun scheduled(key: String, start: Long, lead: Long = 0, state: RecordingState = RecordingState.SCHEDULED) =
+            row(key, state, 0, null).copy(startAt = start, endAt = start + 1000, leadSeconds = lead)
+        db.recordings().insert(scheduled("kids", 5_000, lead = 60)) // padded start 4940
+        db.recordings().insert(scheduled("kids", 9_000))
+        db.recordings().insert(scheduled("adult", 3_000)) // another channel
+        db.recordings().insert(scheduled("kids", 2_000, state = RecordingState.DONE)) // not scheduled
+        assertThat(db.recordings().nextStartOnChannel(source, "kids", 1_000)).isEqualTo(4_940)
+        assertThat(db.recordings().nextStartOnChannel(source, "kids", 4_940)).isEqualTo(9_000) // strictly after
+        assertThat(db.recordings().nextStartOnChannel(source, "kids", 9_000)).isNull()
+    }
 }

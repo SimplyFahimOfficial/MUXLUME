@@ -34,6 +34,11 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - Default audio and subtitle language (Settings → Playback): Automatic (as before), the device language, a language from a short
   list, or subtitles off. Used when a stream has that language; what you pick in the player's options still wins for that
   stream. Part of the backup.
+- Recording padding and reconnect (Settings → Recordings): recordings start 1 minute early and end 5 minutes late by
+  default (choose 0 to 5 minutes early, 0 to 15 late), so the start and end of a programme are not cut off; padding
+  never runs into the next recording on the same channel. If the stream drops, MUXLUME reopens it and keeps appending
+  to the same file, and stops with a network error only after two minutes without data. The file has a gap at each
+  reconnect. Padding is part of the backup.
 - Automatic playlist refresh (Settings → Playlists): off by default, or daily, every 3 days or weekly, in the background
   while the phone is online and the battery isn't low (Wi-Fi only follows the TV guide setting). A playlist that fails
   keeps its channels and shows the error; favourites, hidden channels and locks are kept. A refresh you start yourself

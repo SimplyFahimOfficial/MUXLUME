@@ -276,11 +276,16 @@ abstract class RecordingDao {
     @Query("SELECT * FROM recordings r WHERE r.id = :id AND r.fileUri IS NOT NULL AND r.bytes > 0 AND (:unlocked OR NOT $CHANNEL_LOCKED)")
     abstract suspend fun playable(id: Long, unlocked: Boolean): RecordingEntity?
 
-    @Query("SELECT * FROM recordings WHERE state = 'SCHEDULED' AND startAt > :now")
+    /** Scheduled recordings whose padded start is still ahead. */
+    @Query("SELECT * FROM recordings WHERE state = 'SCHEDULED' AND startAt - leadSeconds > :now")
     abstract suspend fun scheduledAfter(now: Long): List<RecordingEntity>
 
-    @Query("UPDATE recordings SET state = 'FAILED', error = 'MISSED' WHERE state = 'SCHEDULED' AND endAt <= :now")
+    @Query("UPDATE recordings SET state = 'FAILED', error = 'MISSED' WHERE state = 'SCHEDULED' AND endAt + trailSeconds <= :now")
     abstract suspend fun markMissed(now: Long)
+
+    /** The padded start of the next scheduled recording on this channel after [after], or null: a recording must end by then. */
+    @Query("SELECT MIN(startAt - leadSeconds) FROM recordings WHERE sourceId = :sourceId AND stableKey = :stableKey AND state = 'SCHEDULED' AND startAt - leadSeconds > :after")
+    abstract suspend fun nextStartOnChannel(sourceId: Long, stableKey: String, after: Long): Long?
 
     /** Rows left "recording" by a process that died. */
     @Query("UPDATE recordings SET state = 'FAILED', error = 'INTERRUPTED' WHERE state = 'RECORDING'")
@@ -380,7 +385,7 @@ interface HistoryDao {
         LockedGroupEntity::class, RecordingEntity::class,
     ],
     views = [VisibleItem::class],
-    version = 6,
+    version = 7,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = MuxlumeDatabase.Migration1To2::class),
@@ -388,6 +393,7 @@ interface HistoryDao {
         AutoMigration(from = 3, to = 4),
         AutoMigration(from = 4, to = 5),
         AutoMigration(from = 5, to = 6),
+        AutoMigration(from = 6, to = 7),
     ],
 )
 abstract class MuxlumeDatabase : RoomDatabase() {
