@@ -46,6 +46,10 @@ data class AppSettings(
     val buffer: BufferMode = BufferMode.NORMAL,
     /** Folder (tree URI) the user picked for recordings; null until they do. */
     val recordingFolder: String? = null,
+    /** Preferred audio language: null = Automatic (the player's own choice), "device", or a language tag from [com.muxlume.app.playback.TrackLanguages.CHOICES]. */
+    val audioLanguage: String? = null,
+    /** Same for subtitles, plus "off". */
+    val subtitleLanguage: String? = null,
 )
 
 class SettingsRepository(private val store: DataStore<Preferences>) {
@@ -60,6 +64,8 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val guideWifiOnly = booleanPreferencesKey("guide_wifi_only")
         val buffer = stringPreferencesKey("buffer")
         val recordingFolder = stringPreferencesKey("recording_folder")
+        val audioLanguage = stringPreferencesKey("audio_language")
+        val subtitleLanguage = stringPreferencesKey("subtitle_language")
     }
 
     val settings: Flow<AppSettings> = store.data
@@ -76,6 +82,8 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
             guideWifiOnly = it[Keys.guideWifiOnly] ?: true,
             buffer = BufferMode.entries.firstOrNull { m -> m.name == it[Keys.buffer] } ?: BufferMode.NORMAL,
             recordingFolder = it[Keys.recordingFolder],
+            audioLanguage = it[Keys.audioLanguage],
+            subtitleLanguage = it[Keys.subtitleLanguage],
         )
     }
 
@@ -90,6 +98,8 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
     suspend fun setDynamicColor(on: Boolean) = store.edit { it[Keys.dynamicColor] = on }
     suspend fun setGuideWifiOnly(on: Boolean) = store.edit { it[Keys.guideWifiOnly] = on }
     suspend fun setBuffer(mode: BufferMode) = store.edit { it[Keys.buffer] = mode.name }
+    suspend fun setAudioLanguage(value: String?) = store.edit { if (value == null) it.remove(Keys.audioLanguage) else it[Keys.audioLanguage] = value }
+    suspend fun setSubtitleLanguage(value: String?) = store.edit { if (value == null) it.remove(Keys.subtitleLanguage) else it[Keys.subtitleLanguage] = value }
     suspend fun setRecordingFolder(uri: String?) = store.edit { if (uri == null) it.remove(Keys.recordingFolder) else it[Keys.recordingFolder] = uri }
 
     private fun themeOf(name: String) = runCatching { ThemeMode.valueOf(name) }.getOrDefault(ThemeMode.DARK)

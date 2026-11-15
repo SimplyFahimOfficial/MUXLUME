@@ -23,6 +23,19 @@ class SettingsRepositoryTest {
     )
 
     @Test
+    fun `default languages are stored, and Automatic removes them`(): Unit = runBlocking {
+        val r = repo("languages")
+        assertThat(r.current().audioLanguage).isNull()
+        r.setAudioLanguage("hi")
+        r.setSubtitleLanguage("off")
+        assertThat(r.current().audioLanguage).isEqualTo("hi")
+        assertThat(r.current().subtitleLanguage).isEqualTo("off")
+        r.setAudioLanguage(null)
+        assertThat(r.current().audioLanguage).isNull()
+        assertThat(r.current().subtitleLanguage).isEqualTo("off")
+    }
+
+    @Test
     fun `appearance choices round trip`(): Unit = runBlocking {
         val r = repo("ok")
         assertThat(r.current()).isEqualTo(AppSettings())

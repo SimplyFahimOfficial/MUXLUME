@@ -20,6 +20,7 @@ import com.muxlume.app.data.db.SourceEntity
 import com.muxlume.app.data.db.SourceType
 import com.muxlume.app.data.epg.EpgRepository
 import com.muxlume.app.playback.MediaIds
+import com.muxlume.app.playback.TrackLanguages
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -83,6 +84,9 @@ data class BackupSettings(
     val reduceMotion: Boolean? = null,
     val backgroundPlayback: Boolean? = null,
     val guideWifiOnly: Boolean? = null,
+    /** "auto" = Automatic; absent in backups made before these existed (then the setting is left alone). */
+    val audioLanguage: String? = null,
+    val subtitleLanguage: String? = null,
 )
 
 data class ExportSummary(val sources: Int, val skippedFileSources: Int, val favorites: Int, val history: Int)
@@ -222,9 +226,24 @@ class BackupRepository(
         s.reduceMotion?.let { settings.setReduceMotion(it) }
         s.backgroundPlayback?.let { settings.setBackgroundPlayback(it) }
         s.guideWifiOnly?.let { settings.setGuideWifiOnly(it) }
+        language(s.audioLanguage, subtitles = false)?.let { settings.setAudioLanguage(it.value) }
+        language(s.subtitleLanguage, subtitles = true)?.let { settings.setSubtitleLanguage(it.value) }
     }
 
-    private fun AppSettings.toBackup() = BackupSettings(theme.name, accent.name, amoled, dynamicColor, reduceMotion, backgroundPlayback, guideWifiOnly)
+    /** A language from a backup, checked like any input: null means leave the setting alone, [Choice] with a null value means Automatic. */
+    private class Choice(val value: String?)
+
+    private fun language(raw: String?, subtitles: Boolean): Choice? = when {
+        raw == null -> null
+        raw == TrackLanguages.AUTOMATIC_IN_BACKUP -> Choice(null)
+        TrackLanguages.isValid(raw, subtitles) -> Choice(raw)
+        else -> null
+    }
+
+    private fun AppSettings.toBackup() = BackupSettings(
+        theme.name, accent.name, amoled, dynamicColor, reduceMotion, backgroundPlayback, guideWifiOnly,
+        audioLanguage ?: TrackLanguages.AUTOMATIC_IN_BACKUP, subtitleLanguage ?: TrackLanguages.AUTOMATIC_IN_BACKUP,
+    )
 
     /** Two entries are the same playlist when they point at the same place with the same login. */
     private fun identity(type: SourceType, s: SourceSecret) = listOf(type, s.url.orEmpty().trim().trimEnd('/').lowercase(), s.username.orEmpty())

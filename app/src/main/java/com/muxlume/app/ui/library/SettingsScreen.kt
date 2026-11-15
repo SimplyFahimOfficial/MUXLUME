@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -49,6 +50,8 @@ import android.widget.Toast
 import com.muxlume.app.container
 import com.muxlume.app.data.AppSettings
 import com.muxlume.app.data.BufferMode
+import com.muxlume.app.playback.TrackLanguages
+import java.util.Locale
 import com.muxlume.app.ui.components.PillRow
 import com.muxlume.app.ui.Nav
 import com.muxlume.app.ui.components.SectionHeader
@@ -59,6 +62,20 @@ import com.muxlume.app.ui.theme.MuxTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/** Automatic, the device language, (Off for subtitles,) then the languages in [TrackLanguages.CHOICES]. */
+@Composable
+private fun LanguageRow(title: String, value: String?, subtitles: Boolean, onPick: (String?) -> Unit) {
+    val locale = LocalLocale.current.platformLocale
+    val options: List<Pair<String?, String>> = buildList {
+        add(null to stringResource(R.string.settings_language_automatic))
+        add(TrackLanguages.DEVICE to stringResource(R.string.settings_language_device))
+        if (subtitles) add(TrackLanguages.OFF to stringResource(R.string.settings_language_off))
+        TrackLanguages.CHOICES.forEach { tag -> add(tag to Locale.forLanguageTag(tag).getDisplayLanguage(locale).replaceFirstChar { it.titlecase(locale) }) }
+    }
+    Text(title, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary, modifier = Modifier.padding(horizontal = Mux.ScreenPadding).padding(top = 8.dp, bottom = 4.dp))
+    PillRow(options.map { it.second }, options.indexOfFirst { it.first == value }.coerceAtLeast(0), { onPick(options[it].first) })
+}
 
 @Composable
 fun SettingsScreen(nav: Nav) {
@@ -96,6 +113,12 @@ fun SettingsScreen(nav: Nav) {
                 BufferMode.entries.indexOf(settings.buffer),
                 { scope.launch { c.settings.setBuffer(BufferMode.entries[it]) } },
             )
+            Text(
+                stringResource(R.string.settings_languages_body), style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary,
+                modifier = Modifier.padding(horizontal = Mux.ScreenPadding).padding(top = 16.dp, bottom = 4.dp),
+            )
+            LanguageRow(stringResource(R.string.settings_audio_language), settings.audioLanguage, subtitles = false) { scope.launch { c.settings.setAudioLanguage(it) } }
+            LanguageRow(stringResource(R.string.settings_subtitle_language), settings.subtitleLanguage, subtitles = true) { scope.launch { c.settings.setSubtitleLanguage(it) } }
             Spacer(Modifier.height(16.dp))
             SectionHeader(stringResource(R.string.settings_privacy_and_data))
             Text(
