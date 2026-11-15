@@ -11,6 +11,7 @@ import com.muxlume.app.PlainBox
 import com.muxlume.app.core.net.Http
 import com.muxlume.app.data.Accent
 import com.muxlume.app.data.SettingsRepository
+import com.muxlume.app.data.PlaylistRefresh
 import com.muxlume.app.data.SourceInput
 import com.muxlume.app.data.SourceRepository
 import com.muxlume.app.data.SourceSecret
@@ -177,6 +178,19 @@ class BackupRepositoryTest {
         b.import(BackupCrypto.encrypt(Json.encodeToString(BackupData.serializer(), data).toByteArray(), pass))
 
         assertThat(b.db.lockedGroups().all().map { it.groupTitle }).containsExactly("Adult")
+    }
+
+    @Test
+    fun `playlist refresh interval travels with a backup, and an unknown one is ignored`(): Unit = runBlocking {
+        val a = device("a")
+        a.settings.setPlaylistRefresh(PlaylistRefresh.WEEKLY)
+        val b = device("b")
+        b.import(a.export())
+        assertThat(b.settings.current().playlistRefresh).isEqualTo(PlaylistRefresh.WEEKLY)
+
+        val bad = BackupCrypto.encrypt(Json.encodeToString(BackupData.serializer(), BackupData(settings = BackupSettings(playlistRefresh = "HOURLY"))).toByteArray(), pass)
+        b.import(bad)
+        assertThat(b.settings.current().playlistRefresh).isEqualTo(PlaylistRefresh.WEEKLY)
     }
 
     @Test

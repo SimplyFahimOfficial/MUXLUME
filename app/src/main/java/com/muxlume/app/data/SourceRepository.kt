@@ -28,6 +28,8 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -36,6 +38,7 @@ import okhttp3.OkHttpClient
 import java.io.IOException
 import java.io.InputStream
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
 /** Everything secret about a source. Sealed with [SecretBox] before it is stored. */
 @Serializable
@@ -80,7 +83,12 @@ class SourceRepository(
 ) {
     val sources: Flow<List<SourceEntity>> = db.sources().all()
 
+    /** One import per source at a time: the background refresh and a tap on Refresh must not stage rows over each other. */
+    private val importLocks = ConcurrentHashMap<Long, Mutex>()
+
     suspend fun get(id: Long): SourceEntity? = db.sources().get(id)
+
+    suspend fun all(): List<SourceEntity> = db.sources().allNow()
 
     fun secretOf(source: SourceEntity): SourceSecret = Json.decodeFromString(secrets.open(source.secret))
 
@@ -153,7 +161,22 @@ class SourceRepository(
      * dropped and the previous items stay as they were. [onProgress] gets the item count.
      */
     suspend fun refresh(id: Long, onProgress: (Int) -> Unit = {}): ImportResult = withContext(Dispatchers.IO) {
-        val source = db.sources().get(id) ?: throw IOException("Source not found")
+        val before = db.sources().get(id)?.refreshedAt
+        importLocks.getOrPut(id) { Mutex() }.withLock {
+            val source = db.sources().get(id) ?: throw IOException("Source not found")
+            // Another import finished while this one waited for its turn: its result is fresh enough.
+            if (source.refreshedAt != before) {
+                ImportResult(source.liveCount, source.movieCount, source.seriesCount, 0, 0, guideAvailable(source))
+            } else {
+                import(source, onProgress)
+            }
+        }
+    }
+
+    private fun guideAvailable(source: SourceEntity) = runCatching { guideUrl(source) }.getOrNull() != null
+
+    private suspend fun import(source: SourceEntity, onProgress: (Int) -> Unit): ImportResult {
+        val id = source.id
         db.items().deletePending(id) // left over if the app was killed during an earlier import
         val result = try {
             when (source.type) {
@@ -174,7 +197,7 @@ class SourceRepository(
         // New channels may have guide data already stored.
         val fresh = db.sources().get(id)
         if (fresh?.guideEnabled == true) linker.relink(id)
-        result.copy(guideAvailable = fresh != null && runCatching { guideUrl(fresh) }.getOrNull() != null)
+        return result.copy(guideAvailable = fresh != null && guideAvailable(fresh))
     }
 
     /** Makes the staged rows visible and records the import, re-reading the source so a rename made meanwhile is kept. */

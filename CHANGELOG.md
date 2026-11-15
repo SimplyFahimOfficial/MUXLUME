@@ -34,6 +34,10 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - Default audio and subtitle language (Settings → Playback): Automatic (as before), the device language, a language from a short
   list, or subtitles off. Used when a stream has that language; what you pick in the player's options still wins for that
   stream. Part of the backup.
+- Automatic playlist refresh (Settings → Playlists): off by default, or daily, every 3 days or weekly, in the background
+  while the phone is online and the battery isn't low (Wi-Fi only follows the TV guide setting). A playlist that fails
+  keeps its channels and shows the error; favourites, hidden channels and locks are kept. A refresh you start yourself
+  while a background one runs waits for it instead of downloading twice. Part of the backup.
 - Guide filters: show only your favorite channels, or only what is on now (today), together with the group and day.
 - Sleep timer in the player options (15 to 90 minutes, then pauses).
 - Buffering setting (Settings → Buffering): normal, more or less buffer ahead.

@@ -5,6 +5,7 @@ import com.muxlume.app.core.net.TooLargeException
 import com.muxlume.app.core.net.Urls
 import com.muxlume.app.data.Accent
 import com.muxlume.app.data.AppSettings
+import com.muxlume.app.data.PlaylistRefresh
 import com.muxlume.app.data.SettingsRepository
 import com.muxlume.app.data.SourceInput
 import com.muxlume.app.data.SourceRepository
@@ -87,6 +88,7 @@ data class BackupSettings(
     /** "auto" = Automatic; absent in backups made before these existed (then the setting is left alone). */
     val audioLanguage: String? = null,
     val subtitleLanguage: String? = null,
+    val playlistRefresh: String? = null,
 )
 
 data class ExportSummary(val sources: Int, val skippedFileSources: Int, val favorites: Int, val history: Int)
@@ -228,6 +230,7 @@ class BackupRepository(
         s.guideWifiOnly?.let { settings.setGuideWifiOnly(it) }
         language(s.audioLanguage, subtitles = false)?.let { settings.setAudioLanguage(it.value) }
         language(s.subtitleLanguage, subtitles = true)?.let { settings.setSubtitleLanguage(it.value) }
+        s.playlistRefresh?.let { n -> PlaylistRefresh.entries.firstOrNull { it.name == n } }?.let { settings.setPlaylistRefresh(it) }
     }
 
     /** A language from a backup, checked like any input: null means leave the setting alone, [Choice] with a null value means Automatic. */
@@ -242,7 +245,7 @@ class BackupRepository(
 
     private fun AppSettings.toBackup() = BackupSettings(
         theme.name, accent.name, amoled, dynamicColor, reduceMotion, backgroundPlayback, guideWifiOnly,
-        audioLanguage ?: TrackLanguages.AUTOMATIC_IN_BACKUP, subtitleLanguage ?: TrackLanguages.AUTOMATIC_IN_BACKUP,
+        audioLanguage ?: TrackLanguages.AUTOMATIC_IN_BACKUP, subtitleLanguage ?: TrackLanguages.AUTOMATIC_IN_BACKUP, playlistRefresh.name,
     )
 
     /** Two entries are the same playlist when they point at the same place with the same login. */

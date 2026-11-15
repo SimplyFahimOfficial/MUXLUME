@@ -11,6 +11,7 @@ data/m3u/M3uParser.kt          streaming, bounded M3U parser (Iterator)
 data/xtream/XtreamApi.kt       Xtream Codes-compatible player_api client, lenient JSON, streamed lists
 data/SourceRepository.kt       add/edit/remove sources, transactional import (refresh)
 data/db/                       Room: sources, items, channel_prefs, favorites, history, guide channels/programmes/links, reminders
+data/PlaylistRefresh.kt        optional background playlist refresh (WorkManager, checks every 12 h, due at 90% of the chosen interval)
 data/epg/                      XMLTV parser, channel matching, guide refresh (WorkManager, 12 h)
 reminders/                     inexact alarms, boot re-arm, notification
 data/Settings.kt               DataStore preferences
@@ -47,7 +48,7 @@ ui/                            Compose screens, one ViewModel per screen where s
 `SourceRepository.refresh` writes the new list as hidden `pending` rows in short batches of 1,000
 (checking for cancellation between them), then one short transaction deletes the old rows and
 publishes the new ones. Every read filters `pending = 0`, so a running import is invisible and the
-rest of the app can keep writing. Failure or cancellation deletes the staged rows. Lists are read
+rest of the app can keep writing. Imports of one source run one at a time (a per-source mutex); one that waited and finds `refreshedAt` changed returns the stored counts. Failure or cancellation deletes the staged rows. Lists are read
 through Paging; search uses an FTS4 table (`items_fts`) kept in sync by Room.
 
 ## Playback

@@ -50,6 +50,7 @@ import android.widget.Toast
 import com.muxlume.app.container
 import com.muxlume.app.data.AppSettings
 import com.muxlume.app.data.BufferMode
+import com.muxlume.app.data.PlaylistRefresh
 import com.muxlume.app.playback.TrackLanguages
 import java.util.Locale
 import com.muxlume.app.ui.components.PillRow
@@ -95,6 +96,17 @@ fun SettingsScreen(nav: Nav) {
             LinkRow(Icons.Rounded.VisibilityOff, stringResource(R.string.hidden_title), stringResource(R.string.hidden_summary), nav::hiddenChannels)
             LinkRow(Icons.Rounded.Lock, stringResource(R.string.parental_title), stringResource(R.string.parental_summary), nav::parental)
             LinkRow(Icons.Rounded.FiberManualRecord, stringResource(R.string.recording_title), stringResource(R.string.recording_summary), nav::recordings)
+            Spacer(Modifier.height(16.dp))
+            SectionHeader(stringResource(R.string.settings_playlists))
+            Text(
+                stringResource(R.string.settings_playlist_refresh_body), style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary,
+                modifier = Modifier.padding(horizontal = Mux.ScreenPadding, vertical = 4.dp),
+            )
+            PillRow(
+                listOf(R.string.settings_refresh_off, R.string.settings_refresh_daily, R.string.settings_refresh_3_days, R.string.settings_refresh_weekly).map { stringResource(it) },
+                PlaylistRefresh.entries.indexOf(settings.playlistRefresh),
+                { scope.launch { c.settings.setPlaylistRefresh(PlaylistRefresh.entries[it]) } },
+            )
             Spacer(Modifier.height(16.dp))
             SectionHeader(stringResource(R.string.settings_playback))
             Toggle(stringResource(R.string.settings_background_audio), stringResource(R.string.settings_keep_the_sound_playing_after), settings.backgroundPlayback) {
