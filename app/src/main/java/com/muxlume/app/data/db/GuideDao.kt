@@ -10,13 +10,19 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 @RewriteQueriesToDropUnusedColumns
 interface GuideDao {
-    /** Live channels that have guide data, pinned first, then in provider order. */
+    /**
+     * Live channels that have guide data, pinned first, then in provider order. [favoritesOnly] keeps favourite channels;
+     * [onNowAt] (epoch seconds) keeps channels with a programme airing at that moment.
+     */
     @Query(
         """SELECT i.* FROM visible_items i JOIN epg_links l ON l.sourceId = i.sourceId AND l.stableKey = i.stableKey
            WHERE i.sourceId = :sourceId AND i.kind = 'LIVE' AND (:group IS NULL OR i.groupTitle = :group) AND (:unlocked OR i.isLocked = 0)
+           AND (NOT :favoritesOnly OR EXISTS (SELECT 1 FROM favorites f WHERE f.sourceId = i.sourceId AND f.stableKey = i.stableKey))
+           AND (:onNowAt IS NULL OR EXISTS (SELECT 1 FROM programs p WHERE p.sourceId = l.sourceId AND p.channelId = l.channelId
+                AND p.pending = 0 AND p.start <= :onNowAt AND p.stop > :onNowAt))
            ORDER BY i.pinned DESC, i.position""",
     )
-    fun linkedPage(sourceId: Long, group: String?, unlocked: Boolean): PagingSource<Int, ItemEntity>
+    fun linkedPage(sourceId: Long, group: String?, unlocked: Boolean, favoritesOnly: Boolean, onNowAt: Long?): PagingSource<Int, ItemEntity>
 
     @Query(
         """SELECT * FROM visible_items WHERE sourceId = :sourceId AND kind = 'LIVE' AND (:unlocked OR isLocked = 0)
