@@ -44,6 +44,19 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `recording padding defaults to 1 minute early and 5 late, and a value that is not offered reads as the default`(): Unit = runBlocking {
+        val r = repo("padding")
+        assertThat(r.current().recordLeadMinutes).isEqualTo(1)
+        assertThat(r.current().recordTrailMinutes).isEqualTo(5)
+        r.setRecordLeadMinutes(0)
+        r.setRecordTrailMinutes(15)
+        assertThat(r.current().recordLeadMinutes).isEqualTo(0)
+        assertThat(r.current().recordTrailMinutes).isEqualTo(15)
+        r.setRecordTrailMinutes(7)
+        assertThat(r.current().recordTrailMinutes).isEqualTo(5)
+    }
+
+    @Test
     fun `appearance choices round trip`(): Unit = runBlocking {
         val r = repo("ok")
         assertThat(r.current()).isEqualTo(AppSettings())

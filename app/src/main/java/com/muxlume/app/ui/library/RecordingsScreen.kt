@@ -46,6 +46,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.muxlume.app.AppContainer
 import com.muxlume.app.R
 import com.muxlume.app.container
+import com.muxlume.app.data.AppSettings
 import com.muxlume.app.data.db.ItemKind
 import com.muxlume.app.data.db.RecordingEntity
 import com.muxlume.app.data.db.RecordingState
@@ -56,6 +57,7 @@ import com.muxlume.app.recording.RecordingScheduler
 import com.muxlume.app.recording.RecordingService
 import com.muxlume.app.ui.Nav
 import com.muxlume.app.ui.components.EmptyState
+import com.muxlume.app.ui.components.PillRow
 import com.muxlume.app.ui.components.SecondaryButton
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.play
@@ -82,6 +84,14 @@ class RecordingsViewModel(private val c: AppContainer, private val app: android.
 }
 
 /** Where recordings go, what is scheduled or saved, and play, stop and delete. */
+/** "Start earlier" / "Stop later": the minutes to choose from, 0 shown as Off. */
+@Composable
+private fun PaddingRow(title: Int, choices: List<Int>, current: Int, onPick: (Int) -> Unit) {
+    Text(stringResource(title), style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary)
+    val labels = choices.map { if (it == 0) stringResource(R.string.settings_refresh_off) else stringResource(R.string.recording_minutes, it) }
+    PillRow(labels, choices.indexOf(current).coerceAtLeast(0), { onPick(choices[it]) })
+}
+
 @Composable
 fun RecordingsScreen(nav: Nav) {
     val context = LocalContext.current
@@ -90,6 +100,7 @@ fun RecordingsScreen(nav: Nav) {
     val list by vm.list.collectAsStateWithLifecycle()
     val total by vm.totalBytes.collectAsStateWithLifecycle()
     val folder by vm.folder.collectAsStateWithLifecycle()
+    val settings by c.settings.settings.collectAsStateWithLifecycle(AppSettings())
     val scope = rememberCoroutineScope()
     var deleting by remember { mutableStateOf<RecordingEntity?>(null) }
     var canExact by remember { mutableStateOf(true) }
@@ -122,6 +133,9 @@ fun RecordingsScreen(nav: Nav) {
                             { context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))) },
                         )
                     }
+                    PaddingRow(R.string.recording_lead, AppSettings.LEAD_CHOICES, settings.recordLeadMinutes) { scope.launch { c.settings.setRecordLeadMinutes(it) } }
+                    PaddingRow(R.string.recording_trail, AppSettings.TRAIL_CHOICES, settings.recordTrailMinutes) { scope.launch { c.settings.setRecordTrailMinutes(it) } }
+                    Text(stringResource(R.string.recording_padding_note), style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
                     if (total > 0) Text(stringResource(R.string.recording_used, Formatter.formatFileSize(context, total)), style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary)
                 }
             }

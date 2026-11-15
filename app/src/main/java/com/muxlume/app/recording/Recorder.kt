@@ -19,7 +19,9 @@ import okhttp3.HttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
+import java.io.InputStream
 import java.io.OutputStream
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -28,12 +30,17 @@ import kotlin.coroutines.coroutineContext
  * Refuses what it cannot copy faithfully (see [Reason]). Stream URLs stay in here: a failure carries only a
  * reason, never the exception that mentioned the URL.
  *
- * Network errors end the recording and keep what was written (no reconnect in v1).
+ * A connection that drops after the recording started is reopened (waiting 2, 4, 8, 15, then 30 seconds between
+ * tries) and the new bytes are appended; the recording ends with a network error once nothing has arrived for
+ * [giveUpAfterMs]. The file then holds a discontinuity at each reconnect, which players cope with.
+ * The URL is fixed for the whole recording: a token that expires sooner ends it after the give-up window.
  */
 class Recorder(
     private val http: Call.Factory,
     private val now: () -> Long = System::currentTimeMillis,
     private val minPollMs: Long = MIN_POLL_MS,
+    private val giveUpAfterMs: Long = GIVE_UP_MS,
+    private val backoffMs: List<Long> = BACKOFF_MS,
 ) {
     @Volatile var bytes = 0L
         private set
@@ -41,10 +48,12 @@ class Recorder(
     /** A write to the file failed: kept apart from network errors, which are IOExceptions too. */
     private class SinkFailure(cause: IOException) : IOException(cause)
 
-    private class HlsState(var lastSequence: Long = -1, var failures: Int = 0)
+    private class HlsState(var lastSequence: Long = -1)
 
-    /** What every request and write of one recording shares. */
-    private class Run(val headers: Map<String, String>, val policy: HttpPolicy, val endAtMs: Long, val sink: OutputStream)
+    /** What every request and write of one recording shares. [lastDataAt] is when something last arrived. */
+    private class Run(val url: HttpUrl, val headers: Map<String, String>, val policy: HttpPolicy, val endAtMs: Long, val sink: OutputStream, @Volatile var lastDataAt: Long)
+
+    private enum class Ended { COMPLETE, DROPPED }
 
     private inner class CountingSink(private val out: OutputStream) : OutputStream() {
         override fun write(b: Int) = write(byteArrayOf(b.toByte()), 0, 1)
@@ -65,23 +74,23 @@ class Recorder(
         val first = Urls.parseHttp(url) ?: refuse(Reason.GONE)
         if (first.encodedPath.lowercase().endsWith(".mpd")) refuse(Reason.DASH)
         try {
-            withContext(Dispatchers.IO) { copy(first, headers, policy, endAtMs, CountingSink(out)) }
+            withContext(Dispatchers.IO) { copy(Run(first, headers, policy, endAtMs, CountingSink(out), now())) }
         } catch (e: SinkFailure) {
             val full = generateSequence<Throwable>(e) { it.cause }.any { it.message?.contains("ENOSPC") == true || it.message?.contains("No space", ignoreCase = true) == true }
             refuse(if (full) Reason.STORAGE_FULL else Reason.WRITE_FAILED)
         }
     }
 
-    private suspend fun copy(url: HttpUrl, headers: Map<String, String>, policy: HttpPolicy, endAtMs: Long, sink: OutputStream) {
-        val call = http.newCall(get(url, headers, policy))
+    private suspend fun copy(run: Run) {
+        val call = http.newCall(get(run.url, run.headers, run.policy))
         call.cancelWithCoroutine {
             call.run().use { r ->
                 if (!r.isSuccessful || r.body.contentType()?.subtype?.contains("dash+xml") == true) refuse(if (r.isSuccessful) Reason.DASH else Reason.NETWORK)
                 val head = peek(r)
                 when {
-                    head.startsWith("#EXTM3U") -> recordHls(r, headers, policy, endAtMs, sink)
+                    head.startsWith("#EXTM3U") -> recordHls(r, run)
                     head.startsWith("<?xml") || head.startsWith("<MPD") -> refuse(Reason.DASH)
-                    else -> recordDirect(call, r, endAtMs, sink)
+                    else -> recordDirect(call, r, run)
                 }
             }
         }
@@ -93,35 +102,78 @@ class Recorder(
         refuse(Reason.NETWORK)
     }
 
-    /** The stream ends when the server closes it (done) or at [endAtMs] (the call is cancelled then). */
-    private suspend fun recordDirect(call: Call, response: Response, endAtMs: Long, sink: OutputStream) {
-        val deadline = CoroutineScope(coroutineContext).launch { delay((endAtMs - now()).coerceAtLeast(0)); call.cancel() }
+    /**
+     * The stream ends at [Run.endAtMs] (the call is cancelled then) or when the server ends a stream of known length.
+     * Any other end, or a read error, is a drop: reconnect.
+     */
+    private suspend fun recordDirect(call: Call, response: Response, run: Run) {
+        val active = AtomicReference(call)
+        val deadline = CoroutineScope(coroutineContext).launch { delay((run.endAtMs - now()).coerceAtLeast(0)); active.get().cancel() }
         try {
-            val buffer = ByteArray(COPY_BYTES)
-            val input = response.body.byteStream()
-            while (true) {
-                val n = input.read(buffer)
-                if (n < 0) return
-                sink.write(buffer, 0, n)
-            }
-        } catch (e: SinkFailure) {
-            throw e
-        } catch (ignored: IOException) {
-            coroutineContext.ensureActive()
-            if (!deadline.isCompleted) refuse(Reason.NETWORK) // otherwise our own deadline cancelled the call
+            var ended = pump(response, run)
+            while (ended == Ended.DROPPED && now() < run.endAtMs) ended = reconnect(run, active) ?: return
         } finally {
             deadline.cancel()
         }
     }
 
-    private suspend fun recordHls(first: Response, headers: Map<String, String>, policy: HttpPolicy, endAtMs: Long, sink: OutputStream) {
-        var (base, media) = openHls(first, headers, policy)
-        val run = Run(headers, policy, endAtMs, sink)
+    /** Copies one connection to the sink. A body of unknown length that ends is treated as a drop, a known length as complete. */
+    private suspend fun pump(response: Response, run: Run): Ended {
+        val unknownLength = response.body.contentLength() < 0
+        return try {
+            copyToSink(response.body.byteStream(), run)
+            if (unknownLength) Ended.DROPPED else Ended.COMPLETE
+        } catch (e: SinkFailure) {
+            throw e
+        } catch (ignored: IOException) {
+            coroutineContext.ensureActive()
+            Ended.DROPPED
+        }
+    }
+
+    private fun copyToSink(input: InputStream, run: Run) {
+        val buffer = ByteArray(COPY_BYTES)
+        while (true) {
+            val n = input.read(buffer)
+            if (n < 0) return
+            run.sink.write(buffer, 0, n)
+            run.lastDataAt = now()
+        }
+    }
+
+    /** Opens the stream again and copies it; null once the end time has passed. Gives up with a network error after [giveUpAfterMs] without data. */
+    private suspend fun reconnect(run: Run, active: AtomicReference<Call>): Ended? {
+        var attempt = 0
+        while (true) {
+            checkNotStalled(run)
+            delay(minOf(backoffMs[minOf(attempt++, backoffMs.lastIndex)], (run.endAtMs - now()).coerceAtLeast(0)))
+            if (now() >= run.endAtMs) return null
+            val call = http.newCall(get(run.url, run.headers, run.policy))
+            active.set(call)
+            val ended = call.cancelWithCoroutine {
+                try {
+                    call.execute().use { r -> if (r.isSuccessful) pump(r, run) else null }
+                } catch (ignored: IOException) { // its message may name the URL
+                    coroutineContext.ensureActive()
+                    null
+                }
+            }
+            if (ended != null) return ended
+        }
+    }
+
+    /** Nothing has arrived for [giveUpAfterMs]: the stream is gone. */
+    private fun checkNotStalled(run: Run) {
+        if (now() - run.lastDataAt >= giveUpAfterMs) refuse(Reason.NETWORK)
+    }
+
+    private suspend fun recordHls(first: Response, run: Run) {
+        var (base, media) = openHls(first, run.headers, run.policy)
         val state = HlsState()
         while (true) {
             media.problem?.let { refuse(it) }
             if (!appendNew(media, base, state, run) || media.ended) return
-            media = nextPlaylist(base, media.targetDurationSeconds, state, run) ?: return
+            media = nextPlaylist(base, media.targetDurationSeconds, run) ?: return
         }
     }
 
@@ -136,10 +188,12 @@ class Recorder(
 
     /** Appends the segments not written yet, each once and in order; false once the end time has passed. */
     private suspend fun appendNew(media: HlsPlaylist.Media, base: HttpUrl, state: HlsState, run: Run): Boolean {
+        // The server restarted its numbering: what it serves now is new, not a repeat.
+        if (media.firstSequence + media.segments.size - 1 < state.lastSequence) state.lastSequence = media.firstSequence - 1
         var sequence = media.firstSequence
         for (uri in media.segments) {
             if (sequence > state.lastSequence) {
-                if (downloadSegment(base.resolve(uri), run.headers, run.policy, run.sink)) state.failures = 0 else if (++state.failures >= MAX_FAILURES) refuse(Reason.NETWORK)
+                if (downloadSegment(base.resolve(uri), run.headers, run.policy, run.sink)) run.lastDataAt = now() else checkNotStalled(run)
                 state.lastSequence = sequence
             }
             sequence++
@@ -148,15 +202,16 @@ class Recorder(
         return true
     }
 
-    /** Waits for the next playlist and fetches it; null once the end time has passed. Gives up after repeated failures. */
-    private suspend fun nextPlaylist(base: HttpUrl, targetSeconds: Int, state: HlsState, run: Run): HlsPlaylist.Media? {
+    /** Waits for the next playlist and fetches it; null once the end time has passed. Keeps trying until nothing has worked for [giveUpAfterMs]. */
+    private suspend fun nextPlaylist(base: HttpUrl, targetSeconds: Int, run: Run): HlsPlaylist.Media? {
         while (true) {
             delay(minOf(maxOf(minPollMs, targetSeconds * HALF_SECOND_MS), (run.endAtMs - now()).coerceAtLeast(0)))
             if (now() >= run.endAtMs) return null
             try {
-                return fetchMedia(base, run.headers, run.policy).also { state.failures = 0 }
+                return fetchMedia(base, run.headers, run.policy).also { run.lastDataAt = now() }
             } catch (e: RecordingException) {
-                if (e.reason != Reason.NETWORK || ++state.failures >= MAX_FAILURES) throw e
+                if (e.reason != Reason.NETWORK) throw e
+                checkNotStalled(run)
             }
         }
     }
@@ -222,7 +277,8 @@ class Recorder(
     private companion object {
         const val MIN_POLL_MS = 1_000L
         const val HALF_SECOND_MS = 500L
-        const val MAX_FAILURES = 3
+        const val GIVE_UP_MS = 120_000L
+        val BACKOFF_MS = listOf(2_000L, 4_000L, 8_000L, 15_000L, 30_000L)
         const val COPY_BYTES = 64 * 1024
         const val HEAD_BYTES = 64L
         const val MAX_PLAYLIST_BYTES = 2L * 1024 * 1024

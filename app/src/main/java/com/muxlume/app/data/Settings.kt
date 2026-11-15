@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -55,7 +56,19 @@ data class AppSettings(
     /** Same for subtitles, plus "off". */
     val subtitleLanguage: String? = null,
     val playlistRefresh: PlaylistRefresh = PlaylistRefresh.OFF,
-)
+    /** Minutes recordings start before and end after the programme. */
+    val recordLeadMinutes: Int = DEFAULT_LEAD_MINUTES,
+    val recordTrailMinutes: Int = DEFAULT_TRAIL_MINUTES,
+) {
+    companion object {
+        const val DEFAULT_LEAD_MINUTES = 1
+        const val DEFAULT_TRAIL_MINUTES = 5
+
+        /** The minutes the Recordings screen offers; anything else (a bad backup) is ignored. */
+        val LEAD_CHOICES = listOf(0, 1, 2, 5)
+        val TRAIL_CHOICES = listOf(0, 5, 10, 15)
+    }
+}
 
 class SettingsRepository(private val store: DataStore<Preferences>) {
     private object Keys {
@@ -72,6 +85,8 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val audioLanguage = stringPreferencesKey("audio_language")
         val subtitleLanguage = stringPreferencesKey("subtitle_language")
         val playlistRefresh = stringPreferencesKey("playlist_refresh")
+        val recordLead = intPreferencesKey("record_lead_minutes")
+        val recordTrail = intPreferencesKey("record_trail_minutes")
     }
 
     val settings: Flow<AppSettings> = store.data
@@ -91,6 +106,8 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
             audioLanguage = it[Keys.audioLanguage],
             subtitleLanguage = it[Keys.subtitleLanguage],
             playlistRefresh = PlaylistRefresh.entries.firstOrNull { m -> m.name == it[Keys.playlistRefresh] } ?: PlaylistRefresh.OFF,
+            recordLeadMinutes = it[Keys.recordLead]?.takeIf { m -> m in AppSettings.LEAD_CHOICES } ?: AppSettings.DEFAULT_LEAD_MINUTES,
+            recordTrailMinutes = it[Keys.recordTrail]?.takeIf { m -> m in AppSettings.TRAIL_CHOICES } ?: AppSettings.DEFAULT_TRAIL_MINUTES,
         )
     }
 
@@ -108,6 +125,8 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
     suspend fun setAudioLanguage(value: String?) = store.edit { if (value == null) it.remove(Keys.audioLanguage) else it[Keys.audioLanguage] = value }
     suspend fun setSubtitleLanguage(value: String?) = store.edit { if (value == null) it.remove(Keys.subtitleLanguage) else it[Keys.subtitleLanguage] = value }
     suspend fun setPlaylistRefresh(value: PlaylistRefresh) = store.edit { it[Keys.playlistRefresh] = value.name }
+    suspend fun setRecordLeadMinutes(minutes: Int) = store.edit { it[Keys.recordLead] = minutes }
+    suspend fun setRecordTrailMinutes(minutes: Int) = store.edit { it[Keys.recordTrail] = minutes }
     suspend fun setRecordingFolder(uri: String?) = store.edit { if (uri == null) it.remove(Keys.recordingFolder) else it[Keys.recordingFolder] = uri }
 
     private fun themeOf(name: String) = runCatching { ThemeMode.valueOf(name) }.getOrDefault(ThemeMode.DARK)

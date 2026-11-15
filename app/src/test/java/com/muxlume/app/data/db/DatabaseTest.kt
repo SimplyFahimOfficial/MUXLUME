@@ -361,6 +361,28 @@ class DatabaseTest {
         }
     }
 
+    @Test
+    fun `migration 6 to 7 keeps recordings and gives them no padding`() {
+        createAt(6) { old ->
+            sql(
+                old,
+                "INSERT INTO sources (id, name, type, secret, label, allowHttp, createdAt, liveCount, movieCount, seriesCount) VALUES (1, 'S', 'M3U_URL', 'x', 'l', 0, 0, 0, 0, 0)",
+                "INSERT INTO recordings (id, sourceId, stableKey, channelName, title, startAt, endAt, state, bytes) VALUES (1, 1, 'a', 'Alpha', 'Show', 100, 200, 'SCHEDULED', 0)",
+            )
+        }
+        val migrated = openCurrent()
+        try {
+            runBlocking {
+                val r = migrated.recordings().get(1)!!
+                assertThat(r.title).isEqualTo("Show")
+                assertThat(r.leadSeconds).isEqualTo(0)
+                assertThat(r.trailSeconds).isEqualTo(0)
+            }
+        } finally {
+            migrated.close()
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

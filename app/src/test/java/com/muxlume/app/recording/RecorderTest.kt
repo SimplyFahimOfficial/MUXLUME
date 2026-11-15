@@ -33,7 +33,7 @@ class RecorderTest {
     @After fun tearDown() = server.close()
 
     private fun url(path: String) = server.url(path).toString()
-    private fun recorder() = Recorder(client, minPollMs = 10)
+    private fun recorder(giveUpAfterMs: Long = 400) = Recorder(client, minPollMs = 10, giveUpAfterMs = giveUpAfterMs, backoffMs = listOf(20L, 40L))
     private fun soon(ms: Long = 20_000) = System.currentTimeMillis() + ms
 
     private fun segment(n: Int) = ByteArray(4_000) { (n * 31 + it).toByte() }
@@ -87,15 +87,63 @@ class RecorderTest {
         assertThat(r.bytes).isEqualTo(out.size().toLong())
     }
 
+    private fun down() = MockResponse.Builder().code(503).build()
+
     @Test
-    fun `a stream cut off in the middle fails with a network error and keeps the partial file`() {
-        server.enqueue(MockResponse.Builder().body(Buffer().write(ByteArray(80_000) { 2 })).onResponseBody(SocketEffect.CloseSocket()).build())
+    fun `a stream cut off in the middle is reopened and the new bytes are appended`() {
+        val first = ByteArray(80_000) { 2 }
+        val second = ByteArray(50_000) { 3 }
+        // The first answer promises more than it sends and then closes; the second is a complete stream.
+        server.enqueue(MockResponse.Builder().body(Buffer().write(first)).onResponseBody(SocketEffect.CloseSocket()).build())
+        server.enqueue(ok(second))
         val out = ByteArrayOutputStream()
         val r = recorder()
+        runBlocking { r.record(url("/cut.ts"), emptyMap(), HttpPolicy.ALLOW_HTTP, soon(), out) }
+        val got = out.toByteArray()
+        assertThat(got.size).isAtLeast(second.size)
+        assertThat(got.takeLast(second.size)).isEqualTo(second.toList())
+        assertThat(got.take(1000)).isEqualTo(first.take(1000)) // the bytes of both connections, in order
+        assertThat(server.requestCount).isEqualTo(2)
+        assertThat(r.bytes).isEqualTo(got.size.toLong())
+    }
+
+    @Test
+    fun `a live feed that closes early is reopened, a file of known length is not`() {
+        server.enqueue(MockResponse.Builder().addHeader("Content-Type", "video/mp2t").chunkedBody(Buffer().write(ByteArray(5_000) { 1 }), 1_000).build())
+        server.enqueue(ok(ByteArray(3_000) { 2 }))
+        val out = ByteArrayOutputStream()
+        record("/live.ts", out)
+        assertThat(out.size()).isEqualTo(8_000)
+        assertThat(server.requestCount).isEqualTo(2) // the second one has a Content-Length: that is the end
+    }
+
+    @Test
+    fun `a server that stays down ends the recording after the give-up window and keeps the earlier bytes`() {
+        val hits = AtomicInteger()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest) =
+                if (hits.getAndIncrement() == 0) MockResponse.Builder().body(Buffer().write(ByteArray(80_000) { 2 })).onResponseBody(SocketEffect.CloseSocket()).build() else down()
+        }
+        val out = ByteArrayOutputStream()
+        val r = recorder()
+        val started = System.currentTimeMillis()
         val e = assertThrows(RecordingException::class.java) { runBlocking { r.record(url("/cut.ts"), emptyMap(), HttpPolicy.ALLOW_HTTP, soon(), out) } }
         assertThat(e.reason).isEqualTo(Reason.NETWORK)
         assertThat(e.message).doesNotContain("localhost") // a failure says why, never where
+        assertThat(System.currentTimeMillis() - started).isLessThan(5_000)
+        assertThat(out.size()).isGreaterThan(0)
         assertThat(r.bytes).isEqualTo(out.size().toLong())
+    }
+
+    @Test
+    fun `the first connection failing is an immediate error`() {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest) = down()
+        }
+        val started = System.currentTimeMillis()
+        assertThat(reasonOf { record("/none.ts", ByteArrayOutputStream()) }).isEqualTo(Reason.NETWORK)
+        assertThat(server.requestCount).isEqualTo(1)
+        assertThat(System.currentTimeMillis() - started).isLessThan(300)
     }
 
     @Test
@@ -151,6 +199,31 @@ class RecorderTest {
         val out = ByteArrayOutputStream()
         assertThat(reasonOf { record("/live.m3u8", out) }).isEqualTo(Reason.NETWORK)
         assertThat(out.toByteArray()).isEqualTo(segment(0))
+    }
+
+    @Test
+    fun `a playlist that is down for less than the window is recovered from`() {
+        val plays = listOf(playlist(0, 0), "down", "down", playlist(0, 0, 1, ended = true))
+        serve(
+            "/live.m3u8" to { n -> plays[minOf(n, plays.lastIndex)].let { if (it == "down") MockResponse.Builder().code(404).build() else text(it) } },
+            "/s0.ts" to { ok(segment(0)) }, "/s1.ts" to { ok(segment(1)) },
+        )
+        val out = ByteArrayOutputStream()
+        record("/live.m3u8", out, recorder = recorder(giveUpAfterMs = 5_000))
+        assertThat(out.toByteArray()).isEqualTo(bytesOf(segment(0), segment(1)))
+    }
+
+    @Test
+    fun `a server that restarts its sequence numbers is not skipped`() {
+        val plays = listOf(playlist(100, 100, 101), playlist(0, 0, 1, ended = true))
+        serve(
+            "/live.m3u8" to { n -> text(plays[minOf(n, plays.lastIndex)]) },
+            "/s100.ts" to { ok(segment(100)) }, "/s101.ts" to { ok(segment(101)) },
+            "/s0.ts" to { ok(segment(0)) }, "/s1.ts" to { ok(segment(1)) },
+        )
+        val out = ByteArrayOutputStream()
+        record("/live.m3u8", out)
+        assertThat(out.toByteArray()).isEqualTo(bytesOf(segment(100), segment(101), segment(0), segment(1)))
     }
 
     @Test

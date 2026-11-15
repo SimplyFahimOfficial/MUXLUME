@@ -194,6 +194,22 @@ class BackupRepositoryTest {
     }
 
     @Test
+    fun `recording padding travels with a backup, and a value that is not offered is ignored`(): Unit = runBlocking {
+        val a = device("a")
+        a.settings.setRecordLeadMinutes(2)
+        a.settings.setRecordTrailMinutes(10)
+        val b = device("b")
+        b.import(a.export())
+        assertThat(b.settings.current().recordLeadMinutes).isEqualTo(2)
+        assertThat(b.settings.current().recordTrailMinutes).isEqualTo(10)
+
+        val bad = BackupCrypto.encrypt(Json.encodeToString(BackupData.serializer(), BackupData(settings = BackupSettings(recordLeadMinutes = 999, recordTrailMinutes = -3))).toByteArray(), pass)
+        b.import(bad)
+        assertThat(b.settings.current().recordLeadMinutes).isEqualTo(2)
+        assertThat(b.settings.current().recordTrailMinutes).isEqualTo(10)
+    }
+
+    @Test
     fun `default languages travel with a backup, automatic included, and bad values are ignored`(): Unit = runBlocking {
         val a = device("a")
         a.settings.setAudioLanguage("hi")

@@ -80,7 +80,12 @@ notification whose tap starts it, because Android does not let an inexact alarm 
 resolves the stream with `StreamResolver` (so the lock applies), creates a file in the folder the user picked (a SAF tree
 URI), and `Recorder` copies a direct stream as it arrives or polls an HLS media playlist and appends each new segment once, in
 order. It refuses what it cannot copy faithfully and stops at the end time, on Stop, on a write error (keeping the partial
-file), or at Android 15's dataSync limit (`onTimeout`). A failure stores only a `RecordingException.Reason` name, so no URL
+file), or at Android 15's dataSync limit (`onTimeout`). The recording window is `[startAt − leadSeconds, endAt + trailSeconds]`
+(both copied from settings into the row when it is created); the service ends it no later than the padded start of the next
+scheduled recording on the same channel. A direct stream that drops, or a live feed without a length that closes, is reopened
+with 2, 4, 8, 15, then 30 second waits and appended to the same sink; an HLS playlist or segment failure is tolerated the same
+way, and a playlist whose sequence numbers go backwards is treated as a restart. Both give up with `NETWORK` after 120 seconds
+without data. The URL is resolved once, so a token that expires sooner ends the recording after that window. A failure stores only a `RecordingException.Reason` name, so no URL
 reaches the database or the UI. Saved recordings play through the playback service as `rec|<id>`.
 
 ## Navigation

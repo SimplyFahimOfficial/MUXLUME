@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 object RecordingPlan {
     enum class Start { NOW, EXACT_ALARM, NOTIFICATION }
 
+    /** [startAt] is when the recording is to start, padding included. */
     fun start(startAt: Long, now: Long, canScheduleExact: Boolean): Start = when {
         startAt <= now -> Start.NOW
         canScheduleExact -> Start.EXACT_ALARM
@@ -52,13 +53,15 @@ class Recordings(
     suspend fun add(sourceId: Long, stableKey: String, channelName: String, program: ProgramEntity): Result {
         val now = clock() / MILLIS
         if (program.stop <= now) return Result.Ended
-        if (settings.current().recordingFolder == null) return Result.NoFolder
+        val current = settings.current()
+        if (current.recordingFolder == null) return Result.NoFolder
         val draft = RecordingEntity(
             sourceId = sourceId, stableKey = stableKey, channelName = channelName.take(MAX_NAME), title = program.title.take(MAX_NAME),
             startAt = program.start, endAt = program.stop, state = RecordingState.SCHEDULED,
+            leadSeconds = current.recordLeadMinutes * SECONDS_PER_MINUTE, trailSeconds = current.recordTrailMinutes * SECONDS_PER_MINUTE,
         )
         val id = db.recordings().insert(draft).takeIf { it > 0 } ?: return Result.Already
-        return when (RecordingPlan.start(program.start, now, scheduler.canScheduleExact())) {
+        return when (RecordingPlan.start(draft.paddedStart, now, scheduler.canScheduleExact())) {
             RecordingPlan.Start.NOW -> {
                 ContextCompat.startForegroundService(context, RecordingService.startIntent(context, id))
                 Result.Started
@@ -83,6 +86,7 @@ class Recordings(
     private companion object {
         const val MILLIS = 1000L
         const val MAX_NAME = 200
+        const val SECONDS_PER_MINUTE = 60L
     }
 }
 
@@ -96,7 +100,7 @@ class RecordingScheduler(private val context: Context) {
      * because an inexact alarm may not start a foreground service.
      */
     fun schedule(recording: RecordingEntity, exact: Boolean) {
-        val at = recording.startAt * MILLIS
+        val at = recording.paddedStart * MILLIS
         if (exact) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, startIntent(recording.id))
         else alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, dueIntent(recording.id))
     }

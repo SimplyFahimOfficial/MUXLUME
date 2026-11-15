@@ -89,6 +89,8 @@ data class BackupSettings(
     val audioLanguage: String? = null,
     val subtitleLanguage: String? = null,
     val playlistRefresh: String? = null,
+    val recordLeadMinutes: Int? = null,
+    val recordTrailMinutes: Int? = null,
 )
 
 data class ExportSummary(val sources: Int, val skippedFileSources: Int, val favorites: Int, val history: Int)
@@ -230,6 +232,12 @@ class BackupRepository(
         s.guideWifiOnly?.let { settings.setGuideWifiOnly(it) }
         language(s.audioLanguage, subtitles = false)?.let { settings.setAudioLanguage(it.value) }
         language(s.subtitleLanguage, subtitles = true)?.let { settings.setSubtitleLanguage(it.value) }
+        applyLibrary(s)
+    }
+
+    private suspend fun applyLibrary(s: BackupSettings) {
+        s.recordLeadMinutes?.takeIf { it in AppSettings.LEAD_CHOICES }?.let { settings.setRecordLeadMinutes(it) }
+        s.recordTrailMinutes?.takeIf { it in AppSettings.TRAIL_CHOICES }?.let { settings.setRecordTrailMinutes(it) }
         s.playlistRefresh?.let { n -> PlaylistRefresh.entries.firstOrNull { it.name == n } }?.let { settings.setPlaylistRefresh(it) }
     }
 
@@ -246,6 +254,7 @@ class BackupRepository(
     private fun AppSettings.toBackup() = BackupSettings(
         theme.name, accent.name, amoled, dynamicColor, reduceMotion, backgroundPlayback, guideWifiOnly,
         audioLanguage ?: TrackLanguages.AUTOMATIC_IN_BACKUP, subtitleLanguage ?: TrackLanguages.AUTOMATIC_IN_BACKUP, playlistRefresh.name,
+        recordLeadMinutes, recordTrailMinutes,
     )
 
     /** Two entries are the same playlist when they point at the same place with the same login. */

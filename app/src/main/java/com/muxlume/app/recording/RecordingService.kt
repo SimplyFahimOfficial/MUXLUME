@@ -112,7 +112,9 @@ class RecordingService : Service() {
 
     private suspend fun prepare(recording: RecordingEntity): Plan {
         val folder = container.settings.current().recordingFolder?.toUri() ?: refuse(RecordingException.Reason.NO_FOLDER)
-        val endMs = recording.endAt * MILLIS
+        // Padded end, but never into the padded start of the next recording on this channel.
+        val nextStart = container.db.recordings().nextStartOnChannel(recording.sourceId, recording.stableKey, recording.paddedStart)
+        val endMs = minOf(recording.paddedEnd, nextStart ?: Long.MAX_VALUE) * MILLIS
         if (System.currentTimeMillis() >= endMs) refuse(RecordingException.Reason.MISSED)
         container.lock.load()
         val unlocked = container.lock.unlockedNow()
