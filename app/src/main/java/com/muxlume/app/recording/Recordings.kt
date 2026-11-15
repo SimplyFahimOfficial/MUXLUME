@@ -17,6 +17,7 @@ import com.muxlume.app.data.db.MuxlumeDatabase
 import com.muxlume.app.data.db.ProgramEntity
 import com.muxlume.app.data.db.RecordingEntity
 import com.muxlume.app.data.db.RecordingState
+import com.muxlume.app.data.epg.EpgTime
 import com.muxlume.app.reminders.Notifications
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -50,7 +51,8 @@ class Recordings(
 
     private val scheduler get() = RecordingScheduler(context)
 
-    suspend fun add(sourceId: Long, stableKey: String, channelName: String, program: ProgramEntity): Result {
+    /** [pad] false records exactly [program]'s window (a fixed length from the player has nothing to pad). */
+    suspend fun add(sourceId: Long, stableKey: String, channelName: String, program: ProgramEntity, pad: Boolean = true): Result {
         val now = clock() / MILLIS
         if (program.stop <= now) return Result.Ended
         val current = settings.current()
@@ -58,7 +60,8 @@ class Recordings(
         val draft = RecordingEntity(
             sourceId = sourceId, stableKey = stableKey, channelName = channelName.take(MAX_NAME), title = program.title.take(MAX_NAME),
             startAt = program.start, endAt = program.stop, state = RecordingState.SCHEDULED,
-            leadSeconds = current.recordLeadMinutes * SECONDS_PER_MINUTE, trailSeconds = current.recordTrailMinutes * SECONDS_PER_MINUTE,
+            leadSeconds = if (pad) current.recordLeadMinutes * SECONDS_PER_MINUTE else 0,
+            trailSeconds = if (pad) current.recordTrailMinutes * SECONDS_PER_MINUTE else 0,
         )
         val id = db.recordings().insert(draft).takeIf { it > 0 } ?: return Result.Already
         return when (RecordingPlan.start(draft.paddedStart, now, scheduler.canScheduleExact())) {
@@ -69,6 +72,13 @@ class Recordings(
             RecordingPlan.Start.EXACT_ALARM -> Result.Scheduled(unattended = true).also { scheduler.schedule(draft.copy(id = id), exact = true) }
             RecordingPlan.Start.NOTIFICATION -> Result.Scheduled(unattended = false).also { scheduler.schedule(draft.copy(id = id), exact = false) }
         }
+    }
+
+    /** Records the channel from now for [seconds], with no padding, titled "<channel> <date time>". */
+    suspend fun addNow(sourceId: Long, stableKey: String, channelName: String, seconds: Long): Result {
+        val now = clock() / MILLIS
+        val title = "$channelName ${EpgTime.date(now)} ${EpgTime.time(now)}"
+        return add(sourceId, stableKey, channelName, ProgramEntity(sourceId = sourceId, channelId = "", start = now, stop = now + seconds, title = title), pad = false)
     }
 
     /** Alarms do not survive a reboot or an update: arm the future ones again, and give up on those whose time has passed. */

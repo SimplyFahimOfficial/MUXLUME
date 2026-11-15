@@ -96,4 +96,15 @@ class RecordingDbTest {
         assertThat(db.recordings().nextStartOnChannel(source, "kids", 4_940)).isEqualTo(9_000) // strictly after
         assertThat(db.recordings().nextStartOnChannel(source, "kids", 9_000)).isNull()
     }
+
+    @Test
+    fun `a channel shows as being recorded only while its recording runs`(): Unit = runBlocking {
+        val id = db.recordings().insert(row("kids", RecordingState.SCHEDULED, 0, null))
+        assertThat(db.recordings().runningFor(source, "kids").first()).isNull()
+        db.recordings().start(id, "content://tree/f")
+        assertThat(db.recordings().runningFor(source, "kids").first()).isEqualTo(id)
+        assertThat(db.recordings().runningFor(source, "adult").first()).isNull() // another channel
+        db.recordings().finish(id, RecordingState.DONE, 10, null)
+        assertThat(db.recordings().runningFor(source, "kids").first()).isNull()
+    }
 }

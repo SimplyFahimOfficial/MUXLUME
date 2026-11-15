@@ -534,6 +534,13 @@
     <string name="recording_trail">Stop later</string>
     <string name="recording_minutes">%1$d min</string>
     <string name="recording_padding_note">Programmes rarely start and end on time, so recordings begin and end a little outside them. Applies to recordings you schedule from now on. If the connection drops, MUXLUME keeps trying for up to two minutes. Some providers allow only one stream at a time; recording while watching may stop one of them.</string>
+    <string name="recording_stop_recording">Stop recording</string>
+    <string name="recording_length_title">Record for how long?</string>
+    <string name="recording_length_body">There is no guide for this channel. Recording starts now and ends after the time you pick.</string>
+    <string name="recording_length_30m">30 minutes</string>
+    <string name="recording_length_1h">1 hour</string>
+    <string name="recording_length_2h">2 hours</string>
+    <string name="recording_length_4h">4 hours</string>
     <string name="recording_used">Recordings use %1$s</string>
     <string name="recording_empty_title">No recordings</string>
     <string name="recording_empty_body">Open a programme in the guide and tap Record.</string>

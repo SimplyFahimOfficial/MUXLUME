@@ -277,6 +277,10 @@ abstract class RecordingDao {
     abstract suspend fun playable(id: Long, unlocked: Boolean): RecordingEntity?
 
     /** Scheduled recordings whose padded start is still ahead. */
+    /** The id of the recording of this channel that is running now, if any (a Long, so not a guarded type). */
+    @Query("SELECT id FROM recordings WHERE sourceId = :sourceId AND stableKey = :stableKey AND state = 'RECORDING' ORDER BY id DESC LIMIT 1")
+    abstract fun runningFor(sourceId: Long, stableKey: String): Flow<Long?>
+
     @Query("SELECT * FROM recordings WHERE state = 'SCHEDULED' AND startAt - leadSeconds > :now")
     abstract suspend fun scheduledAfter(now: Long): List<RecordingEntity>
 
