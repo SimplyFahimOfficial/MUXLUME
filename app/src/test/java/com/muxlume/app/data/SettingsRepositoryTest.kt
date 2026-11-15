@@ -36,6 +36,14 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `playlist refresh is off by default and can be changed`(): Unit = runBlocking {
+        val r = repo("refresh")
+        assertThat(r.current().playlistRefresh).isEqualTo(PlaylistRefresh.OFF)
+        r.setPlaylistRefresh(PlaylistRefresh.EVERY_3_DAYS)
+        assertThat(r.current().playlistRefresh).isEqualTo(PlaylistRefresh.EVERY_3_DAYS)
+    }
+
+    @Test
     fun `appearance choices round trip`(): Unit = runBlocking {
         val r = repo("ok")
         assertThat(r.current()).isEqualTo(AppSettings())

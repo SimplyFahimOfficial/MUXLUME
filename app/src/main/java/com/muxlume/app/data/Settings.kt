@@ -26,6 +26,10 @@ enum class BufferMode(val minMs: Int, val maxMs: Int, val startMs: Int, val resu
     SMALL(5_000, 15_000, 1_000, 2_000),
 }
 
+/** How often playlists are re-downloaded in the background; [hours] is 0 for never. */
+@Suppress("MagicNumber") // hours
+enum class PlaylistRefresh(val hours: Long) { OFF(0), DAILY(24), EVERY_3_DAYS(72), WEEKLY(168) }
+
 /** Highlight colour; maps to a [androidx.compose.ui.graphics.Color] in the theme. */
 enum class Accent { ORANGE, AMBER, CRIMSON, TEAL, VIOLET }
 
@@ -50,6 +54,7 @@ data class AppSettings(
     val audioLanguage: String? = null,
     /** Same for subtitles, plus "off". */
     val subtitleLanguage: String? = null,
+    val playlistRefresh: PlaylistRefresh = PlaylistRefresh.OFF,
 )
 
 class SettingsRepository(private val store: DataStore<Preferences>) {
@@ -66,6 +71,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val recordingFolder = stringPreferencesKey("recording_folder")
         val audioLanguage = stringPreferencesKey("audio_language")
         val subtitleLanguage = stringPreferencesKey("subtitle_language")
+        val playlistRefresh = stringPreferencesKey("playlist_refresh")
     }
 
     val settings: Flow<AppSettings> = store.data
@@ -84,6 +90,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
             recordingFolder = it[Keys.recordingFolder],
             audioLanguage = it[Keys.audioLanguage],
             subtitleLanguage = it[Keys.subtitleLanguage],
+            playlistRefresh = PlaylistRefresh.entries.firstOrNull { m -> m.name == it[Keys.playlistRefresh] } ?: PlaylistRefresh.OFF,
         )
     }
 
@@ -100,6 +107,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
     suspend fun setBuffer(mode: BufferMode) = store.edit { it[Keys.buffer] = mode.name }
     suspend fun setAudioLanguage(value: String?) = store.edit { if (value == null) it.remove(Keys.audioLanguage) else it[Keys.audioLanguage] = value }
     suspend fun setSubtitleLanguage(value: String?) = store.edit { if (value == null) it.remove(Keys.subtitleLanguage) else it[Keys.subtitleLanguage] = value }
+    suspend fun setPlaylistRefresh(value: PlaylistRefresh) = store.edit { it[Keys.playlistRefresh] = value.name }
     suspend fun setRecordingFolder(uri: String?) = store.edit { if (uri == null) it.remove(Keys.recordingFolder) else it[Keys.recordingFolder] = uri }
 
     private fun themeOf(name: String) = runCatching { ThemeMode.valueOf(name) }.getOrDefault(ThemeMode.DARK)

@@ -418,7 +418,7 @@
     <string name="guide_match_channels">Match channels</string>
     <string name="guide_background_updates">Background updates</string>
     <string name="guide_wifi_only">Wi-Fi only</string>
-    <string name="guide_wifi_only_body">Refresh the guide about every 12 hours, only on Wi-Fi.</string>
+    <string name="guide_wifi_only_body">Refresh the guide (about every 12 hours) and playlists in the background only on Wi-Fi.</string>
     <string name="guide_reminders">Reminders</string>
     <string name="guide_no_reminders">No reminders set.</string>
     <string name="guide_delete_reminder">Delete reminder for %1$s</string>
@@ -566,6 +566,12 @@
     <string name="guide_filter_show_all">Show all channels</string>
     <!-- Default audio and subtitle language -->
     <string name="settings_languages_body">Default languages for channels, movies and series. Automatic keeps the stream\'s own choice. A language is used when the stream has it. What you pick in the player\'s options wins for that stream.</string>
+    <string name="settings_playlists">Playlists</string>
+    <string name="settings_playlist_refresh_body">Download playlists again in the background so new channels appear on their own. Your favourites, hidden channels and locks are kept. Uses the Wi-Fi only setting from TV guide settings.</string>
+    <string name="settings_refresh_off">Off</string>
+    <string name="settings_refresh_daily">Daily</string>
+    <string name="settings_refresh_3_days">Every 3 days</string>
+    <string name="settings_refresh_weekly">Weekly</string>
     <string name="settings_audio_language">Audio language</string>
     <string name="settings_subtitle_language">Subtitles</string>
     <string name="settings_language_automatic">Automatic</string>

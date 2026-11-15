@@ -16,6 +16,9 @@ import com.muxlume.app.core.net.CleartextGate
 import com.muxlume.app.core.net.Http
 import com.muxlume.app.core.security.SecretBox
 import com.muxlume.app.data.backup.BackupRepository
+import com.muxlume.app.data.PlaylistRefresh
+import com.muxlume.app.data.PlaylistRefresher
+import com.muxlume.app.data.PlaylistWork
 import com.muxlume.app.data.SettingsRepository
 import com.muxlume.app.data.lock.ParentalLock
 import com.muxlume.app.playback.SleepTimer
@@ -56,6 +59,7 @@ class AppContainer(context: Context) {
     val lock by lazy { ParentalLock(app.settingsDataStore, appScope) }
     private val linker by lazy { EpgLinker(db) }
     val sources by lazy { SourceRepository(db, http, SecretBox(), app.contentResolver, app.resources, linker) }
+    val playlistRefresher by lazy { PlaylistRefresher(sources) }
     val backup by lazy { BackupRepository(db, sources, settings, epg) }
     val streams by lazy { StreamResolver(db, sources) }
     val recordings by lazy { Recordings(app, db, settings) }
@@ -101,6 +105,11 @@ class MuxlumeApp : Application(), SingletonImageLoader.Factory, Configuration.Pr
             combine(container.db.sources().all().map { list -> list.any { it.guideEnabled } }, container.settings.settings.map { it.guideWifiOnly }, ::Pair)
                 .distinctUntilChanged()
                 .collect { (anyGuide, wifiOnly) -> if (anyGuide) EpgWork.schedule(this@MuxlumeApp, wifiOnly) else EpgWork.cancel(this@MuxlumeApp) }
+        }
+        // Background playlist refresh runs only when the user chose an interval; it shares the guide's Wi-Fi setting.
+        container.appScope.launch {
+            container.settings.settings.map { it.playlistRefresh to it.guideWifiOnly }.distinctUntilChanged()
+                .collect { (every, wifiOnly) -> if (every != PlaylistRefresh.OFF) PlaylistWork.schedule(this@MuxlumeApp, wifiOnly) else PlaylistWork.cancel(this@MuxlumeApp) }
         }
     }
 
