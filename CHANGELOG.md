@@ -34,6 +34,11 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - Default audio and subtitle language (Settings → Playback): Automatic (as before), the device language, a language from a short
   list, or subtitles off. Used when a stream has that language; what you pick in the player's options still wins for that
   stream. Part of the backup.
+- Channel number jump: in the live player, type the number on a remote or keyboard (it plays after a short pause or on
+  Enter; Back clears it) or tap "Go to channel" for a number pad. The number is the channel's number in its playlist
+  (tvg-chno or the provider's number); a playlist without numbers counts channels in provider order. "No channel N"
+  is shown when nothing matches. "Switch to last channel" (and the remote's Last channel key) goes back to the channel
+  before this one. Channel up and down keep following the list you came from where the new channel is in it.
 - Record from the player: a Record button in the live player records the programme airing now (from the guide, with
   the padding above), or, for a channel without guide data, asks for 30 minutes, 1, 2 or 4 hours and records from now
   with no padding. The button turns red while that channel is being recorded and stops it. The recording uses its own

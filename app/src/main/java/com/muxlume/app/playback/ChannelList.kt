@@ -56,3 +56,18 @@ suspend fun MuxlumeDatabase.neighbour(item: ItemEntity, list: ChannelList, forwa
         }
     }
 }
+
+/** The channel numbered [number] in [sourceId]'s playlist, or, if that playlist has no numbers, its [number]th live channel in provider order. */
+suspend fun MuxlumeDatabase.channelByNumber(sourceId: Long, number: Int, unlocked: Boolean): ItemEntity? =
+    if (items().hasNumbers(sourceId, unlocked)) items().byNumber(sourceId, number, unlocked)
+    else if (number >= 1) items().nthLive(sourceId, number - 1, unlocked) else null
+
+/**
+ * The list to use after jumping to [target] from [current]: the same list when the target is in it, otherwise the target's own group.
+ * [targetIsFavorite] matters only for the favourites list.
+ */
+fun listAfterJump(current: ChannelList, target: ItemEntity, targetIsFavorite: Boolean): ChannelList = when {
+    current.order == ChannelList.Order.FAVORITES -> if (targetIsFavorite) current else ChannelList(ChannelList.Order.PROVIDER, target.groupTitle)
+    current.group == null || current.group == target.groupTitle -> current
+    else -> ChannelList(ChannelList.Order.PROVIDER, target.groupTitle)
+}

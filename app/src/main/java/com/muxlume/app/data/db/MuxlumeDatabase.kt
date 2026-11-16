@@ -124,6 +124,17 @@ abstract class ItemDao {
     @Query("SELECT * FROM visible_items WHERE sourceId = :sourceId AND stableKey = :key AND (:unlocked OR isLocked = 0)")
     abstract suspend fun byKey(sourceId: Long, key: String, unlocked: Boolean): ItemEntity?
 
+    /** The live channel a source's playlist numbered [number] (tvg-chno, Xtream num), first in provider order. */
+    @Query("SELECT * FROM visible_items WHERE sourceId = :sourceId AND kind = 'LIVE' AND number = :number AND (:unlocked OR isLocked = 0) ORDER BY position LIMIT 1")
+    abstract suspend fun byNumber(sourceId: Long, number: Int, unlocked: Boolean): ItemEntity?
+
+    @Query("SELECT EXISTS(SELECT 1 FROM visible_items WHERE sourceId = :sourceId AND kind = 'LIVE' AND number IS NOT NULL AND (:unlocked OR isLocked = 0))")
+    abstract suspend fun hasNumbers(sourceId: Long, unlocked: Boolean): Boolean
+
+    /** The live channel at [offset] (0-based) in provider order: the number of a playlist that has none. */
+    @Query("SELECT * FROM visible_items WHERE sourceId = :sourceId AND kind = 'LIVE' AND (:unlocked OR isLocked = 0) ORDER BY position LIMIT 1 OFFSET :offset")
+    abstract suspend fun nthLive(sourceId: Long, offset: Int, unlocked: Boolean): ItemEntity?
+
     @Query("SELECT * FROM visible_items WHERE sourceId = :sourceId AND stableKey = :key AND (:unlocked OR isLocked = 0)")
     abstract fun observe(sourceId: Long, key: String, unlocked: Boolean): Flow<ItemEntity?>
 

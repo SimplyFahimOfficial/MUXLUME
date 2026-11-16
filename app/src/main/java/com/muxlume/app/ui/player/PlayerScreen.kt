@@ -37,6 +37,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AspectRatio
+import androidx.compose.material.icons.rounded.Dialpad
 import androidx.compose.material.icons.rounded.FiberManualRecord
 import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.Pause
@@ -46,6 +47,7 @@ import androidx.compose.material.icons.rounded.Replay10
 import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -193,6 +195,10 @@ fun PlayerScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val channel = if (ui.live) ui.mediaId?.let(MediaIds::parse) else null
     val runningId by remember(channel) { channel?.let { (s, k) -> context.container.db.recordings().runningFor(s, k) } ?: flowOf(null) }.collectAsStateWithLifecycle(null)
+    var numberPad by remember { mutableStateOf(false) }
+    val number = remember { NumberEntry() }
+    var current by remember { mutableStateOf<String?>(null) }
+    var previous by remember { mutableStateOf<String?>(null) }
     val reduced = MuxTheme.reducedMotion
     val view = LocalView.current
     val focus = remember { FocusRequester() }
@@ -213,6 +219,35 @@ fun PlayerScreen(onBack: () -> Unit) {
     }
 
     val p = player
+    fun toast(id: Int, vararg args: Any) = Toast.makeText(context, res.getString(id, *args), Toast.LENGTH_SHORT).show()
+
+    fun goTo(n: Int) {
+        if (p == null) return
+        scope.launch { if (!context.jumpToChannel(p, n)) toast(R.string.player_no_channel, n) }
+    }
+
+    fun goToPrevious() {
+        val (sourceId, key) = previous?.let(MediaIds::parse) ?: return
+        if (p == null) return
+        scope.launch {
+            val c = context.container
+            val unlocked = c.lock.unlockedNow()
+            val item = c.db.items().byKey(sourceId, key, unlocked)
+            if (item == null || !context.playLike(p, item, unlocked)) toast(R.string.player_no_previous)
+        }
+    }
+
+    // The last channel is what was playing before this one; it starts empty each time the player opens.
+    LaunchedEffect(ui.mediaId) {
+        val now = ui.mediaId
+        if (now != null && now != current) { previous = current; current = now }
+    }
+    // Digits typed for a channel number are played after a pause.
+    LaunchedEffect(number.digits) {
+        if (number.digits.isEmpty()) return@LaunchedEffect
+        delay(NumberEntry.PAUSE_MS)
+        number.commit()?.let(::goTo)
+    }
     DisposableEffect(p) {
         if (p == null) return@DisposableEffect onDispose { }
         ui.read(p)
@@ -266,6 +301,7 @@ fun PlayerScreen(onBack: () -> Unit) {
         onDispose { lifecycle.removeObserver(observer) }
     }
     BackHandler {
+        if (number.digits.isNotEmpty()) { number.clear(); return@BackHandler }
         if (!settings.backgroundPlayback) p?.pause()
         onBack()
     }
@@ -283,7 +319,14 @@ fun PlayerScreen(onBack: () -> Unit) {
                 .focusable()
                 .onKeyEvent { e ->
                     if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
+                    val digit = if (ui.live) NumberEntry.digitOf(e.key.nativeKeyCode) else null
+                    if (digit != null) { number.append(digit); return@onKeyEvent true }
+                    if (number.digits.isNotEmpty() && (e.key.nativeKeyCode == KeyEvent.KEYCODE_ENTER || e.key.nativeKeyCode == KeyEvent.KEYCODE_DPAD_CENTER)) {
+                        number.commit()?.let(::goTo)
+                        return@onKeyEvent true
+                    }
                     when (e.key.nativeKeyCode) {
+                        KeyEvent.KEYCODE_LAST_CHANNEL -> { goToPrevious(); true }
                         KeyEvent.KEYCODE_CHANNEL_UP -> { p?.seekToNextMediaItem(); poke(); true }
                         KeyEvent.KEYCODE_CHANNEL_DOWN -> { p?.seekToPreviousMediaItem(); poke(); true }
                         KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (!controls) { poke(); true } else false
@@ -307,6 +350,15 @@ fun PlayerScreen(onBack: () -> Unit) {
                 LaunchedEffect(Unit) { delay(400); show = true } // no spinner flash on quick rebuffers
                 if (show) CircularProgressIndicator(Modifier.align(Alignment.Center).size(44.dp), color = MuxTheme.Primary, strokeWidth = 3.dp)
             }
+            if (number.digits.isNotEmpty()) {
+                val typed = number.digits
+                Text(
+                    typed, style = MaterialTheme.typography.displayMedium, color = MuxTheme.TextPrimary,
+                    modifier = Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(24.dp)
+                        .clip(Mux.PillShape).background(MuxTheme.Scrim).padding(horizontal = 20.dp, vertical = 8.dp)
+                        .semantics { liveRegion = LiveRegionMode.Polite; contentDescription = typed },
+                )
+            }
             ui.error?.let { e ->
                 ErrorPanel(e, onRetry = { p?.prepare(); p?.play() }, onBack = onBack, modifier = Modifier.align(Alignment.Center))
             }
@@ -323,12 +375,16 @@ fun PlayerScreen(onBack: () -> Unit) {
                     onPip = { if (activity?.enterPip() != true) Toast.makeText(context, res.getString(R.string.player_picture_in_picture_isn_t), Toast.LENGTH_LONG).show() },
                     onRotate = { portrait = !portrait; poke() },
                     onOptions = { sheet = true },
+                    onNumberPad = { numberPad = true },
+                    onPrevious = if (previous != null) ({ goToPrevious(); poke() }) else null,
                     onRecord = if (channel != null) ({ record(null); poke() }) else null,
                     recording = runningId != null,
                     poke = ::poke,
                 )
             }
         }
+
+        if (numberPad) NumberPadDialog(onGo = { numberPad = false; goTo(it) }, onDismiss = { numberPad = false })
 
         if (lengths) {
             AlertDialog(
@@ -360,7 +416,7 @@ fun PlayerScreen(onBack: () -> Unit) {
 private fun Controls(
     ui: PlayerUi, p: Player?, scaleLabel: String,
     onBack: () -> Unit, onScale: () -> Unit, onPip: () -> Unit, onRotate: () -> Unit, onOptions: () -> Unit,
-    onRecord: (() -> Unit)?, recording: Boolean, poke: () -> Unit,
+    onNumberPad: () -> Unit, onPrevious: (() -> Unit)?, onRecord: (() -> Unit)?, recording: Boolean, poke: () -> Unit,
 ) {
     Box(Modifier.fillMaxSize()) {
         // Scrims only behind the top and bottom bars, so the picture stays clean.
@@ -373,6 +429,10 @@ private fun Controls(
                     Text(ui.title, style = MaterialTheme.typography.titleLarge, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     ui.subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MuxTheme.Primary.copy(alpha = 0.8f), maxLines = 1) }
                     if (ui.live) ui.mediaId?.let(MediaIds::parse)?.let { (sourceId, key) -> NowNextLine(rememberNowNext(sourceId, key, true).value) }
+                }
+                if (ui.live) {
+                    onPrevious?.let { previous -> IconButton(previous) { Icon(Icons.Rounded.SwapHoriz, stringResource(R.string.player_last_channel), tint = MuxTheme.TextPrimary) } }
+                    IconButton(onNumberPad) { Icon(Icons.Rounded.Dialpad, stringResource(R.string.player_go_to_channel), tint = MuxTheme.TextPrimary) }
                 }
                 onRecord?.let { record ->
                     val label = stringResource(if (recording) R.string.recording_stop_recording else R.string.recording_record)

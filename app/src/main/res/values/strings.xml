@@ -541,6 +541,12 @@
     <string name="recording_length_1h">1 hour</string>
     <string name="recording_length_2h">2 hours</string>
     <string name="recording_length_4h">4 hours</string>
+    <string name="player_go_to_channel">Go to channel</string>
+    <string name="player_number_go">Go</string>
+    <string name="player_number_clear">Clear</string>
+    <string name="player_no_channel">No channel %1$d</string>
+    <string name="player_last_channel">Switch to last channel</string>
+    <string name="player_no_previous">The previous channel is not available.</string>
     <string name="recording_used">Recordings use %1$s</string>
     <string name="recording_empty_title">No recordings</string>
     <string name="recording_empty_body">Open a programme in the guide and tap Record.</string>
