@@ -65,6 +65,28 @@ retries network errors three times (2/4/8 s) and rejoins live streams that fell 
 Background playback: off by default; leaving the player pauses unless PiP is active. When enabled,
 the media notification keeps playback going.
 
+## Alternative servers
+
+`ChannelNames` (pure) normalises a name (NFKD, no accents or case, no bracketed text, a leading ISO country code only when a `:`,
+`|` or ` - ` follows, `+` as "plus", no quality words) and compares two: **SAME** when the normalised names are equal, **SIMILAR** when
+every word with a digit and every "plus" matches, they share a word, `max(Jaccard of words, 1 - Levenshtein / length)` is at least 0.75, and,
+when it is the letters that make them close, every differing word is a typo of one on the other side ("Sky Sport" and "Sky Sports", not "SAB"
+and "MAX"). `AlternativeFinder` takes candidates from the text index by the name's words (`ChannelServerDao.liveByWords`, visible live
+channels, lock-aware) and orders them SAME before SIMILAR, other playlists before the channel's own, then by closeness and provider order.
+The index is by word start, so a name that shares no word start with the channel ("Skysports") is not found.
+
+Saved servers are `channel_servers` rows keyed like favourites (channel and server by playlist and stable key), so they survive refreshes
+and go when either playlist is deleted; `ChannelServerDao.forChannel` joins `visible_items`, so hidden or locked channels disappear.
+`MediaIds` requests carry `muxlume.primary`, the channel the user chose, when another server of it plays (`MediaItem.primaryId`);
+the Servers sheet, channel up/down, the previous-channel control and watch history are anchored to it (history is not written for a
+server that is not the chosen channel).
+
+`PlaybackService.Recovery` tries another server after the existing retries are used up (or for an error that is not retried), when the
+setting is on: `FailoverPlan` picks the next of the saved servers then the SAME alternatives, never one tried before and at most 3 per
+failure; the item is resolved through `resolve`, so its own playlist's login and HTTP setting apply; a server gets one retry instead of three.
+The counters reset when the user starts playback. Nothing but the playlist's name is shown, never a URL. Trying a server connects to that
+playlist's own provider, as playing it would.
+
 ## Default languages
 
 `AppSettings.audioLanguage/subtitleLanguage` (null = Automatic) are applied by `PlaybackService` through the pure

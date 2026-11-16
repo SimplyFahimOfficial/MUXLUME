@@ -31,4 +31,4 @@ suspend fun Context.play(items: List<MediaItem>, startIndex: Int = 0, positionMs
  * Plays a live channel. [list] is the list it was picked from: channel up/down (app, remote, media
  * notification) moves through that list, looked up on demand by the playback service.
  */
-suspend fun Context.playChannel(item: ItemEntity, list: ChannelList? = null): Boolean = play(listOf(MediaIds.request(item, list)))
+suspend fun Context.playChannel(item: ItemEntity, list: ChannelList? = null, primary: String? = null): Boolean = play(listOf(MediaIds.request(item, list, primary)))

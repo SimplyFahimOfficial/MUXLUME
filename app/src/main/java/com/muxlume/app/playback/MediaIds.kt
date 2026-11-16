@@ -16,6 +16,9 @@ import com.muxlume.app.data.db.ItemKind
 object MediaIds {
     const val EXTRA_KIND = "muxlume.kind"
     const val EXTRA_PARENT = "muxlume.parent"
+
+    /** The channel the user chose, while another server of it plays. Absent when the item is the channel the user chose. */
+    const val EXTRA_PRIMARY = "muxlume.primary"
     private const val RECORDING_PREFIX = "rec|"
 
     fun of(sourceId: Long, stableKey: String) = "$sourceId|$stableKey"
@@ -47,6 +50,7 @@ object MediaIds {
         kind: ItemKind,
         parentKey: String? = null,
         list: ChannelList? = null,
+        primary: String? = null,
     ): MediaItem = MediaItem.Builder()
         .setMediaId(mediaId)
         .setMediaMetadata(
@@ -57,14 +61,14 @@ object MediaIds {
                 .setIsPlayable(true)
                 .setIsBrowsable(false)
                 .setMediaType(if (kind == ItemKind.LIVE) MediaMetadata.MEDIA_TYPE_TV_CHANNEL else MediaMetadata.MEDIA_TYPE_VIDEO)
-                .setExtras(Bundle().apply { putString(EXTRA_KIND, kind.name); putString(EXTRA_PARENT, parentKey); list?.toBundle(this) })
+                .setExtras(Bundle().apply { putString(EXTRA_KIND, kind.name); putString(EXTRA_PARENT, parentKey); primary?.let { putString(EXTRA_PRIMARY, it) }; list?.toBundle(this) })
                 .build(),
         )
         .build()
 
     /** [list]: for live channels, the list it was picked from (channel up/down follows it). */
-    fun request(item: ItemEntity, list: ChannelList? = null): MediaItem =
-        request(of(item.sourceId, item.stableKey), item.name, item.groupTitle.ifEmpty { null }, item.logo, item.kind, list = list)
+    fun request(item: ItemEntity, list: ChannelList? = null, primary: String? = null): MediaItem =
+        request(of(item.sourceId, item.stableKey), item.name, item.groupTitle.ifEmpty { null }, item.logo, item.kind, list = list, primary = primary)
 
     fun request(entry: HistoryEntity): MediaItem =
         request(entry.mediaId, entry.title, entry.subtitle, entry.artwork, entry.kind, entry.parentKey)
@@ -72,3 +76,6 @@ object MediaIds {
     fun kindOf(item: MediaItem): ItemKind =
         item.mediaMetadata.extras?.getString(EXTRA_KIND)?.let { runCatching { ItemKind.valueOf(it) }.getOrNull() } ?: ItemKind.LIVE
 }
+
+/** The id of the channel the user chose: the item's own unless it is another server of one. */
+val MediaItem.primaryId: String get() = mediaMetadata.extras?.getString(MediaIds.EXTRA_PRIMARY) ?: mediaId

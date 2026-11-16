@@ -24,6 +24,7 @@ import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.ListenableFuture
 import com.muxlume.app.MainActivity
 import com.muxlume.app.MuxlumeApp
+import com.muxlume.app.R
 import com.muxlume.app.core.net.HttpPolicy
 import com.muxlume.app.data.db.HistoryEntity
 import com.muxlume.app.data.db.ItemKind
@@ -59,6 +60,10 @@ class PlaybackService : MediaSessionService() {
     private var retries = 0
     private var retryJob: Job? = null
     private var switchJob: Job? = null
+    private var failoverJob: Job? = null
+    private val failoverTried = HashSet<String>()
+    private var failoverAttempts = 0
+    private val finder by lazy { AlternativeFinder(container.db) }
     private lateinit var exoPlayer: ExoPlayer
     private lateinit var baseTrackParameters: TrackSelectionParameters
     private var languages: Pair<String?, String?> = null to null
@@ -156,6 +161,7 @@ class PlaybackService : MediaSessionService() {
             startIndex: Int,
             startPositionMs: Long,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = scope.future {
+            resetFailover()
             val wanted = mediaItems.getOrNull(startIndex)?.mediaId
             val resolved = mediaItems.mapNotNull { resolve(it) }
             val index = resolved.indexOfFirst { it.mediaId == wanted }.coerceAtLeast(0)
@@ -235,8 +241,10 @@ class PlaybackService : MediaSessionService() {
         private fun switchChannel(forward: Boolean): Boolean {
             val current = exo.currentMediaItem ?: return false
             if (MediaIds.kindOf(current) != ItemKind.LIVE) return false
-            val (sourceId, key) = MediaIds.parse(current.mediaId) ?: return false
+            // Up and down move from the channel the user chose, not from the server that happens to play it.
+            val (sourceId, key) = MediaIds.parse(current.primaryId) ?: return false
             switchJob?.cancel()
+            resetFailover()
             switchJob = scope.launch {
                 val unlocked = container.lock.unlockedNow()
                 val item = container.db.items().byKey(sourceId, key, unlocked) ?: return@launch
@@ -274,14 +282,18 @@ class PlaybackService : MediaSessionService() {
             }
             val network = error.errorCode in PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED..PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
                 error.errorCode == PlaybackException.ERROR_CODE_TIMEOUT
-            if (network && retries < MAX_RETRIES) {
+            // A server tried by failover gets one retry, not three, so three servers do not take a minute.
+            val budget = if (player.currentMediaItem?.let { it.primaryId != it.mediaId } == true) 1 else MAX_RETRIES
+            if (network && retries < budget) {
                 retries++
                 retryJob?.cancel()
                 retryJob = scope.launch {
                     delay(2_000L shl (retries - 1))
                     if (player.playerError != null) player.prepare()
                 }
+                return
             }
+            player.currentMediaItem?.let(::tryAnotherServer)
         }
     }
 
@@ -296,6 +308,51 @@ class PlaybackService : MediaSessionService() {
         player.replaceMediaItem(player.currentMediaItemIndex, item.buildUpon().setMimeType(MimeTypes.APPLICATION_M3U8).build())
         player.prepare()
         return true
+    }
+
+    private fun resetFailover() {
+        failoverJob?.cancel()
+        failoverTried.clear()
+        failoverAttempts = 0
+    }
+
+    /**
+     * A live channel failed for good: switch to its next saved server, then to channels of the same name in other playlists
+     * (never a merely similar one: that could be a different channel), at most [FailoverPlan.MAX_ATTEMPTS] per failure and never one
+     * twice. Each server uses its own playlist's login and HTTP setting through [resolve]. Nothing is shown but the playlist's name.
+     */
+    private fun tryAnotherServer(failed: MediaItem) {
+        if (MediaIds.kindOf(failed) != ItemKind.LIVE) return
+        failoverJob?.cancel()
+        failoverJob = scope.launch {
+            if (!container.settings.current().failover) return@launch
+            val primaryId = failed.primaryId
+            val (sourceId, key) = MediaIds.parse(primaryId) ?: return@launch
+            val unlocked = container.lock.unlockedNow()
+            val primary = container.db.items().byKey(sourceId, key, unlocked) ?: return@launch
+            failoverTried += primaryId
+            failoverTried += failed.mediaId
+            val saved = container.db.channelServers().forChannelNow(sourceId, key, unlocked).map { it.item }
+            val same = finder.find(primary, unlocked).filter { it.tier == ChannelNames.Tier.SAME }
+            val names = same.associate { it.item.id to it.sourceName }
+            val candidates = saved + same.map { it.item }
+            val byId = candidates.associateBy { MediaIds.of(it.sourceId, it.stableKey) }
+            val list = ChannelList.from(failed.mediaMetadata.extras, primary)
+            while (true) {
+                val id = FailoverPlan.next(byId.keys.toList(), failoverTried, failoverAttempts) ?: return@launch
+                failoverTried += id
+                val item = byId.getValue(id)
+                val resolved = resolve(MediaIds.request(item, list, primaryId)) ?: continue
+                failoverAttempts++
+                val playlist = names[item.id] ?: container.db.sources().get(item.sourceId)?.name.orEmpty()
+                val meta = resolved.mediaMetadata.buildUpon().setArtist(getString(R.string.player_trying_server, playlist)).build()
+                applyFor(resolved.mediaId)
+                exoPlayer.setMediaItem(resolved.buildUpon().setMediaMetadata(meta).build())
+                exoPlayer.prepare()
+                exoPlayer.play()
+                return@launch
+            }
+        }
     }
 
     private suspend fun savePositionsWhilePlaying(player: Player) {
@@ -317,6 +374,7 @@ class PlaybackService : MediaSessionService() {
 
     private fun entryFor(player: Player): HistoryEntity? {
         val item = player.currentMediaItem ?: return null
+        if (item.primaryId != item.mediaId) return null // another server of a channel: the channel the user chose keeps its entry
         val (sourceId, _) = MediaIds.parse(item.mediaId) ?: return null
         val kind = MediaIds.kindOf(item)
         val meta = item.mediaMetadata

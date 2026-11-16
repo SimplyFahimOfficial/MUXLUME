@@ -42,6 +42,8 @@ data class BackupData(
     val channelPrefs: List<BackupChannelPref> = emptyList(),
     /** Which groups the parental PIN covers. The PIN itself is never saved. */
     val lockedGroups: List<BackupLockedGroup> = emptyList(),
+    /** Saved servers of channels. Absent in older backups. */
+    val servers: List<BackupServer> = emptyList(),
 ) {
     companion object {
         const val VERSION = 1
@@ -54,6 +56,10 @@ data class BackupSource(val name: String, val type: SourceType, val secret: Sour
 /** [source] is an index into [BackupData.sources]. */
 @Serializable
 data class BackupFavorite(val source: Int, val stableKey: String, val addedAt: Long)
+
+/** A saved server: [serverSource] and [source] are indexes into [BackupData.sources]. */
+@Serializable
+data class BackupServer(val source: Int, val stableKey: String, val serverSource: Int, val serverStableKey: String, val position: Int)
 
 /** Hidden, renamed and pinned channels. [source] is an index into [BackupData.sources]. */
 @Serializable
@@ -91,6 +97,7 @@ data class BackupSettings(
     val playlistRefresh: String? = null,
     val recordLeadMinutes: Int? = null,
     val recordTrailMinutes: Int? = null,
+    val failover: Boolean? = null,
 )
 
 data class ExportSummary(val sources: Int, val skippedFileSources: Int, val favorites: Int, val history: Int)
@@ -128,6 +135,10 @@ class BackupRepository(
             settings = settings.current().toBackup(),
             channelPrefs = prefs,
             lockedGroups = db.lockedGroups().all().mapNotNull { g -> index[g.sourceId]?.let { BackupLockedGroup(it, g.groupTitle) } },
+            servers = db.channelServers().all().mapNotNull { s ->
+                val from = index[s.sourceId] ?: return@mapNotNull null
+                index[s.serverSourceId]?.let { BackupServer(from, s.stableKey, it, s.serverStableKey, s.position) }
+            },
         )
         out.write(BackupCrypto.encrypt(JSON.encodeToString(BackupData.serializer(), data).toByteArray(), passphrase))
         out.flush()
@@ -146,7 +157,7 @@ class BackupRepository(
             throw BackupException(BackupException.Reason.NOT_A_BACKUP).apply { initCause(e) }
         }
         if (data.version > BackupData.VERSION) throw BackupException(BackupException.Reason.TOO_NEW)
-        val rows = maxOf(data.favorites.size, data.history.size, data.channelPrefs.size, data.lockedGroups.size)
+        val rows = maxOf(data.favorites.size, data.history.size, data.channelPrefs.size, data.lockedGroups.size, data.servers.size)
         if (data.sources.size > MAX_SOURCES || rows > MAX_ROWS) throw BackupException(BackupException.Reason.TOO_LARGE)
         restore(data)
     }
@@ -200,6 +211,12 @@ class BackupRepository(
             if (p.stableKey.isBlank() || p.stableKey.length > MAX_KEY || pref.isDefault()) return@forEach
             db.channelPrefs().upsert(pref)
         }
+        // In the order they were added, so the numbering here keeps it.
+        data.servers.sortedBy { it.position }.forEach { s ->
+            val from = ids.getOrNull(s.source) ?: return@forEach
+            val to = ids.getOrNull(s.serverSource) ?: return@forEach
+            if (s.stableKey.length <= MAX_KEY && s.serverStableKey.length <= MAX_KEY) db.channelServers().add(from, s.stableKey, to, s.serverStableKey)
+        }
         data.lockedGroups.forEach { g ->
             val id = ids.getOrNull(g.source) ?: return@forEach
             if (g.groupTitle.length <= MAX_KEY) db.lockedGroups().add(LockedGroupEntity(id, g.groupTitle))
@@ -238,6 +255,7 @@ class BackupRepository(
     private suspend fun applyLibrary(s: BackupSettings) {
         s.recordLeadMinutes?.takeIf { it in AppSettings.LEAD_CHOICES }?.let { settings.setRecordLeadMinutes(it) }
         s.recordTrailMinutes?.takeIf { it in AppSettings.TRAIL_CHOICES }?.let { settings.setRecordTrailMinutes(it) }
+        s.failover?.let { settings.setFailover(it) }
         s.playlistRefresh?.let { n -> PlaylistRefresh.entries.firstOrNull { it.name == n } }?.let { settings.setPlaylistRefresh(it) }
     }
 
@@ -254,7 +272,7 @@ class BackupRepository(
     private fun AppSettings.toBackup() = BackupSettings(
         theme.name, accent.name, amoled, dynamicColor, reduceMotion, backgroundPlayback, guideWifiOnly,
         audioLanguage ?: TrackLanguages.AUTOMATIC_IN_BACKUP, subtitleLanguage ?: TrackLanguages.AUTOMATIC_IN_BACKUP, playlistRefresh.name,
-        recordLeadMinutes, recordTrailMinutes,
+        recordLeadMinutes, recordTrailMinutes, failover,
     )
 
     /** Two entries are the same playlist when they point at the same place with the same login. */

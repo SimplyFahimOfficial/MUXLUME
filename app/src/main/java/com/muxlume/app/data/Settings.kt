@@ -59,6 +59,8 @@ data class AppSettings(
     /** Minutes recordings start before and end after the programme. */
     val recordLeadMinutes: Int = DEFAULT_LEAD_MINUTES,
     val recordTrailMinutes: Int = DEFAULT_TRAIL_MINUTES,
+    /** When a live channel fails for good, switch to a saved server or a same-name channel of another playlist. */
+    val failover: Boolean = true,
 ) {
     companion object {
         const val DEFAULT_LEAD_MINUTES = 1
@@ -87,6 +89,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val playlistRefresh = stringPreferencesKey("playlist_refresh")
         val recordLead = intPreferencesKey("record_lead_minutes")
         val recordTrail = intPreferencesKey("record_trail_minutes")
+        val failover = booleanPreferencesKey("failover_servers")
     }
 
     val settings: Flow<AppSettings> = store.data
@@ -108,6 +111,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
             playlistRefresh = PlaylistRefresh.entries.firstOrNull { m -> m.name == it[Keys.playlistRefresh] } ?: PlaylistRefresh.OFF,
             recordLeadMinutes = it[Keys.recordLead]?.takeIf { m -> m in AppSettings.LEAD_CHOICES } ?: AppSettings.DEFAULT_LEAD_MINUTES,
             recordTrailMinutes = it[Keys.recordTrail]?.takeIf { m -> m in AppSettings.TRAIL_CHOICES } ?: AppSettings.DEFAULT_TRAIL_MINUTES,
+            failover = it[Keys.failover] ?: true,
         )
     }
 
@@ -125,6 +129,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
     suspend fun setAudioLanguage(value: String?) = store.edit { if (value == null) it.remove(Keys.audioLanguage) else it[Keys.audioLanguage] = value }
     suspend fun setSubtitleLanguage(value: String?) = store.edit { if (value == null) it.remove(Keys.subtitleLanguage) else it[Keys.subtitleLanguage] = value }
     suspend fun setPlaylistRefresh(value: PlaylistRefresh) = store.edit { it[Keys.playlistRefresh] = value.name }
+    suspend fun setFailover(on: Boolean) = store.edit { it[Keys.failover] = on }
     suspend fun setRecordLeadMinutes(minutes: Int) = store.edit { it[Keys.recordLead] = minutes }
     suspend fun setRecordTrailMinutes(minutes: Int) = store.edit { it[Keys.recordTrail] = minutes }
     suspend fun setRecordingFolder(uri: String?) = store.edit { if (uri == null) it.remove(Keys.recordingFolder) else it[Keys.recordingFolder] = uri }

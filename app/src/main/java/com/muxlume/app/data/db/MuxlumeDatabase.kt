@@ -334,6 +334,53 @@ abstract class RecordingDao {
     abstract fun totalBytes(): Flow<Long>
 }
 
+/** A saved server of a channel: another channel (of any playlist) that plays the same thing, tried when the first does not connect. */
+@Dao
+abstract class ChannelServerDao {
+    /** The saved servers of a channel in the order they were added; hidden channels and locked groups (while locked) are left out. */
+    @Query(
+        """SELECT i.*, s.position AS serverOrder FROM channel_servers s
+           JOIN visible_items i ON i.sourceId = s.serverSourceId AND i.stableKey = s.serverStableKey
+           WHERE s.sourceId = :sourceId AND s.stableKey = :stableKey AND i.kind = 'LIVE' AND (:unlocked OR i.isLocked = 0)
+           ORDER BY s.position""",
+    )
+    abstract fun forChannel(sourceId: Long, stableKey: String, unlocked: Boolean): Flow<List<ServerRow>>
+
+    @Query(
+        """SELECT i.*, s.position AS serverOrder FROM channel_servers s
+           JOIN visible_items i ON i.sourceId = s.serverSourceId AND i.stableKey = s.serverStableKey
+           WHERE s.sourceId = :sourceId AND s.stableKey = :stableKey AND i.kind = 'LIVE' AND (:unlocked OR i.isLocked = 0)
+           ORDER BY s.position""",
+    )
+    abstract suspend fun forChannelNow(sourceId: Long, stableKey: String, unlocked: Boolean): List<ServerRow>
+
+    /** Live channels whose provider name has words starting with the [match] terms (see ItemDao.ftsQuery), for finding alternatives. */
+    @Query(
+        """SELECT * FROM visible_items WHERE kind = 'LIVE' AND id IN (SELECT rowid FROM items_fts WHERE items_fts MATCH :match)
+           AND (:unlocked OR isLocked = 0) LIMIT :limit""",
+    )
+    abstract suspend fun liveByWords(match: String, limit: Int, unlocked: Boolean): List<ItemEntity>
+
+    @Query("SELECT * FROM channel_servers ORDER BY sourceId, stableKey, position")
+    abstract suspend fun all(): List<ChannelServerEntity>
+
+    @Query("SELECT COALESCE(MAX(position), 0) FROM channel_servers WHERE sourceId = :sourceId AND stableKey = :stableKey")
+    protected abstract suspend fun lastPosition(sourceId: Long, stableKey: String): Int
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    protected abstract suspend fun insert(server: ChannelServerEntity)
+
+    /** Saves [serverSourceId]/[serverStableKey] as the last server of the channel (nothing if it is there already or is the channel itself). */
+    @Transaction
+    open suspend fun add(sourceId: Long, stableKey: String, serverSourceId: Long, serverStableKey: String) {
+        if (sourceId == serverSourceId && stableKey == serverStableKey) return
+        insert(ChannelServerEntity(sourceId, stableKey, serverSourceId, serverStableKey, lastPosition(sourceId, stableKey) + 1))
+    }
+
+    @Query("DELETE FROM channel_servers WHERE sourceId = :sourceId AND stableKey = :stableKey AND serverSourceId = :serverSourceId AND serverStableKey = :serverStableKey")
+    abstract suspend fun remove(sourceId: Long, stableKey: String, serverSourceId: Long, serverStableKey: String)
+}
+
 @Dao
 interface LockedGroupDao {
     @Query("SELECT groupTitle FROM locked_groups WHERE sourceId = :sourceId")
@@ -409,10 +456,10 @@ interface HistoryDao {
     entities = [
         SourceEntity::class, ItemEntity::class, ItemFtsEntity::class, FavoriteEntity::class, HistoryEntity::class,
         EpgChannelEntity::class, ProgramEntity::class, EpgLinkEntity::class, ReminderEntity::class, ChannelPrefEntity::class,
-        LockedGroupEntity::class, RecordingEntity::class,
+        LockedGroupEntity::class, RecordingEntity::class, ChannelServerEntity::class,
     ],
     views = [VisibleItem::class],
-    version = 7,
+    version = 8,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = MuxlumeDatabase.Migration1To2::class),
@@ -421,6 +468,7 @@ interface HistoryDao {
         AutoMigration(from = 4, to = 5),
         AutoMigration(from = 5, to = 6),
         AutoMigration(from = 6, to = 7),
+        AutoMigration(from = 7, to = 8),
     ],
 )
 abstract class MuxlumeDatabase : RoomDatabase() {
@@ -430,6 +478,7 @@ abstract class MuxlumeDatabase : RoomDatabase() {
     abstract fun channelPrefs(): ChannelPrefDao
     abstract fun lockedGroups(): LockedGroupDao
     abstract fun recordings(): RecordingDao
+    abstract fun channelServers(): ChannelServerDao
     abstract fun history(): HistoryDao
     abstract fun epg(): EpgDao
 

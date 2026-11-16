@@ -194,6 +194,28 @@ class BackupRepositoryTest {
     }
 
     @Test
+    fun `saved servers and the failover switch travel with a backup, in order, and ones that point at a file playlist stay behind`(): Unit = runBlocking {
+        val a = device("a")
+        val (home, provider, file) = a.seed()
+        a.db.channelServers().add(home, "news", provider, "news-b")
+        a.db.channelServers().add(home, "news", home, "news-2")
+        a.db.channelServers().add(home, "news", file, "news-file") // the file playlist is not in the backup
+        a.settings.setFailover(false)
+        val b = device("b")
+        b.import(a.export())
+        val restored = b.db.sources().allNow().associateBy { it.name }
+        val rows = b.db.channelServers().all()
+        assertThat(rows.map { it.serverStableKey }).containsExactly("news-b", "news-2").inOrder()
+        assertThat(rows.map { it.sourceId }.toSet()).containsExactly(restored.getValue("Home").id)
+        assertThat(rows.first().serverSourceId).isEqualTo(restored.getValue("Provider").id)
+        assertThat(b.settings.current().failover).isFalse()
+
+        // An old backup without the field keeps the setting, and a second import adds nothing twice.
+        b.import(a.export())
+        assertThat(b.db.channelServers().all()).hasSize(2)
+    }
+
+    @Test
     fun `recording padding travels with a backup, and a value that is not offered is ignored`(): Unit = runBlocking {
         val a = device("a")
         a.settings.setRecordLeadMinutes(2)

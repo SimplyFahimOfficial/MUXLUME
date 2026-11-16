@@ -165,6 +165,24 @@ data class RecordingEntity(
     val paddedEnd: Long get() = endAt + trailSeconds
 }
 
+/**
+ * Another channel that plays the same thing as [stableKey] of [sourceId], saved by the user. Keyed like favourites, so it survives
+ * playlist refreshes; it goes when either playlist is removed. [position] is the order it was added in.
+ */
+@Entity(
+    tableName = "channel_servers",
+    primaryKeys = ["sourceId", "stableKey", "serverSourceId", "serverStableKey"],
+    foreignKeys = [
+        ForeignKey(entity = SourceEntity::class, parentColumns = ["id"], childColumns = ["sourceId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = SourceEntity::class, parentColumns = ["id"], childColumns = ["serverSourceId"], onDelete = ForeignKey.CASCADE),
+    ],
+    indices = [Index("serverSourceId")],
+)
+data class ChannelServerEntity(val sourceId: Long, val stableKey: String, val serverSourceId: Long, val serverStableKey: String, val position: Int)
+
+/** A saved server with the channel it points at, as shown (renames applied). */
+data class ServerRow(@Embedded val item: ItemEntity, val serverOrder: Int)
+
 /** A group (category) the parental PIN covers, in every list, search and the guide. */
 @Entity(
     tableName = "locked_groups",

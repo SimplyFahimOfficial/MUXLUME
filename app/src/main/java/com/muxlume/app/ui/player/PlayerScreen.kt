@@ -115,6 +115,7 @@ import com.muxlume.app.container
 import com.muxlume.app.core.net.CleartextBlockedException
 import com.muxlume.app.data.AppSettings
 import com.muxlume.app.playback.MediaIds
+import com.muxlume.app.playback.primaryId
 import com.muxlume.app.data.db.ItemKind
 import com.muxlume.app.ui.components.LiveBadge
 import com.muxlume.app.ui.components.PrimaryButton
@@ -125,6 +126,7 @@ import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
 import com.muxlume.app.ui.theme.SectionLabel
 import com.muxlume.app.playback.ChannelList
+import com.muxlume.app.ui.playChannel
 import com.muxlume.app.recording.RecordingService
 import com.muxlume.app.ui.guide.NowNextLine
 import com.muxlume.app.ui.guide.recordingMessage
@@ -138,6 +140,8 @@ import kotlinx.coroutines.launch
 private class PlayerUi {
     var title by mutableStateOf("")
     var mediaId by mutableStateOf<String?>(null)
+    /** The channel the user chose; differs from [mediaId] while another server of it plays. */
+    var primaryId by mutableStateOf<String?>(null)
     var subtitle by mutableStateOf<String?>(null)
     var isPlaying by mutableStateOf(false)
     var state by mutableIntStateOf(Player.STATE_IDLE)
@@ -155,6 +159,7 @@ private class PlayerUi {
         val meta = p.mediaMetadata
         title = meta.title?.toString().orEmpty()
         mediaId = p.currentMediaItem?.mediaId
+        primaryId = p.currentMediaItem?.primaryId
         subtitle = meta.artist?.toString()
         isPlaying = p.isPlaying
         state = p.playbackState
@@ -199,6 +204,7 @@ fun PlayerScreen(onBack: () -> Unit) {
     val runningId by remember(channel) { channel?.let { (s, k) -> context.container.db.recordings().runningFor(s, k) } ?: flowOf(null) }.collectAsStateWithLifecycle(null)
     var numberPad by remember { mutableStateOf(false) }
     var picker by remember { mutableStateOf<ChannelList?>(null) }
+    var servers by remember { mutableStateOf(false) }
     val number = remember { NumberEntry() }
     var current by remember { mutableStateOf<String?>(null) }
     var previous by remember { mutableStateOf<String?>(null) }
@@ -246,8 +252,8 @@ fun PlayerScreen(onBack: () -> Unit) {
     }
 
     // The last channel is what was playing before this one; it starts empty each time the player opens.
-    LaunchedEffect(ui.mediaId) {
-        val now = ui.mediaId
+    LaunchedEffect(ui.primaryId) {
+        val now = ui.primaryId
         if (now != null && now != current) { previous = current; current = now }
     }
     // Digits typed for a channel number are played after a pause.
@@ -368,7 +374,10 @@ fun PlayerScreen(onBack: () -> Unit) {
                 )
             }
             ui.error?.let { e ->
-                ErrorPanel(e, onRetry = { p?.prepare(); p?.play() }, onBack = onBack, modifier = Modifier.align(Alignment.Center))
+                ErrorPanel(
+                    e, onRetry = { p?.prepare(); p?.play() }, onBack = onBack, modifier = Modifier.align(Alignment.Center),
+                    onServers = if (ui.live && channel != null) ({ servers = true }) else null,
+                )
             }
             AnimatedVisibility(
                 visible = controls && !inPip && ui.error == null,
@@ -383,6 +392,7 @@ fun PlayerScreen(onBack: () -> Unit) {
                     onPip = { if (activity?.enterPip() != true) Toast.makeText(context, res.getString(R.string.player_picture_in_picture_isn_t), Toast.LENGTH_LONG).show() },
                     onRotate = { portrait = !portrait; poke() },
                     onOptions = { sheet = true },
+                    onServers = if (channel != null) ({ servers = true; poke() }) else null,
                     onNumberPad = { numberPad = true },
                     onChannels = if (channel != null) ({ openPicker(); poke() }) else null,
                     onPrevious = if (previous != null) ({ goToPrevious(); poke() }) else null,
@@ -391,6 +401,21 @@ fun PlayerScreen(onBack: () -> Unit) {
                     poke = ::poke,
                 )
             }
+        }
+
+        val chosen = ui.primaryId
+        if (servers && chosen != null) {
+            ServersSheet(
+                primaryId = chosen, playingId = ui.mediaId,
+                onPlay = { item ->
+                    servers = false
+                    if (p != null) scope.launch {
+                        val list = context.currentList(p, context.container.lock.unlockedNow())
+                        context.playChannel(item, list, primary = chosen.takeIf { it != MediaIds.of(item.sourceId, item.stableKey) })
+                    }
+                },
+                onDismiss = { servers = false; poke() },
+            )
         }
 
         picker?.let { list ->
@@ -436,7 +461,7 @@ fun PlayerScreen(onBack: () -> Unit) {
 private fun Controls(
     ui: PlayerUi, p: Player?, scaleLabel: String,
     onBack: () -> Unit, onScale: () -> Unit, onPip: () -> Unit, onRotate: () -> Unit, onOptions: () -> Unit,
-    onNumberPad: () -> Unit, onChannels: (() -> Unit)?, onPrevious: (() -> Unit)?, onRecord: (() -> Unit)?, recording: Boolean, poke: () -> Unit,
+    onServers: (() -> Unit)?, onNumberPad: () -> Unit, onChannels: (() -> Unit)?, onPrevious: (() -> Unit)?, onRecord: (() -> Unit)?, recording: Boolean, poke: () -> Unit,
 ) {
     Box(Modifier.fillMaxSize()) {
         // Scrims only behind the top and bottom bars, so the picture stays clean.
@@ -449,6 +474,7 @@ private fun Controls(
                     Text(ui.title, style = MaterialTheme.typography.titleLarge, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     ui.subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MuxTheme.Primary.copy(alpha = 0.8f), maxLines = 1) }
                     if (ui.live) ui.mediaId?.let(MediaIds::parse)?.let { (sourceId, key) -> NowNextLine(rememberNowNext(sourceId, key, true).value) }
+                    onServers?.let { servers -> if (ui.live) TextButton(servers) { Text(stringResource(R.string.player_servers), color = MuxTheme.Primary) } }
                 }
                 if (ui.live) {
                     onPrevious?.let { previous -> IconButton(previous) { Icon(Icons.Rounded.SwapHoriz, stringResource(R.string.player_last_channel), tint = MuxTheme.TextPrimary) } }
@@ -524,7 +550,7 @@ private fun Controls(
 }
 
 @Composable
-private fun ErrorPanel(e: PlaybackException, onRetry: () -> Unit, onBack: () -> Unit, modifier: Modifier) {
+private fun ErrorPanel(e: PlaybackException, onRetry: () -> Unit, onBack: () -> Unit, modifier: Modifier, onServers: (() -> Unit)?) {
     Column(
         modifier.padding(24.dp).clip(Mux.CardShape).background(MuxTheme.Surface).padding(24.dp).semantics { liveRegion = LiveRegionMode.Polite },
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -537,6 +563,7 @@ private fun ErrorPanel(e: PlaybackException, onRetry: () -> Unit, onBack: () -> 
             SecondaryButton(stringResource(R.string.player_back), onBack)
             PrimaryButton(stringResource(R.string.player_retry), onRetry)
         }
+        onServers?.let { TextButton(it) { Text(stringResource(R.string.player_try_another_server), color = MuxTheme.Primary) } }
     }
 }
 

@@ -125,6 +125,7 @@ fun SettingsScreen(nav: Nav) {
                 BufferMode.entries.indexOf(settings.buffer),
                 { scope.launch { c.settings.setBuffer(BufferMode.entries[it]) } },
             )
+            Toggle(stringResource(R.string.settings_failover), stringResource(R.string.settings_failover_body), settings.failover) { scope.launch { c.settings.setFailover(it) } }
             Text(
                 stringResource(R.string.settings_languages_body), style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary,
                 modifier = Modifier.padding(horizontal = Mux.ScreenPadding).padding(top = 16.dp, bottom = 4.dp),
