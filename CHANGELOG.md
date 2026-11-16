@@ -34,6 +34,10 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - Default audio and subtitle language (Settings → Playback): Automatic (as before), the device language, a language from a short
   list, or subtitles off. Used when a stream has that language; what you pick in the player's options still wins for that
   stream. Part of the backup.
+- Record from the player: a Record button in the live player records the programme airing now (from the guide, with
+  the padding above), or, for a channel without guide data, asks for 30 minutes, 1, 2 or 4 hours and records from now
+  with no padding. The button turns red while that channel is being recorded and stops it. The recording uses its own
+  connection: a provider that allows one stream per account may refuse it or end playback.
 - Recording padding and reconnect (Settings → Recordings): recordings start 1 minute early and end 5 minutes late by
   default (choose 0 to 5 minutes early, 0 to 15 late), so the start and end of a programme are not cut off; padding
   never runs into the next recording on the same channel. If the stream drops, MUXLUME reopens it and keeps appending

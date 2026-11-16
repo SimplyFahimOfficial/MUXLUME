@@ -87,6 +87,10 @@ with 2, 4, 8, 15, then 30 second waits and appended to the same sink; an HLS pla
 way, and a playlist whose sequence numbers go backwards is treated as a restart. Both give up with `NETWORK` after 120 seconds
 without data. The URL is resolved once, so a token that expires sooner ends the recording after that window. A failure stores only a `RecordingException.Reason` name, so no URL
 reaches the database or the UI. Saved recordings play through the playback service as `rec|<id>`.
+The player's Record button calls `Recordings.add` with the programme airing now (from `EpgRepository.nowNext`) or
+`Recordings.addNow` (fixed length, no padding); `RecordingDao.runningFor` drives its red state and the same button stops the
+recording through `RecordingService.stopIntent`. A recording opens its own connection to the stream, so a provider that
+allows one stream per account may refuse it or end playback.
 
 ## Navigation
 

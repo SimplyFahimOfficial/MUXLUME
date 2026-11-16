@@ -37,6 +37,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AspectRatio
+import androidx.compose.material.icons.rounded.FiberManualRecord
 import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
@@ -46,6 +47,7 @@ import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,6 +56,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -64,6 +67,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -117,9 +121,13 @@ import com.muxlume.app.ui.theme.Motion
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
 import com.muxlume.app.ui.theme.SectionLabel
+import com.muxlume.app.recording.RecordingService
 import com.muxlume.app.ui.guide.NowNextLine
+import com.muxlume.app.ui.guide.recordingMessage
 import com.muxlume.app.ui.guide.rememberNowNext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 
 /** Snapshot of the controller state the screen needs, updated by one listener. */
 @OptIn(UnstableApi::class)
@@ -159,6 +167,10 @@ private class PlayerUi {
     }
 }
 
+private const val RECORD_DEBOUNCE_MS = 3_000L
+private const val SECONDS_PER_MINUTE = 60L
+private val RECORD_LENGTHS = listOf(30L to R.string.recording_length_30m, 60L to R.string.recording_length_1h, 120L to R.string.recording_length_2h, 240L to R.string.recording_length_4h)
+
 private val scales = listOf(ContentScale.Fit to R.string.player_fit, ContentScale.Crop to R.string.player_fill, ContentScale.FillBounds to R.string.player_stretch)
 
 @OptIn(UnstableApi::class)
@@ -176,9 +188,29 @@ fun PlayerScreen(onBack: () -> Unit) {
     var scaleIndex by remember { mutableIntStateOf(0) }
     var portrait by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf(false) }
+    var lengths by remember { mutableStateOf(false) }
+    var recordLockedUntil by remember { mutableLongStateOf(0L) }
+    val scope = rememberCoroutineScope()
+    val channel = if (ui.live) ui.mediaId?.let(MediaIds::parse) else null
+    val runningId by remember(channel) { channel?.let { (s, k) -> context.container.db.recordings().runningFor(s, k) } ?: flowOf(null) }.collectAsStateWithLifecycle(null)
     val reduced = MuxTheme.reducedMotion
     val view = LocalView.current
     val focus = remember { FocusRequester() }
+
+    /** Records the programme airing now, or [seconds] from now when [seconds] is given. Stops the recording if one is running. */
+    fun record(seconds: Long?) {
+        val (sourceId, key) = channel ?: return
+        runningId?.let { context.startService(RecordingService.stopIntent(context, it)); return }
+        if (System.currentTimeMillis() < recordLockedUntil) return // the row takes a moment to show as recording
+        scope.launch {
+            val c = context.container
+            val airing = if (seconds == null) c.epg.nowNext(sourceId, key).now else null
+            if (seconds == null && airing == null) { lengths = true; return@launch }
+            recordLockedUntil = System.currentTimeMillis() + RECORD_DEBOUNCE_MS
+            val result = if (airing != null) c.recordings.add(sourceId, key, ui.title, airing) else c.recordings.addNow(sourceId, key, ui.title, seconds ?: 0)
+            Toast.makeText(context, recordingMessage(res, result, airing?.start ?: 0), Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val p = player
     DisposableEffect(p) {
@@ -291,9 +323,29 @@ fun PlayerScreen(onBack: () -> Unit) {
                     onPip = { if (activity?.enterPip() != true) Toast.makeText(context, res.getString(R.string.player_picture_in_picture_isn_t), Toast.LENGTH_LONG).show() },
                     onRotate = { portrait = !portrait; poke() },
                     onOptions = { sheet = true },
+                    onRecord = if (channel != null) ({ record(null); poke() }) else null,
+                    recording = runningId != null,
                     poke = ::poke,
                 )
             }
+        }
+
+        if (lengths) {
+            AlertDialog(
+                onDismissRequest = { lengths = false },
+                title = { Text(stringResource(R.string.recording_length_title)) },
+                text = {
+                    Column {
+                        Text(stringResource(R.string.recording_length_body), style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary)
+                        RECORD_LENGTHS.forEach { (minutes, label) ->
+                            TextButton({ lengths = false; record(minutes * SECONDS_PER_MINUTE) }) { Text(stringResource(label), color = MuxTheme.Primary) }
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = { TextButton({ lengths = false }) { Text(stringResource(R.string.channel_cancel), color = MuxTheme.Primary) } },
+                containerColor = MuxTheme.Raised,
+            )
         }
 
         if (sheet && p != null) {
@@ -307,7 +359,8 @@ fun PlayerScreen(onBack: () -> Unit) {
 @Composable
 private fun Controls(
     ui: PlayerUi, p: Player?, scaleLabel: String,
-    onBack: () -> Unit, onScale: () -> Unit, onPip: () -> Unit, onRotate: () -> Unit, onOptions: () -> Unit, poke: () -> Unit,
+    onBack: () -> Unit, onScale: () -> Unit, onPip: () -> Unit, onRotate: () -> Unit, onOptions: () -> Unit,
+    onRecord: (() -> Unit)?, recording: Boolean, poke: () -> Unit,
 ) {
     Box(Modifier.fillMaxSize()) {
         // Scrims only behind the top and bottom bars, so the picture stays clean.
@@ -320,6 +373,12 @@ private fun Controls(
                     Text(ui.title, style = MaterialTheme.typography.titleLarge, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     ui.subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MuxTheme.Primary.copy(alpha = 0.8f), maxLines = 1) }
                     if (ui.live) ui.mediaId?.let(MediaIds::parse)?.let { (sourceId, key) -> NowNextLine(rememberNowNext(sourceId, key, true).value) }
+                }
+                onRecord?.let { record ->
+                    val label = stringResource(if (recording) R.string.recording_stop_recording else R.string.recording_record)
+                    IconButton(record, Modifier.semantics { contentDescription = label }) {
+                        Icon(Icons.Rounded.FiberManualRecord, null, tint = if (recording) MuxTheme.Error else MuxTheme.TextPrimary)
+                    }
                 }
                 IconButton(onOptions) { Icon(Icons.Rounded.Tune, stringResource(R.string.player_audio_subtitles_and_info), tint = MuxTheme.TextPrimary) }
                 val sizeLabel = stringResource(R.string.player_picture_size, scaleLabel)

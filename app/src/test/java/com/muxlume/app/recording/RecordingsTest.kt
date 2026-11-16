@@ -140,6 +140,28 @@ class RecordingsAddTest {
     }
 
     @Test
+    fun `recording from the player with a fixed length starts now, takes no padding and is titled with the channel and time`(): Unit = runBlocking {
+        chooseFolder()
+        assertThat(recordings().addNow(source, "k", "Chan", 1800)).isEqualTo(Recordings.Result.Started)
+        val saved = db.recordings().find(source, "k", now)!!
+        assertThat(saved.endAt).isEqualTo(now + 1800)
+        assertThat(saved.leadSeconds).isEqualTo(0)
+        assertThat(saved.trailSeconds).isEqualTo(0)
+        assertThat(saved.title).startsWith("Chan ")
+        assertThat(shadowOf(context as android.app.Application).nextStartedService.getLongExtra(RecordingService.EXTRA_ID, -1)).isEqualTo(saved.id)
+    }
+
+    @Test
+    fun `recording from the player without a folder saves nothing, and the guide programme path can skip padding`(): Unit = runBlocking {
+        assertThat(recordings().addNow(source, "k", "Chan", 1800)).isEqualTo(Recordings.Result.NoFolder)
+        assertThat(db.recordings().find(source, "k", now)).isNull()
+
+        chooseFolder()
+        assertThat(recordings().add(source, "k", "Chan", program(now - 100, now + 3600), pad = false)).isEqualTo(Recordings.Result.Started)
+        assertThat(db.recordings().find(source, "k", now - 100)!!.trailSeconds).isEqualTo(0)
+    }
+
+    @Test
     fun `without exact alarms the alarm only posts a notification to tap, and the user is told`(): Unit = runBlocking {
         chooseFolder()
         org.robolectric.shadows.ShadowAlarmManager.setCanScheduleExactAlarms(false)

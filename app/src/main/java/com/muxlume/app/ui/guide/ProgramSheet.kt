@@ -48,6 +48,15 @@ import com.muxlume.app.ui.theme.MuxTheme
 import com.muxlume.app.ui.theme.SectionLabel
 import kotlinx.coroutines.launch
 
+/** What to tell the user after asking to record; [startAt] is the programme's start, for a scheduled one. */
+fun recordingMessage(res: android.content.res.Resources, r: Recordings.Result, startAt: Long): String = when (r) {
+    Recordings.Result.NoFolder -> res.getString(R.string.recording_no_folder)
+    Recordings.Result.Ended -> res.getString(R.string.recording_ended)
+    Recordings.Result.Already -> res.getString(R.string.recording_already)
+    Recordings.Result.Started -> res.getString(R.string.recording_started)
+    is Recordings.Result.Scheduled -> res.getString(if (r.unattended) R.string.recording_scheduled else R.string.recording_scheduled_notify, EpgTime.time(startAt))
+}
+
 /** A programme's details with Watch and, for programmes that haven't started, a reminder. */
 @Composable
 fun ProgramSheet(item: ItemEntity, program: ProgramEntity, onWatch: () -> Unit, onDismiss: () -> Unit) {
@@ -72,13 +81,8 @@ fun ProgramSheet(item: ItemEntity, program: ProgramEntity, onWatch: () -> Unit, 
     }
 
     fun onRecord() = scope.launch {
-        when (val r = c.recordings.add(item.sourceId, item.stableKey, item.name, program)) {
-            Recordings.Result.NoFolder -> toast(R.string.recording_no_folder)
-            Recordings.Result.Ended -> toast(R.string.recording_ended)
-            Recordings.Result.Already -> toast(R.string.recording_already)
-            Recordings.Result.Started -> toast(R.string.recording_started)
-            is Recordings.Result.Scheduled -> toast(if (r.unattended) R.string.recording_scheduled else R.string.recording_scheduled_notify, EpgTime.time(program.start))
-        }
+        val r = c.recordings.add(item.sourceId, item.stableKey, item.name, program)
+        Toast.makeText(context, recordingMessage(res, r, program.start), Toast.LENGTH_SHORT).show()
     }
 
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
