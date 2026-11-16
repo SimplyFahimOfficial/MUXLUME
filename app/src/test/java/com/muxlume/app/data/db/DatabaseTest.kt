@@ -462,6 +462,30 @@ class DatabaseTest {
         }
     }
 
+    @Test
+    fun `migration 7 to 8 keeps the channels and adds saved servers that follow their playlists`() {
+        createAt(7) { old ->
+            sql(
+                old,
+                "INSERT INTO sources (id, name, type, secret, label, allowHttp, createdAt, liveCount, movieCount, seriesCount) VALUES (1, 'S', 'M3U_URL', 'x', 'l', 0, 0, 1, 0, 0)",
+                "INSERT INTO sources (id, name, type, secret, label, allowHttp, createdAt, liveCount, movieCount, seriesCount) VALUES (2, 'T', 'M3U_URL', 'y', 'l', 0, 0, 0, 0, 0)",
+                "INSERT INTO items (sourceId, kind, stableKey, name, groupTitle, position) VALUES (1, 'LIVE', 'a', 'Alpha', 'News', 0)",
+            )
+        }
+        val migrated = openCurrent()
+        try {
+            runBlocking {
+                assertThat(migrated.items().byKey(1, "a", true)!!.name).isEqualTo("Alpha")
+                migrated.channelServers().add(1, "a", 2, "b")
+                assertThat(migrated.channelServers().all()).hasSize(1)
+                migrated.sources().delete(2)
+                assertThat(migrated.channelServers().all()).isEmpty() // the server's playlist is gone
+            }
+        } finally {
+            migrated.close()
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

@@ -148,8 +148,10 @@ Settings: `recordLeadMinutes` (default 1), `recordTrailMinutes` (default 5), cop
 
 `tier(a, b)`:
 - **SAME** when the keys are equal.
-- **SIMILAR** when all numeric tokens and `plus` tokens are equal as multisets (so "Sky Sports 1" ≠ "Sky Sports 2", "ITV" ≠ "ITV plus 1"), at least one
-  non-numeric token is shared, and `max(jaccard(tokens), 1 − levenshtein(keyA, keyB) / max(len))` ≥ **0.75**.
+- **SIMILAR** when all tokens that contain a digit ("1", "f1", "24") and `plus` tokens are equal as multisets (so "Sky Sports 1" ≠ "Sky Sports 2",
+  "ITV" ≠ "ITV plus 1", "Sky Sports F1" ≠ "F2"), at least one other token is shared, and `max(jaccard(tokens), 1 − levenshtein(keyA, keyB) / max(len))` ≥ **0.75**.
+  When only the letters make them close (Jaccard under 0.75), every token that differs must be within one edit (one more per 5 letters) of a token on the other
+  side, so "Sky Sport News" ≈ "Sky Sports News" but "Sony SAB" ≠ "Sony MAX".
 - otherwise none.
 The threshold and the lists are constants with a test table of 40+ pairs (positive and negative), so a change is a visible diff.
 

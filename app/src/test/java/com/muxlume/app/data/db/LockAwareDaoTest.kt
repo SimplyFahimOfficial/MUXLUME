@@ -10,7 +10,7 @@ import java.io.File
  * it is safe. Reads the DAO sources, so adding a query without thinking about the lock fails here.
  */
 class LockAwareDaoTest {
-    private val guarded = listOf("ItemEntity", "HistoryEntity", "ReminderEntity", "ProgramHit", "RecordingEntity")
+    private val guarded = listOf("ItemEntity", "HistoryEntity", "ReminderEntity", "ProgramHit", "RecordingEntity", "ServerRow")
 
     /** "Dao.method" to why it may ignore the lock. */
     private val exempt = mapOf(

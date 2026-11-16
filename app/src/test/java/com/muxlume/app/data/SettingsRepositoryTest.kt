@@ -57,6 +57,14 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `trying other servers is on by default and can be turned off`(): Unit = runBlocking {
+        val r = repo("failover")
+        assertThat(r.current().failover).isTrue()
+        r.setFailover(false)
+        assertThat(r.current().failover).isFalse()
+    }
+
+    @Test
     fun `appearance choices round trip`(): Unit = runBlocking {
         val r = repo("ok")
         assertThat(r.current()).isEqualTo(AppSettings())

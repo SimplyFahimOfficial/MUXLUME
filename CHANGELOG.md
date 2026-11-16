@@ -34,6 +34,17 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - Default audio and subtitle language (Settings → Playback): Automatic (as before), the device language, a language from a short
   list, or subtitles off. Used when a stream has that language; what you pick in the player's options still wins for that
   stream. Part of the backup.
+- Alternative servers: the Servers button under the channel name in the live player lists the channel itself, the
+  servers you saved for it, and channels with the same name in your playlists ("Same name": equal once case, accents,
+  brackets, quality words such as HD or 4K and country prefixes such as "UK:" are ignored), then channels with a similar
+  name ("Similar name": a typo or a plural; numbers must match, so Sky Sports 1 never matches Sky Sports 2 and ITV never
+  matches ITV +1). Playlists other than the channel's own come first. Tap a row to switch to it; "Add as server" saves it
+  for the channel (kept across refreshes and in the backup) and "Remove" deletes it. When a channel fails for good (after the
+  usual retries) MUXLUME tries its saved servers, then same-name channels, at most 3 per failure and never one twice, and
+  says which playlist it is trying; similar-name channels are only used when you tap them. The error screen offers "Try
+  another server". Turn the automatic part off in Settings → Playback. Each server uses its own playlist's login and HTTP
+  setting, locked groups and hidden channels are never offered, and playing another server does not change the channel's
+  watch history. Matching happens on the device.
 - Channel picker: the Channels button in the live player lists the channels of the list you came from (provider order,
   A to Z, a group or favourites) over the video, which keeps playing until you choose one. Typing searches the live channels
   of the same playlist. Hidden channels, and locked ones while locked, are not listed; channel up and down keep that list.
