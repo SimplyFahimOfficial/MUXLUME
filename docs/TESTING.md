@@ -22,6 +22,7 @@ contacted.
 | `LockAwareDaoTest` | Every DAO query returning items, history, reminders or programme hits takes `:unlocked`, or is on a short list with the reason it may not |
 | `HlsParserTest`, `RecorderTest` (MockWebServer) | HLS media and master playlists, encryption/DRM/fMP4 detection; a direct stream copied byte for byte, cut at the end time, cut off mid-stream and reopened with the bytes of both connections in order, a live feed that closes early, a server that stays down (network error after the give-up window, partial kept), the first connection failing at once, headers sent; HLS segments appended once each and in order across a sliding playlist, best variant only, stop at the end time, a playlist that stays down, one that recovers, a restarted sequence, skipped segment; DASH/RTSP/DRM/AES/fMP4 refused with nothing written; out of space and write errors; cancel; failures never name the host |
 | `NumberEntryTest`, `DatabaseTest` (number jump) | Digits and numpad keys, leading zeros, five digit limit, clear; channel by number, place in the list for playlists without numbers, number clashes, hidden and locked channels not reachable; the list kept after a jump only where the target is in it |
+| `DatabaseTest` (channel picker) | The picker lists provider order, A to Z, a group and favourites like channel up and down does; hidden and locked channels absent; search limited to live channels of one playlist, finding provider and renamed names |
 | `RecordingsTest`, `RecordingDbTest`, `StreamResolverTest` (Robolectric) | Start rules (now / exact alarm / notification), file names, no folder / over / duplicate, alarm and service intents, re-arming and giving up after a restart; recordings hidden and unplayable while their channel is locked, one row per programme, cascade; padding copied from settings and used for the alarm and the immediate start, give-up after the padded end, next padded start on the same channel, migration 6 → 7, `addNow` (fixed length, no padding, title, no folder), running-state query; URLs, headers and HTTP setting per source, RTSP gate, locked / hidden / missing items, episodes through their series |
 | `CrashLogTest` | Links removed in messages and causes in any case, the rest of the report kept, 64 KB cap, a second crash replaces the first, the handler writes then calls the previous one, an unwritable log does not hide the crash |
 | `GuideFilterTest` (Robolectric, Room) | Guide favorites and on-now filters, alone and with a group: start inclusive, end exclusive, staged programmes ignored, hidden and locked channels never listed |
@@ -39,6 +40,8 @@ R8 problems.
 `./gradlew testDebugUnitTest --tests '*VisualRender*' -Pmuxlume.visual=build/visual`.
 
 ## Not automated yet
+
+Channel picker: opening it over playing video, scrolling a very large list, search, remote focus and Back, TalkBack labels.
 
 Channel number jump: typing digits on a remote and keyboard, the 2.5 second pause and Enter, the overlay, the number pad, Back clearing, Last channel key.
 

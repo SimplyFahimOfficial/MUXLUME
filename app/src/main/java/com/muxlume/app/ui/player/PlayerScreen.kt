@@ -36,6 +36,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.rounded.AspectRatio
 import androidx.compose.material.icons.rounded.Dialpad
 import androidx.compose.material.icons.rounded.FiberManualRecord
@@ -123,6 +124,7 @@ import com.muxlume.app.ui.theme.Motion
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
 import com.muxlume.app.ui.theme.SectionLabel
+import com.muxlume.app.playback.ChannelList
 import com.muxlume.app.recording.RecordingService
 import com.muxlume.app.ui.guide.NowNextLine
 import com.muxlume.app.ui.guide.recordingMessage
@@ -196,6 +198,7 @@ fun PlayerScreen(onBack: () -> Unit) {
     val channel = if (ui.live) ui.mediaId?.let(MediaIds::parse) else null
     val runningId by remember(channel) { channel?.let { (s, k) -> context.container.db.recordings().runningFor(s, k) } ?: flowOf(null) }.collectAsStateWithLifecycle(null)
     var numberPad by remember { mutableStateOf(false) }
+    var picker by remember { mutableStateOf<ChannelList?>(null) }
     val number = remember { NumberEntry() }
     var current by remember { mutableStateOf<String?>(null) }
     var previous by remember { mutableStateOf<String?>(null) }
@@ -224,6 +227,11 @@ fun PlayerScreen(onBack: () -> Unit) {
     fun goTo(n: Int) {
         if (p == null) return
         scope.launch { if (!context.jumpToChannel(p, n)) toast(R.string.player_no_channel, n) }
+    }
+
+    fun openPicker() {
+        if (p == null) return
+        scope.launch { picker = context.currentList(p, context.container.lock.unlockedNow()) }
     }
 
     fun goToPrevious() {
@@ -376,12 +384,24 @@ fun PlayerScreen(onBack: () -> Unit) {
                     onRotate = { portrait = !portrait; poke() },
                     onOptions = { sheet = true },
                     onNumberPad = { numberPad = true },
+                    onChannels = if (channel != null) ({ openPicker(); poke() }) else null,
                     onPrevious = if (previous != null) ({ goToPrevious(); poke() }) else null,
                     onRecord = if (channel != null) ({ record(null); poke() }) else null,
                     recording = runningId != null,
                     poke = ::poke,
                 )
             }
+        }
+
+        picker?.let { list ->
+            ChannelPickerSheet(
+                sourceId = channel?.first ?: 0, list = list, currentKey = channel?.second,
+                onPick = { item ->
+                    picker = null
+                    if (p != null) scope.launch { context.playLike(p, item, context.container.lock.unlockedNow()) }
+                },
+                onDismiss = { picker = null; poke() },
+            )
         }
 
         if (numberPad) NumberPadDialog(onGo = { numberPad = false; goTo(it) }, onDismiss = { numberPad = false })
@@ -416,7 +436,7 @@ fun PlayerScreen(onBack: () -> Unit) {
 private fun Controls(
     ui: PlayerUi, p: Player?, scaleLabel: String,
     onBack: () -> Unit, onScale: () -> Unit, onPip: () -> Unit, onRotate: () -> Unit, onOptions: () -> Unit,
-    onNumberPad: () -> Unit, onPrevious: (() -> Unit)?, onRecord: (() -> Unit)?, recording: Boolean, poke: () -> Unit,
+    onNumberPad: () -> Unit, onChannels: (() -> Unit)?, onPrevious: (() -> Unit)?, onRecord: (() -> Unit)?, recording: Boolean, poke: () -> Unit,
 ) {
     Box(Modifier.fillMaxSize()) {
         // Scrims only behind the top and bottom bars, so the picture stays clean.
@@ -432,6 +452,7 @@ private fun Controls(
                 }
                 if (ui.live) {
                     onPrevious?.let { previous -> IconButton(previous) { Icon(Icons.Rounded.SwapHoriz, stringResource(R.string.player_last_channel), tint = MuxTheme.TextPrimary) } }
+                    onChannels?.let { channels -> IconButton(channels) { Icon(Icons.AutoMirrored.Rounded.List, stringResource(R.string.player_channels), tint = MuxTheme.TextPrimary) } }
                     IconButton(onNumberPad) { Icon(Icons.Rounded.Dialpad, stringResource(R.string.player_go_to_channel), tint = MuxTheme.TextPrimary) }
                 }
                 onRecord?.let { record ->
