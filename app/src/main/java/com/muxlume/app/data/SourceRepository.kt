@@ -251,6 +251,8 @@ class SourceRepository(
         }
         db.items().insertAll(batch)
         onProgress(position)
+        // An empty file or an HTML error page served with HTTP 200 must not wipe a working catalogue.
+        if (position == 0 && source.liveCount + source.movieCount > 0) throw IOException("The playlist has no playable channels")
         commit(source.id) {
             it.copy(
                 refreshedAt = now(), lastError = null, liveCount = live, movieCount = movies, seriesCount = 0,

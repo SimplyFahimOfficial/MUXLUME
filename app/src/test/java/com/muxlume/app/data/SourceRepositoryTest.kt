@@ -28,6 +28,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import java.io.IOException
 
 @RunWith(AndroidJUnit4::class)
 // Plain Application: MuxlumeApp would start its own database and observers during the test.
@@ -102,6 +103,39 @@ class SourceRepositoryTest {
         assertThrows(HttpStatusException::class.java) { runBlocking { repo.refresh(id) } }
         assertThat(names(id)).hasSize(3)
         assertThat(repo.get(id)!!.lastError).contains("500")
+    }
+
+    @Test
+    fun `an empty or HTML body with HTTP 200 keeps the previous channels and records an error`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+        val refreshedAt = repo.get(id)!!.refreshedAt
+
+        for (body in listOf("<html><body><h1>Service unavailable</h1></body></html>", "")) {
+            serve(body)
+            assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+            assertThat(names(id)).containsExactly("a", "b").inOrder()
+            val source = repo.get(id)!!
+            assertThat(source.refreshedAt).isEqualTo(refreshedAt)
+            assertThat(source.lastError).isNotEmpty()
+        }
+    }
+
+    @Test
+    fun `a smaller valid headerless playlist still refreshes and clears the error`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+        serve("")
+        assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+        assertThat(repo.get(id)!!.lastError).isNotNull()
+
+        serve("https://cdn.example/only.m3u8\n")
+        repo.refresh(id)
+        assertThat(names(id)).hasSize(1)
+        assertThat(repo.get(id)!!.lastError).isNull()
+        assertThat(repo.get(id)!!.liveCount).isEqualTo(1)
     }
 
     @Test
