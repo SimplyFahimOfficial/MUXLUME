@@ -48,6 +48,9 @@ interface SourceDao {
     suspend fun allNow(): List<SourceEntity>
 }
 
+/** A staged item and the key it takes over from an earlier import. */
+data class KeyRemap(val id: Long, val stableKey: String)
+
 /** SQL: the history row `h` is of an item (or a series' episode) in a locked group. Used as `NOT (...)` unless `:unlocked`. */
 internal const val HISTORY_LOCKED = """EXISTS (SELECT 1 FROM items li JOIN locked_groups lg ON lg.sourceId = li.sourceId AND lg.groupTitle = li.groupTitle
     WHERE li.sourceId = h.sourceId AND li.pending = 0
@@ -63,6 +66,7 @@ internal const val CHANNEL_LOCKED = """EXISTS (SELECT 1 FROM items li JOIN locke
  */
 @Dao
 @RewriteQueriesToDropUnusedColumns
+@Suppress("TooManyFunctions") // every read and write of items is here
 abstract class ItemDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract suspend fun insertAll(items: List<ItemEntity>)
@@ -75,6 +79,37 @@ abstract class ItemDao {
 
     @Query("UPDATE items SET pending = 0 WHERE sourceId = :sourceId AND pending = 1")
     protected abstract suspend fun publishPending(sourceId: Long)
+
+    /**
+     * Staged live channels (at most [limit]) whose key no earlier row has but whose tvg-id belongs to exactly one earlier and one staged
+     * live channel of this source, with the earlier key. Rows whose own key or whose earlier key is already taken are left out.
+     */
+    @Query(
+        """SELECT n.id AS id, o.stableKey AS stableKey FROM items n
+           JOIN (SELECT tvgId, MIN(stableKey) AS stableKey FROM items WHERE sourceId = :sourceId AND pending = 0 AND kind = 'LIVE' AND tvgId IS NOT NULL
+                 GROUP BY tvgId HAVING COUNT(*) = 1) o ON o.tvgId = n.tvgId
+           WHERE n.sourceId = :sourceId AND n.pending = 1 AND n.kind = 'LIVE' AND n.stableKey != o.stableKey
+           AND n.tvgId IN (SELECT tvgId FROM items WHERE sourceId = :sourceId AND pending = 1 AND kind = 'LIVE' AND tvgId IS NOT NULL
+                           GROUP BY tvgId HAVING COUNT(*) = 1)
+           AND NOT EXISTS (SELECT 1 FROM items x WHERE x.sourceId = :sourceId AND x.pending = 0 AND x.stableKey = n.stableKey)
+           AND NOT EXISTS (SELECT 1 FROM items x WHERE x.sourceId = :sourceId AND x.pending = 1 AND x.stableKey = o.stableKey)
+           LIMIT :limit""",
+    )
+    abstract suspend fun keyReuse(sourceId: Long, limit: Int): List<KeyRemap>
+
+    @Query("UPDATE items SET stableKey = :stableKey WHERE id = :id")
+    protected abstract suspend fun setKey(id: Long, stableKey: String)
+
+    /**
+     * Gives staged live channels the key of the earlier channel with the same tvg-id (see [keyReuse]), so favorites, history and
+     * preferences follow a channel whose group or stream link changed. Keys are never shared: an ambiguous tvg-id changes nothing.
+     */
+    @Transaction
+    open suspend fun reuseKeys(sourceId: Long, limit: Int): Int {
+        val rows = keyReuse(sourceId, limit)
+        rows.forEach { setKey(it.id, it.stableKey) }
+        return rows.size
+    }
 
     /** Replaces the source's visible items with the staged (pending) ones, in one short transaction. */
     @Transaction

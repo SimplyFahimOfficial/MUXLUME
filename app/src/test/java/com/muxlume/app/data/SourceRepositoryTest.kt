@@ -17,17 +17,26 @@ import com.muxlume.app.data.db.ItemKind
 import com.muxlume.app.data.db.MuxlumeDatabase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
+import mockwebserver3.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertThrows
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import java.io.IOException
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
 // Plain Application: MuxlumeApp would start its own database and observers during the test.
@@ -68,6 +77,36 @@ class SourceRepositoryTest {
         db.openHelper.readableDatabase.query("SELECT name FROM items WHERE sourceId = ? AND kind = 'LIVE' AND pending = 0 ORDER BY position", arrayOf<Any>(id))
             .use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
 
+    private fun entry(name: String, url: String, group: String = "G", tvg: String? = null) =
+        "#EXTINF:-1${tvg?.let { " tvg-id=\"$it\"" }.orEmpty()} group-title=\"$group\",$name\n$url\n"
+
+    private fun m3u(vararg entries: String) = "#EXTM3U\n" + entries.joinToString("")
+
+    /** Holds the answer of one path until [open] is released, and records every path asked for. */
+    private inner class Gate(private val held: String, private val routes: Map<String, MockResponse>) {
+        val reached = CountDownLatch(1)
+        val open = CountDownLatch(1)
+        val requested = CopyOnWriteArrayList<String>()
+
+        init {
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    val path = request.url.encodedPath
+                    requested += path
+                    if (path == held) {
+                        reached.countDown()
+                        open.await(10, TimeUnit.SECONDS)
+                    }
+                    return routes[path] ?: MockResponse.Builder().code(404).build()
+                }
+            }
+        }
+
+        suspend fun awaitReached() = withContext(Dispatchers.IO) { assertThat(reached.await(10, TimeUnit.SECONDS)).isTrue() }
+    }
+
+    private fun ok(body: String) = MockResponse.Builder().code(200).body(body).build()
+
     private fun key(id: Long, name: String): String =
         db.openHelper.readableDatabase.query("SELECT stableKey FROM items WHERE sourceId = ? AND name = ? AND pending = 0", arrayOf<Any>(id, name))
             .use { c -> c.moveToFirst(); c.getString(0) }
@@ -102,6 +141,39 @@ class SourceRepositoryTest {
         assertThrows(HttpStatusException::class.java) { runBlocking { repo.refresh(id) } }
         assertThat(names(id)).hasSize(3)
         assertThat(repo.get(id)!!.lastError).contains("500")
+    }
+
+    @Test
+    fun `an empty or HTML body with HTTP 200 keeps the previous channels and records an error`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+        val refreshedAt = repo.get(id)!!.refreshedAt
+
+        for (body in listOf("<html><body><h1>Service unavailable</h1></body></html>", "")) {
+            serve(body)
+            assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+            assertThat(names(id)).containsExactly("a", "b").inOrder()
+            val source = repo.get(id)!!
+            assertThat(source.refreshedAt).isEqualTo(refreshedAt)
+            assertThat(source.lastError).isNotEmpty()
+        }
+    }
+
+    @Test
+    fun `a smaller valid headerless playlist still refreshes and clears the error`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+        serve("")
+        assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+        assertThat(repo.get(id)!!.lastError).isNotNull()
+
+        serve("https://cdn.example/only.m3u8\n")
+        repo.refresh(id)
+        assertThat(names(id)).hasSize(1)
+        assertThat(repo.get(id)!!.lastError).isNull()
+        assertThat(repo.get(id)!!.liveCount).isEqualTo(1)
     }
 
     @Test
@@ -193,5 +265,170 @@ class SourceRepositoryTest {
         assertThat(live.url).isNull()
         assertThat(repo.get(id)!!.liveExtension).isEqualTo("ts")
         assertThat(db.items().recentlyAdded(ItemKind.MOVIE, 5, true).first().single().extension).isEqualTo("mkv")
+    }
+
+    @Test
+    fun `a link saved while another refresh runs publishes the new link's channels`(): Unit = runBlocking {
+        val id = repo.save(SourceInput.M3uUrl("T", server.url("/a.m3u").toString(), true))
+        val other = repo.save(SourceInput.M3uUrl("O", server.url("/o.m3u").toString(), true))
+        val gate = Gate("/a.m3u", mapOf("/a.m3u" to ok(playlist("a1", "a2")), "/b.m3u" to ok(playlist("b1", "b2", "b3")), "/o.m3u" to ok(playlist("o1"))))
+
+        val running = async(Dispatchers.IO) { repo.refresh(id) }
+        gate.awaitReached()
+        withTimeout(5_000) { repo.refresh(other) } // another source isn't held back by the paused one
+        assertThat(names(other)).containsExactly("o1")
+
+        repo.save(SourceInput.M3uUrl("T", server.url("/b.m3u").toString(), true), id)
+        val edited = async(Dispatchers.IO) { repo.refresh(id) }
+        gate.open.countDown()
+        running.await()
+        edited.await()
+
+        assertThat(gate.requested).contains("/b.m3u")
+        assertThat(repo.secretOf(repo.get(id)!!).url).endsWith("/b.m3u")
+        assertThat(names(id)).containsExactly("b1", "b2", "b3").inOrder()
+        assertThat(repo.get(id)!!.liveCount).isEqualTo(3)
+    }
+
+    @Test
+    fun `a failed refresh of a link saved during another refresh keeps the last working channels`(): Unit = runBlocking {
+        val id = repo.save(SourceInput.M3uUrl("T", server.url("/a.m3u").toString(), true))
+        val gate = Gate("/a.m3u", mapOf("/a.m3u" to ok(playlist("a1")), "/b.m3u" to MockResponse.Builder().code(500).build()))
+        gate.open.countDown()
+        repo.refresh(id)
+        val refreshedAt = repo.get(id)!!.refreshedAt
+        assertThat(names(id)).containsExactly("a1")
+
+        val slowGate = Gate("/a.m3u", mapOf("/a.m3u" to ok(playlist("a-new")), "/b.m3u" to MockResponse.Builder().code(500).build()))
+        val running = async(Dispatchers.IO) { repo.refresh(id) }
+        slowGate.awaitReached()
+        repo.save(SourceInput.M3uUrl("T", server.url("/b.m3u").toString(), true), id)
+        val edited = async(Dispatchers.IO) { runCatching { repo.refresh(id) } }
+        slowGate.open.countDown()
+        running.await()
+
+        assertThat(edited.await().exceptionOrNull()).isInstanceOf(HttpStatusException::class.java)
+        assertThat(names(id)).containsExactly("a1")
+        assertThat(repo.get(id)!!.refreshedAt).isEqualTo(refreshedAt)
+        assertThat(repo.get(id)!!.lastError).contains("500")
+    }
+
+    @Test
+    fun `two refreshes of an unchanged source download it once`(): Unit = runBlocking {
+        val id = addM3u()
+        val gate = Gate("/list.m3u", mapOf("/list.m3u" to ok(playlist("a"))))
+        val first = async(Dispatchers.IO) { repo.refresh(id) }
+        gate.awaitReached()
+        val second = async(Dispatchers.IO) { repo.refresh(id) }
+        delay(300) // lets the second call queue behind the first
+        gate.open.countDown()
+        first.await()
+        second.await()
+        assertThat(gate.requested).containsExactly("/list.m3u")
+    }
+
+    private val one = "https://cdn.example/1.m3u8"
+    private val two = "https://cdn.example/2.m3u8"
+
+    /** Imports [first], favorites and pins channel "One", then refreshes with [second]. Returns the source and One's key before the refresh. */
+    private suspend fun refreshAfterMarking(first: String, second: String): Pair<Long, String> {
+        val id = addM3u()
+        serve(first)
+        repo.refresh(id)
+        val old = key(id, "One")
+        db.favorites().add(FavoriteEntity(id, old, 1))
+        db.channelPrefs().edit(id, old) { it.copy(pinned = true) }
+        serve(second)
+        repo.refresh(id)
+        return id to old
+    }
+
+    private suspend fun assertFavoriteOpens(id: Long, oldKey: String, url: String, group: String) {
+        val fav = db.items().favorites(ItemKind.LIVE, id, true).first().single()
+        assertThat(fav.stableKey).isEqualTo(oldKey)
+        assertThat(fav.url).isEqualTo(url)
+        assertThat(fav.groupTitle).isEqualTo(group)
+        assertThat(db.items().byKey(id, oldKey, true)!!.url).isEqualTo(url)
+        assertThat(db.channelPrefs().isPinned(id, oldKey)).isTrue()
+    }
+
+    @Test
+    fun `a favorite follows a channel whose group was renamed`(): Unit = runBlocking {
+        val (id, old) = refreshAfterMarking(
+            m3u(entry("One", one, "News", "one.tv"), entry("Two", two, "News", "two.tv")),
+            m3u(entry("One", one, "Sport", "one.tv"), entry("Two", two, "News", "two.tv")),
+        )
+        assertFavoriteOpens(id, old, one, "Sport")
+        assertThat(names(id)).containsExactly("One", "Two").inOrder()
+    }
+
+    @Test
+    fun `a favorite follows a channel whose stream link rotated`(): Unit = runBlocking {
+        val rotated = "https://cdn2.example/1.m3u8?t=2"
+        val (id, old) = refreshAfterMarking(
+            m3u(entry("One", one, "News", "one.tv"), entry("Two", two, "News", "two.tv")),
+            m3u(entry("One", rotated, "News", "one.tv"), entry("Two", two, "News", "two.tv")),
+        )
+        assertFavoriteOpens(id, old, rotated, "News")
+    }
+
+    @Test
+    fun `channels without a tvg-id or with a shared one get new identities`(): Unit = runBlocking {
+        val (plain, plainKey) = refreshAfterMarking(m3u(entry("One", one)), m3u(entry("One", "https://cdn2.example/1.m3u8")))
+        assertThat(key(plain, "One")).isNotEqualTo(plainKey)
+
+        // Two variants share a tvg-id, in the old list and in the new one: neither may inherit the favorite.
+        val sd = "https://cdn.example/sd.m3u8"
+        val (id, old) = refreshAfterMarking(
+            m3u(entry("One", one, "G", "dup.tv"), entry("One SD", sd, "G", "dup.tv")),
+            m3u(entry("One", "https://cdn2.example/1.m3u8", "G", "dup.tv"), entry("One SD", "https://cdn2.example/sd.m3u8", "G", "dup.tv")),
+        )
+        val keys = listOf(key(id, "One"), key(id, "One SD"))
+        assertThat(keys).containsNoDuplicates()
+        assertThat(keys).doesNotContain(old)
+        assertThat(db.items().favorites(ItemKind.LIVE, id, true).first()).isEmpty()
+
+        // One variant disappears: the lone remaining one is still ambiguous against the two old ones.
+        val (lone, loneOld) = refreshAfterMarking(
+            m3u(entry("One", one, "G", "dup.tv"), entry("One SD", sd, "G", "dup.tv")),
+            m3u(entry("One", "https://cdn2.example/1.m3u8", "G", "dup.tv")),
+        )
+        assertThat(key(lone, "One")).isNotEqualTo(loneOld)
+    }
+
+    @Test
+    fun `a tvg-id shared with another source doesn't move keys between sources`(): Unit = runBlocking {
+        val a = addM3u()
+        val b = addM3u()
+        serve(m3u(entry("One", one, "G", "shared.tv")))
+        repo.refresh(a)
+        serve(m3u(entry("One", two, "G", "shared.tv")))
+        repo.refresh(b)
+        val keyA = key(a, "One")
+        val keyB = key(b, "One")
+        db.favorites().add(FavoriteEntity(a, keyA, 1))
+        db.favorites().add(FavoriteEntity(b, keyB, 2))
+
+        serve(m3u(entry("One", "https://cdn2.example/a.m3u8", "G", "shared.tv")))
+        repo.refresh(a)
+        serve(m3u(entry("One", "https://cdn2.example/b.m3u8", "G", "shared.tv")))
+        repo.refresh(b)
+
+        assertThat(key(a, "One")).isEqualTo(keyA)
+        assertThat(key(b, "One")).isEqualTo(keyB)
+        assertThat(db.items().byKey(a, keyA, true)!!.url).isEqualTo("https://cdn2.example/a.m3u8")
+        assertThat(db.items().byKey(b, keyB, true)!!.url).isEqualTo("https://cdn2.example/b.m3u8")
+    }
+
+    @Test
+    fun `reusing keys works across several batches`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(m3u(*Array(2_500) { entry("c$it", "https://cdn.example/$it.m3u8", "G", "tv$it") }))
+        repo.refresh(id)
+        val old = key(id, "c2499")
+        serve(m3u(*Array(2_500) { entry("c$it", "https://cdn2.example/$it.m3u8", "G", "tv$it") }))
+        repo.refresh(id)
+        assertThat(key(id, "c2499")).isEqualTo(old)
+        assertThat(db.items().byKey(id, old, true)!!.url).isEqualTo("https://cdn2.example/2499.m3u8")
     }
 }
