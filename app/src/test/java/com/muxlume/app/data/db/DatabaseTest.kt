@@ -166,6 +166,24 @@ class DatabaseTest {
     }
 
 
+    @Test
+    fun `migration 8 to 9 keeps sources and recordings and adds an unknown connection limit`() {
+        createAt(8) { old ->
+            sql(
+                old,
+                "INSERT INTO sources (id, name, type, secret, label, allowHttp, createdAt, liveCount, movieCount, seriesCount) VALUES (1, 'S', 'XTREAM', 'x', 'l', 0, 0, 1, 0, 0)",
+                "INSERT INTO recordings (sourceId, stableKey, channelName, title, startAt, endAt, state) VALUES (1, 'k', 'C', 'T', 10, 20, 'SCHEDULED')",
+            )
+        }
+        val migrated = openCurrent()
+        try {
+            assertThat(runBlocking { migrated.sources().get(1) }!!.maxConnections).isNull()
+            assertThat(runBlocking { migrated.recordings().find(1, "k", 10) }!!.state).isEqualTo(RecordingState.SCHEDULED)
+        } finally {
+            migrated.close()
+        }
+    }
+
     // ---- Channel preferences (hide, rename, pin)
 
     private val prefs get() = db.channelPrefs()

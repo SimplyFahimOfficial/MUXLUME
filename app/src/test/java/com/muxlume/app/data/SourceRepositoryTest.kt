@@ -431,4 +431,18 @@ class SourceRepositoryTest {
         assertThat(key(id, "c2499")).isEqualTo(old)
         assertThat(db.items().byKey(id, old, true)!!.url).isEqualTo("https://cdn2.example/2499.m3u8")
     }
+
+    @Test
+    fun `an xtream account's positive connection limit is kept, and a missing or zero one is not`(): Unit = runBlocking {
+        suspend fun importWith(limit: String?): Int? {
+            val id = repo.save(SourceInput.Xtream("X", server.url("/").toString(), "u", "p", allowHttp = true))
+            serve("""{"user_info":{"auth":1,"status":"Active","allowed_output_formats":["ts"]${limit?.let { ""","max_connections":"$it"""" }.orEmpty()}}}""")
+            repeat(6) { serve("[]") }
+            repo.refresh(id)
+            return repo.get(id)!!.maxConnections
+        }
+        assertThat(importWith("2")).isEqualTo(2)
+        assertThat(importWith("0")).isNull()
+        assertThat(importWith(null)).isNull()
+    }
 }

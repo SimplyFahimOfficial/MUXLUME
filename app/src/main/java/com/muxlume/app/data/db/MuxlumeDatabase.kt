@@ -339,6 +339,10 @@ abstract class RecordingDao {
     @Query("SELECT id FROM recordings WHERE sourceId = :sourceId AND stableKey = :stableKey AND state = 'RECORDING' ORDER BY id DESC LIMIT 1")
     abstract fun runningFor(sourceId: Long, stableKey: String): Flow<Long?>
 
+    /** The recordings of a source that are waiting or running: what a new one has to share the account's connections with. */
+    @Query("SELECT * FROM recordings WHERE sourceId = :sourceId AND state IN ('SCHEDULED', 'RECORDING')")
+    abstract suspend fun activeFor(sourceId: Long): List<RecordingEntity>
+
     @Query("SELECT * FROM recordings WHERE state = 'SCHEDULED' AND startAt - leadSeconds > :now")
     abstract suspend fun scheduledAfter(now: Long): List<RecordingEntity>
 
@@ -494,7 +498,7 @@ interface HistoryDao {
         LockedGroupEntity::class, RecordingEntity::class, ChannelServerEntity::class,
     ],
     views = [VisibleItem::class],
-    version = 8,
+    version = 9,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = MuxlumeDatabase.Migration1To2::class),
@@ -504,6 +508,7 @@ interface HistoryDao {
         AutoMigration(from = 5, to = 6),
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8),
+        AutoMigration(from = 8, to = 9),
     ],
 )
 abstract class MuxlumeDatabase : RoomDatabase() {

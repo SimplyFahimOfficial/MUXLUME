@@ -137,7 +137,12 @@ class SourceRepository(
             // Re-read in the transaction: an import that commits meanwhile must not be overwritten with its old counts and timestamp.
             db.withTransaction {
                 val current = db.sources().get(existing.id) ?: throw IOException("Source not found")
-                db.sources().update(current.copy(name = name, type = type, secret = sealed, label = label, allowHttp = input.allowHttp))
+                db.sources().update(
+                    current.copy(
+                        name = name, type = type, secret = sealed, label = label, allowHttp = input.allowHttp,
+                        maxConnections = current.maxConnections.takeIf { type == SourceType.XTREAM },
+                    ),
+                )
             }
             existing.id
         } else {
@@ -327,6 +332,7 @@ class SourceRepository(
             it.copy(
                 refreshedAt = now(), lastError = null, liveCount = counts[0], movieCount = counts[1], seriesCount = counts[2],
                 liveExtension = account.liveExtension, expiresAt = account.expiresAtEpochSec,
+                maxConnections = account.maxConnections?.takeIf { n -> n > 0 },
             )
         }
         return ImportResult(counts[0], counts[1], counts[2], 0, 0)

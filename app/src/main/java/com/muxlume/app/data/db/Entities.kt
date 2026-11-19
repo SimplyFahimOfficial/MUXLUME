@@ -44,6 +44,8 @@ data class SourceEntity(
     val epgRefreshedAt: Long? = null,
     val epgError: String? = null,
     @ColumnInfo(defaultValue = "0") val epgPrograms: Int = 0,
+    /** Xtream: how many streams the account may open at once, as the provider reported at the last import (null if unknown or not positive). */
+    val maxConnections: Int? = null,
 )
 
 /**

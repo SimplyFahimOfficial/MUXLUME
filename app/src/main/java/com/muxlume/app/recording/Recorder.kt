@@ -76,8 +76,7 @@ class Recorder(
         try {
             withContext(Dispatchers.IO) { copy(Run(first, headers, policy, endAtMs, CountingSink(out), now())) }
         } catch (e: SinkFailure) {
-            val full = generateSequence<Throwable>(e) { it.cause }.any { it.message?.contains("ENOSPC") == true || it.message?.contains("No space", ignoreCase = true) == true }
-            refuse(if (full) Reason.STORAGE_FULL else Reason.WRITE_FAILED)
+            refuse(writeFailure(e))
         }
     }
 

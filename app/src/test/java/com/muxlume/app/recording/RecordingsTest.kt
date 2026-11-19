@@ -194,4 +194,51 @@ class RecordingsAddTest {
         assertThat(db.recordings().get(future)!!.state).isEqualTo(RecordingState.SCHEDULED)
         assertThat(alarms.scheduledAlarms).hasSize(1)
     }
+
+    private suspend fun limitTo(connections: Int?) = db.sources().update(db.sources().get(source)!!.copy(maxConnections = connections))
+
+    private suspend fun waiting(key: String, start: Long, end: Long) =
+        db.recordings().insert(RecordingEntity(sourceId = source, stableKey = key, channelName = "C", title = key, startAt = start, endAt = end, state = RecordingState.SCHEDULED))
+
+    @Test
+    fun `declining the connection warning leaves no recording and no alarm`(): Unit = runBlocking {
+        chooseFolder()
+        limitTo(1)
+        waiting("other", now + 500, now + 4000)
+        var asked: RecordingWarning? = null
+        val r = recordings().add(source, "k", "Chan", program(now + 600, now + 4200)) { asked = it; false }
+        assertThat(r).isEqualTo(Recordings.Result.Cancelled)
+        assertThat(asked!!.overLimit).isEqualTo(1)
+        assertThat(db.recordings().find(source, "k", now + 600)).isNull()
+        assertThat(alarms.scheduledAlarms).isEmpty()
+        assertThat(shadowOf(context as android.app.Application).nextStartedService).isNull()
+    }
+
+    @Test
+    fun `continuing past the warning schedules as usual, and no question is asked without a clash`(): Unit = runBlocking {
+        chooseFolder()
+        limitTo(1)
+        waiting("other", now + 500, now + 4000)
+        assertThat(recordings().add(source, "k", "Chan", program(now + 600, now + 4200)) { true }).isInstanceOf(Recordings.Result.Scheduled::class.java)
+        assertThat(alarms.scheduledAlarms).hasSize(1)
+
+        // After the last one ends there is room again: nothing to ask.
+        val r = recordings().add(source, "later", "Chan", program(now + 9000, now + 9600)) { error("no warning expected") }
+        assertThat(r).isInstanceOf(Recordings.Result.Scheduled::class.java)
+    }
+
+    @Test
+    fun `an unknown limit never asks about connections`(): Unit = runBlocking {
+        chooseFolder()
+        waiting("other", now + 500, now + 4000)
+        assertThat(recordings().add(source, "k", "Chan", program(now + 600, now + 4200)) { error("no warning expected") }).isInstanceOf(Recordings.Result.Scheduled::class.java)
+    }
+
+    @Test
+    fun `a programme already in your recordings is reported before any warning`(): Unit = runBlocking {
+        chooseFolder()
+        limitTo(1)
+        recordings().add(source, "k", "Chan", program(now + 600, now + 4200))
+        assertThat(recordings().add(source, "k", "Chan", program(now + 600, now + 4200)) { error("no warning expected") }).isEqualTo(Recordings.Result.Already)
+    }
 }

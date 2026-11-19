@@ -54,7 +54,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** What to tell the user after asking to record; [startAt] is the programme's start, for a scheduled one. */
-fun recordingMessage(res: android.content.res.Resources, r: Recordings.Result, startAt: Long): String = when (r) {
+fun recordingMessage(res: android.content.res.Resources, r: Recordings.Result, startAt: Long): String? = when (r) {
+    Recordings.Result.Cancelled -> null // the user chose not to record
     Recordings.Result.NoFolder -> res.getString(R.string.recording_no_folder)
     Recordings.Result.Ended -> res.getString(R.string.recording_ended)
     Recordings.Result.Already -> res.getString(R.string.recording_already)
@@ -95,6 +96,7 @@ fun ProgramSheet(item: ItemEntity, program: ProgramEntity, onWatch: () -> Unit, 
     val scope = rememberCoroutineScope()
     val reminder by c.db.reminders().reminderFor(item.sourceId, item.stableKey, program.start).collectAsStateWithLifecycle(null)
     val (canRemind, canRecord) = rememberProgramActions(program)
+    val prompt = remember { RecordingPrompt() }
 
     fun toast(id: Int, vararg args: Any) = Toast.makeText(context, res.getString(id, *args), Toast.LENGTH_SHORT).show()
 
@@ -109,8 +111,8 @@ fun ProgramSheet(item: ItemEntity, program: ProgramEntity, onWatch: () -> Unit, 
     }
 
     fun onRecord() = scope.launch {
-        val r = c.recordings.add(item.sourceId, item.stableKey, item.name, program)
-        Toast.makeText(context, recordingMessage(res, r, program.start), Toast.LENGTH_SHORT).show()
+        val r = c.recordings.add(item.sourceId, item.stableKey, item.name, program, confirm = prompt::confirm)
+        recordingMessage(res, r, program.start)?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
     }
 
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -131,6 +133,7 @@ fun ProgramSheet(item: ItemEntity, program: ProgramEntity, onWatch: () -> Unit, 
         }
     }
 
+    prompt.Dialog()
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MuxTheme.Surface) {
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = Mux.ScreenPadding).padding(bottom = 28.dp),

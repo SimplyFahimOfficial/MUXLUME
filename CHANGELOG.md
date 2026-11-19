@@ -81,6 +81,9 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
   notification 5 minutes before; inexact timing; needs notification permission on Android 13+).
 - Support: highlighted entry, a separate "More ways to pay" card, tap the QR code to enlarge it with
   the payee name and UPI ID, and a link to the project's GitHub repository.
+- Recording warns before it schedules a clash: when the playlist is an Xtream account whose connection limit
+  the recordings would exceed at some moment (the limit is read at each import), or when a recording would
+  cut a recording of the same channel short. You can record anyway or cancel; nothing is saved until you choose.
 
 ### Removed
 - Personal GitHub and Instagram links from the Support screen.
@@ -110,6 +113,9 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
   channel from two playlists.
 - A programme's sheet drops "Remind me" when the programme starts and "Record" when it ends, also if the
   sheet stayed open while the app was in the background.
+- A recording no longer shows as saved when the file could not be opened, written or closed: it is marked
+  stopped with the reason (storage full, file could not be written), the part already recorded is kept, and an
+  empty file is removed.
 
 ### Added
 - Light theme and an Appearance screen: System/Light/Dark, five accent colours, Material You accent
