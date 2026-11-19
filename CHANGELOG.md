@@ -105,6 +105,11 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
   paused refresh's old channels are dropped instead of being published under the new link.
 - Favorites, hidden and pinned channels, history and reminders stay with a channel after a playlist edit
   that changes its group or stream link, when the playlist gives it a tvg-id that no other channel shares.
+- While another server plays a channel, channel up/down, number entry and the channel picker follow the
+  channel you chose and its list, and only that channel is highlighted, also in Favorites that hold the same
+  channel from two playlists.
+- A programme's sheet drops "Remind me" when the programme starts and "Record" when it ends, also if the
+  sheet stayed open while the app was in the background.
 
 ### Added
 - Light theme and an Appearance screen: System/Light/Dark, five accent colours, Material You accent

@@ -418,9 +418,10 @@ fun PlayerScreen(onBack: () -> Unit) {
             )
         }
 
+        val chosenId = ui.primaryId
         picker?.let { list ->
-            ChannelPickerSheet(
-                sourceId = channel?.first ?: 0, list = list, currentKey = channel?.second,
+            if (chosenId != null) ChannelPickerSheet(
+                primaryId = chosenId, list = list,
                 onPick = { item ->
                     picker = null
                     if (p != null) scope.launch { context.playLike(p, item, context.container.lock.unlockedNow()) }

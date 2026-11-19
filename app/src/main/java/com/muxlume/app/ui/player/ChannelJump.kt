@@ -26,8 +26,8 @@ import com.muxlume.app.R
 import com.muxlume.app.container
 import com.muxlume.app.data.db.ItemEntity
 import com.muxlume.app.playback.ChannelList
-import com.muxlume.app.playback.MediaIds
-import com.muxlume.app.playback.channelByNumber
+import com.muxlume.app.playback.channelByNumberFrom
+import com.muxlume.app.playback.chosenChannel
 import com.muxlume.app.playback.listAfterJump
 import com.muxlume.app.ui.playChannel
 import com.muxlume.app.ui.theme.MuxTheme
@@ -64,10 +64,10 @@ class NumberEntry {
  * where the target is in it. False if there is no such channel (nothing changes).
  */
 suspend fun Context.jumpToChannel(player: Player, number: Int): Boolean {
-    val (sourceId, _) = player.currentMediaItem?.mediaId?.let(MediaIds::parse) ?: return false
+    val current = player.currentMediaItem ?: return false
     val c = container
     val unlocked = c.lock.unlockedNow()
-    val target = c.db.channelByNumber(sourceId, number, unlocked) ?: return false
+    val target = c.db.channelByNumberFrom(current, number, unlocked) ?: return false
     return playLike(player, target, unlocked)
 }
 
@@ -77,13 +77,9 @@ suspend fun Context.playLike(player: Player, target: ItemEntity, unlocked: Boole
     return playChannel(target, list)
 }
 
-/** The list the channel playing now was picked from (its own group in provider order if it came from nowhere in particular), or null if nothing live plays. */
-suspend fun Context.currentList(player: Player, unlocked: Boolean): ChannelList? {
-    val current = player.currentMediaItem ?: return null
-    val (sourceId, key) = MediaIds.parse(current.mediaId) ?: return null
-    val item = container.db.items().byKey(sourceId, key, unlocked) ?: return null
-    return ChannelList.from(current.mediaMetadata.extras, item)
-}
+/** The list the channel the user chose was picked from (its own group in provider order if it came from nowhere in particular), or null if nothing live plays. */
+suspend fun Context.currentList(player: Player, unlocked: Boolean): ChannelList? =
+    player.currentMediaItem?.let { container.db.chosenChannel(it, unlocked)?.second }
 
 /** A number pad for touch: shows what was typed, Go plays it. */
 @Composable

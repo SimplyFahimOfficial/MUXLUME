@@ -242,13 +242,11 @@ class PlaybackService : MediaSessionService() {
             val current = exo.currentMediaItem ?: return false
             if (MediaIds.kindOf(current) != ItemKind.LIVE) return false
             // Up and down move from the channel the user chose, not from the server that happens to play it.
-            val (sourceId, key) = MediaIds.parse(current.primaryId) ?: return false
             switchJob?.cancel()
             resetFailover()
             switchJob = scope.launch {
                 val unlocked = container.lock.unlockedNow()
-                val item = container.db.items().byKey(sourceId, key, unlocked) ?: return@launch
-                val list = ChannelList.from(current.mediaMetadata.extras, item)
+                val (item, list) = container.db.chosenChannel(current, unlocked) ?: return@launch
                 val next = container.db.neighbour(item, list, forward, unlocked) ?: return@launch // end of the list
                 val resolved = resolve(MediaIds.request(next, list)) ?: return@launch
                 saveHistory(exo)

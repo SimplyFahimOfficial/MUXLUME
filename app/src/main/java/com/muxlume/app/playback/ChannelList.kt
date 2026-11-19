@@ -1,6 +1,7 @@
 package com.muxlume.app.playback
 
 import android.os.Bundle
+import androidx.media3.common.MediaItem
 import androidx.paging.PagingSource
 import com.muxlume.app.data.db.ItemEntity
 import com.muxlume.app.data.db.ItemKind
@@ -64,6 +65,22 @@ suspend fun MuxlumeDatabase.neighbour(item: ItemEntity, list: ChannelList, forwa
             else items.previousFavorite(list.favoritesSourceId, fav.addedAt, item.id, unlocked)
         }
     }
+}
+
+/**
+ * The channel the user chose for the item playing now, and the list it was picked from. While another server plays, that is the channel
+ * behind it ([primaryId]), not the server's own channel: up/down, number entry and the channel picker all start from it.
+ */
+suspend fun MuxlumeDatabase.chosenChannel(current: MediaItem, unlocked: Boolean): Pair<ItemEntity, ChannelList>? {
+    val (sourceId, key) = MediaIds.parse(current.primaryId) ?: return null
+    val item = items().byKey(sourceId, key, unlocked) ?: return null
+    return item to ChannelList.from(current.mediaMetadata.extras, item)
+}
+
+/** The channel numbered [number] in the playlist of the channel the user chose for [current] (see [chosenChannel]). */
+suspend fun MuxlumeDatabase.channelByNumberFrom(current: MediaItem, number: Int, unlocked: Boolean): ItemEntity? {
+    val (sourceId, _) = MediaIds.parse(current.primaryId) ?: return null
+    return channelByNumber(sourceId, number, unlocked)
 }
 
 /** The channel numbered [number] in [sourceId]'s playlist, or, if that playlist has no numbers, its [number]th live channel in provider order. */
