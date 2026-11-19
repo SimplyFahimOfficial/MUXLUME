@@ -283,4 +283,39 @@ class BackupRepositoryTest {
         assertThat(e.reason).isEqualTo(BackupException.Reason.WRONG_PASSPHRASE)
         assertThat(runBlocking { b.db.sources().allNow() }).isEmpty()
     }
+
+    @Test
+    fun `the order of favorites is saved in the backup and restored, and favorites never placed stay unplaced`(): Unit = runBlocking {
+        val a = device("a")
+        val home = a.sources.save(SourceInput.M3uUrl("Home", "https://example.com/list.m3u", allowHttp = false))
+        a.db.favorites().add(FavoriteEntity(home, "one", 100, sortOrder = 2))
+        a.db.favorites().add(FavoriteEntity(home, "two", 200, sortOrder = 1))
+        a.db.favorites().add(FavoriteEntity(home, "three", 300)) // added after arranging: no place yet
+
+        val b = device("b")
+        b.import(a.export())
+
+        val restored = b.db.sources().allNow().single().id
+        assertThat(b.db.favorites().all().associate { it.stableKey to it.sortOrder }).containsExactly("one", 2, "two", 1, "three", null)
+        assertThat(b.db.favorites().get(restored, "two")!!.orderKey).isLessThan(b.db.favorites().get(restored, "one")!!.orderKey)
+    }
+
+    @Test
+    fun `a backup from before favorites had an order restores them in the default order`(): Unit = runBlocking {
+        val older = """{"version":1,"sources":[{"name":"Home","type":"M3U_URL","secret":{"url":"https://example.com/list.m3u"},"allowHttp":false,"guideEnabled":false}],""" +
+            """"favorites":[{"source":0,"stableKey":"one","addedAt":100},{"source":0,"stableKey":"two","addedAt":200}]}"""
+        val b = device("b")
+        b.import(BackupCrypto.encrypt(older.toByteArray(), pass))
+        assertThat(b.db.favorites().all().map { it.sortOrder }).containsExactly(null, null)
+        assertThat(b.db.favorites().all().sortedBy { it.orderKey }.map { it.stableKey }).containsExactly("two", "one").inOrder() // newest first
+    }
+
+    @Test
+    fun `an order from a backup is checked like any other input`(): Unit = runBlocking {
+        val source = BackupSource("Home", SourceType.M3U_URL, SourceSecret(url = "https://example.com/list.m3u"), allowHttp = false, guideEnabled = false)
+        val data = BackupData(sources = listOf(source), favorites = listOf(BackupFavorite(0, "neg", 1, -5), BackupFavorite(0, "huge", 2, Int.MAX_VALUE), BackupFavorite(0, "ok", 3, 4)))
+        val b = device("b")
+        b.import(BackupCrypto.encrypt(Json.encodeToString(BackupData.serializer(), data).toByteArray(), pass))
+        assertThat(b.db.favorites().all().associate { it.stableKey to it.sortOrder }).containsExactly("neg", null, "huge", null, "ok", 4)
+    }
 }

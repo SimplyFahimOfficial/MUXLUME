@@ -61,8 +61,8 @@ suspend fun MuxlumeDatabase.neighbour(item: ItemEntity, list: ChannelList, forwa
             else items.previousByName(item.sourceId, group, pinned, item.name, item.position, unlocked)
         ChannelList.Order.FAVORITES -> {
             val fav = favorites().get(item.sourceId, item.stableKey) ?: return null
-            if (forward) items.nextFavorite(list.favoritesSourceId, fav.addedAt, item.id, unlocked)
-            else items.previousFavorite(list.favoritesSourceId, fav.addedAt, item.id, unlocked)
+            if (forward) items.nextFavorite(list.favoritesSourceId, fav.orderKey, item.id, unlocked)
+            else items.previousFavorite(list.favoritesSourceId, fav.orderKey, item.id, unlocked)
         }
     }
 }

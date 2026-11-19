@@ -184,6 +184,27 @@ class DatabaseTest {
         }
     }
 
+    @Test
+    fun `migration 9 to 10 keeps favorites in their newest-first order until they are moved`() {
+        createAt(9) { old ->
+            sql(
+                old,
+                "INSERT INTO sources (id, name, type, secret, label, allowHttp, createdAt, liveCount, movieCount, seriesCount) VALUES (1, 'S', 'M3U_URL', 'x', 'l', 0, 0, 3, 0, 0)",
+                "INSERT INTO items (sourceId, kind, stableKey, name, groupTitle, position) VALUES (1, 'LIVE', 'old', 'Old', 'G', 0), (1, 'LIVE', 'mid', 'Mid', 'G', 1), (1, 'LIVE', 'new', 'New', 'G', 2)",
+                "INSERT INTO favorites (sourceId, stableKey, addedAt) VALUES (1, 'old', 100), (1, 'mid', 200), (1, 'new', 300)",
+            )
+        }
+        val migrated = openCurrent()
+        try {
+            assertThat(runBlocking { migrated.favorites().all() }.map { it.sortOrder }).containsExactly(null, null, null)
+            assertThat(runBlocking { migrated.items().favorites(ItemKind.LIVE, null, true).first() }.map { it.name }).containsExactly("New", "Mid", "Old").inOrder()
+            assertThat(runBlocking { migrated.favorites().move(migrated.items().byKey(1, "old", true)!!, null, true, true) }).isTrue()
+            assertThat(runBlocking { migrated.items().favorites(ItemKind.LIVE, null, true).first() }.map { it.name }).containsExactly("New", "Old", "Mid").inOrder()
+        } finally {
+            migrated.close()
+        }
+    }
+
     // ---- Channel preferences (hide, rename, pin)
 
     private val prefs get() = db.channelPrefs()

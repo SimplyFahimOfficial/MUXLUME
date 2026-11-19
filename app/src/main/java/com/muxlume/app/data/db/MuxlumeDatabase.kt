@@ -142,14 +142,14 @@ abstract class ItemDao {
     @Query(
         """SELECT v.* FROM visible_items v JOIN favorites f ON f.sourceId = v.sourceId AND f.stableKey = v.stableKey
            WHERE v.kind = :kind AND (:sourceId IS NULL OR v.sourceId = :sourceId) AND (:unlocked OR v.isLocked = 0)
-           ORDER BY f.addedAt DESC, v.id""",
+           ORDER BY COALESCE(f.sortOrder, -f.addedAt), v.id""",
     )
     abstract fun favoritesPage(kind: ItemKind, sourceId: Long?, unlocked: Boolean): PagingSource<Int, ItemEntity>
 
     @Query(
         """SELECT v.* FROM visible_items v JOIN favorites f ON f.sourceId = v.sourceId AND f.stableKey = v.stableKey
            WHERE v.kind = :kind AND (:sourceId IS NULL OR v.sourceId = :sourceId) AND (:unlocked OR v.isLocked = 0)
-           ORDER BY f.addedAt DESC, v.id""",
+           ORDER BY COALESCE(f.sortOrder, -f.addedAt), v.id""",
     )
     abstract fun favorites(kind: ItemKind, sourceId: Long?, unlocked: Boolean): Flow<List<ItemEntity>>
 
@@ -221,16 +221,18 @@ abstract class ItemDao {
     @Query(
         """SELECT v.* FROM visible_items v JOIN favorites f ON f.sourceId = v.sourceId AND f.stableKey = v.stableKey
            WHERE v.kind = 'LIVE' AND (:sourceId IS NULL OR v.sourceId = :sourceId) AND (:unlocked OR v.isLocked = 0)
-           AND (f.addedAt < :addedAt OR (f.addedAt = :addedAt AND v.id > :id)) ORDER BY f.addedAt DESC, v.id LIMIT 1""",
+           AND (COALESCE(f.sortOrder, -f.addedAt) > :orderKey OR (COALESCE(f.sortOrder, -f.addedAt) = :orderKey AND v.id > :id))
+           ORDER BY COALESCE(f.sortOrder, -f.addedAt), v.id LIMIT 1""",
     )
-    abstract suspend fun nextFavorite(sourceId: Long?, addedAt: Long, id: Long, unlocked: Boolean): ItemEntity?
+    abstract suspend fun nextFavorite(sourceId: Long?, orderKey: Long, id: Long, unlocked: Boolean): ItemEntity?
 
     @Query(
         """SELECT v.* FROM visible_items v JOIN favorites f ON f.sourceId = v.sourceId AND f.stableKey = v.stableKey
            WHERE v.kind = 'LIVE' AND (:sourceId IS NULL OR v.sourceId = :sourceId) AND (:unlocked OR v.isLocked = 0)
-           AND (f.addedAt > :addedAt OR (f.addedAt = :addedAt AND v.id < :id)) ORDER BY f.addedAt, v.id DESC LIMIT 1""",
+           AND (COALESCE(f.sortOrder, -f.addedAt) < :orderKey OR (COALESCE(f.sortOrder, -f.addedAt) = :orderKey AND v.id < :id))
+           ORDER BY COALESCE(f.sortOrder, -f.addedAt) DESC, v.id DESC LIMIT 1""",
     )
-    abstract suspend fun previousFavorite(sourceId: Long?, addedAt: Long, id: Long, unlocked: Boolean): ItemEntity?
+    abstract suspend fun previousFavorite(sourceId: Long?, orderKey: Long, id: Long, unlocked: Boolean): ItemEntity?
 
     companion object {
         private const val MAX_SEARCH_WORDS = 8
@@ -436,24 +438,50 @@ interface LockedGroupDao {
 }
 
 @Dao
-interface FavoriteDao {
+abstract class FavoriteDao {
     @Query("SELECT stableKey FROM favorites WHERE sourceId = :sourceId")
-    fun keys(sourceId: Long): Flow<List<String>>
+    abstract fun keys(sourceId: Long): Flow<List<String>>
 
     @Query("SELECT * FROM favorites")
-    suspend fun all(): List<FavoriteEntity>
+    abstract suspend fun all(): List<FavoriteEntity>
 
     @Query("SELECT * FROM favorites WHERE sourceId = :sourceId AND stableKey = :key")
-    suspend fun get(sourceId: Long, key: String): FavoriteEntity?
+    abstract suspend fun get(sourceId: Long, key: String): FavoriteEntity?
 
     @Query("SELECT EXISTS(SELECT 1 FROM favorites WHERE sourceId = :sourceId AND stableKey = :key)")
-    fun isFavorite(sourceId: Long, key: String): Flow<Boolean>
+    abstract fun isFavorite(sourceId: Long, key: String): Flow<Boolean>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun add(favorite: FavoriteEntity)
+    abstract suspend fun add(favorite: FavoriteEntity)
 
     @Query("DELETE FROM favorites WHERE sourceId = :sourceId AND stableKey = :key")
-    suspend fun remove(sourceId: Long, key: String)
+    abstract suspend fun remove(sourceId: Long, key: String)
+
+    /** The favorites of [kind] that lists show, in the order they show them (see [FavoriteEntity.orderKey]). */
+    @Query(
+        """SELECT f.* FROM favorites f JOIN visible_items v ON v.sourceId = f.sourceId AND v.stableKey = f.stableKey
+           WHERE v.kind = :kind AND (:unlocked OR v.isLocked = 0) ORDER BY COALESCE(f.sortOrder, -f.addedAt), v.id""",
+    )
+    protected abstract suspend fun shown(kind: ItemKind, unlocked: Boolean): List<FavoriteEntity>
+
+    @Query("UPDATE favorites SET sortOrder = :order WHERE sourceId = :sourceId AND stableKey = :key")
+    protected abstract suspend fun setOrder(sourceId: Long, key: String, order: Int)
+
+    /**
+     * Moves a favorite one place up or down among the favorites a list shows ([listSourceId]: the playlist that list is limited to, if any).
+     * The first move writes the order lists already show as numbers, so nothing else shifts. False at the first or last place.
+     */
+    @Transaction
+    open suspend fun move(item: ItemEntity, listSourceId: Long?, unlocked: Boolean, up: Boolean): Boolean {
+        val order = shown(item.kind, unlocked).toMutableList()
+        val list = order.filter { listSourceId == null || it.sourceId == listSourceId }
+        val at = list.indexOfFirst { it.sourceId == item.sourceId && it.stableKey == item.stableKey }
+        val to = if (up) at - 1 else at + 1
+        if (at < 0 || to !in list.indices) return false
+        java.util.Collections.swap(order, order.indexOf(list[at]), order.indexOf(list[to]))
+        order.forEachIndexed { i, f -> setOrder(f.sourceId, f.stableKey, i + 1) }
+        return true
+    }
 }
 
 @Dao
@@ -498,7 +526,7 @@ interface HistoryDao {
         LockedGroupEntity::class, RecordingEntity::class, ChannelServerEntity::class,
     ],
     views = [VisibleItem::class],
-    version = 9,
+    version = 10,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = MuxlumeDatabase.Migration1To2::class),
@@ -509,6 +537,7 @@ interface HistoryDao {
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9),
+        AutoMigration(from = 9, to = 10),
     ],
 )
 abstract class MuxlumeDatabase : RoomDatabase() {

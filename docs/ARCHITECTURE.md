@@ -29,6 +29,8 @@ ui/                            Compose screens, one ViewModel per screen where s
 - `items`: live channels, movies and series of a source. Replaced on every refresh. Unique
   `(sourceId, stableKey)`: `live:<id>`/`movie:<id>`/`series:<id>` for Xtream, a hash of
   group + URL for M3U (exact duplicates merge).
+- `favorites.sortOrder` is null until the user moves a favorite (then 1..n for the favorites a list shows); every favorites query, the player's
+  picker and channel up/down order by `COALESCE(sortOrder, -addedAt), id`, so unplaced favorites stay newest first and new ones come first.
 - `favorites`, `channel_prefs` and `history` reference `(sourceId, stableKey)` / the playback id, so they
   survive refreshes, and cascade when a source is removed.
 - `channel_prefs` holds what the user did to a channel: hidden, renamed (`customName`), pinned. Rows with

@@ -198,7 +198,19 @@ data class LockedGroupEntity(val sourceId: Long, val groupTitle: String)
     primaryKeys = ["sourceId", "stableKey"],
     foreignKeys = [ForeignKey(entity = SourceEntity::class, parentColumns = ["id"], childColumns = ["sourceId"], onDelete = ForeignKey.CASCADE)],
 )
-data class FavoriteEntity(val sourceId: Long, val stableKey: String, val addedAt: Long)
+data class FavoriteEntity(
+    val sourceId: Long,
+    val stableKey: String,
+    val addedAt: Long,
+    /**
+     * Place in the list the user arranged, from 1; null until they move a favorite. Lists order by [orderKey], so favorites nobody
+     * placed stay newest first and a favorite added later goes to the top.
+     */
+    val sortOrder: Int? = null,
+) {
+    /** Smaller comes first. The same expression is in the favorites queries (`COALESCE(sortOrder, -addedAt)`). */
+    val orderKey: Long get() = sortOrder?.toLong() ?: -addedAt
+}
 
 /** Watch history and resume positions. [mediaId] is the playback id (see playback/MediaIds.kt). */
 @Entity(

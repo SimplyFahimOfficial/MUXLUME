@@ -84,6 +84,10 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - Recording warns before it schedules a clash: when the playlist is an Xtream account whose connection limit
   the recordings would exceed at some moment (the limit is read at each import), or when a recording would
   cut a recording of the same channel short. You can record anyway or cancel; nothing is saved until you choose.
+- Move up and Move down for favorites: press and hold a channel in Live TV → Favorites. The Favorites list, the home
+  row, the player's channel list and channel up/down all follow the same order. Until you move something, favorites stay
+  newest first; a favorite you add later goes to the top. The order is part of the backup (older backups restore in
+  the default order).
 
 ### Removed
 - Personal GitHub and Instagram links from the Support screen.

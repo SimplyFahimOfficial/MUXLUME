@@ -462,6 +462,10 @@
     <string name="channel_pin">Pin to top</string>
     <string name="channel_unpin">Unpin</string>
     <string name="channel_rename">Rename</string>
+    <string name="channel_move_up">Move up</string>
+    <string name="channel_move_down">Move down</string>
+    <string name="channel_moved_up">%1$s moved up in Favorites.</string>
+    <string name="channel_moved_down">%1$s moved down in Favorites.</string>
     <string name="channel_hide">Hide</string>
     <string name="channel_hidden">%1$s hidden. Bring it back in Settings → Hidden channels.</string>
     <string name="channel_rename_title">Rename channel</string>

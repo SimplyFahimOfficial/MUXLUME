@@ -55,7 +55,13 @@ data class BackupSource(val name: String, val type: SourceType, val secret: Sour
 
 /** [source] is an index into [BackupData.sources]. */
 @Serializable
-data class BackupFavorite(val source: Int, val stableKey: String, val addedAt: Long)
+data class BackupFavorite(
+    val source: Int,
+    val stableKey: String,
+    val addedAt: Long,
+    /** Place in the order the user arranged; absent in older backups and for favorites never placed. */
+    val order: Int? = null,
+)
 
 /** A saved server: [serverSource] and [source] are indexes into [BackupData.sources]. */
 @Serializable
@@ -119,7 +125,7 @@ class BackupRepository(
         val all = db.sources().allNow()
         val (portable, files) = all.partition { it.type != SourceType.M3U_FILE }
         val index = portable.withIndex().associate { (i, s) -> s.id to i }
-        val favorites = db.favorites().all().mapNotNull { f -> index[f.sourceId]?.let { BackupFavorite(it, f.stableKey, f.addedAt) } }
+        val favorites = db.favorites().all().mapNotNull { f -> index[f.sourceId]?.let { BackupFavorite(it, f.stableKey, f.addedAt, f.sortOrder) } }
         val history = db.history().all().mapNotNull { h ->
             val i = index[h.sourceId] ?: return@mapNotNull null
             val key = MediaIds.parse(h.mediaId)?.second ?: return@mapNotNull null
@@ -186,7 +192,7 @@ class BackupRepository(
         var favorites = 0
         data.favorites.forEach { f ->
             val id = ids.getOrNull(f.source) ?: return@forEach
-            db.favorites().add(FavoriteEntity(id, f.stableKey, f.addedAt))
+            db.favorites().add(FavoriteEntity(id, f.stableKey, f.addedAt, f.order?.takeIf { it in 1..MAX_ROWS }))
             favorites++
         }
         restoreChoices(data, ids)

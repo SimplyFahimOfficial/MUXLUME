@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.VisibilityOff
@@ -47,9 +49,12 @@ import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
 import kotlinx.coroutines.launch
 
-/** What a long press on a channel offers: pin to the top of the lists, rename, hide. */
+/** Where a favorite can go in the list it is shown in: [onMove] gets true for up. A direction that is not possible is not offered. */
+class FavoriteMove(val canUp: Boolean, val canDown: Boolean, val onMove: (up: Boolean) -> Unit)
+
+/** What a long press on a channel offers: pin to the top of the lists, rename, hide, and in the favorites list move up or down. */
 @Composable
-fun ChannelOptionsSheet(item: ItemEntity, onDismiss: () -> Unit) {
+fun ChannelOptionsSheet(item: ItemEntity, move: FavoriteMove? = null, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val res = LocalResources.current
     val prefs = context.container.db.channelPrefs()
@@ -73,6 +78,15 @@ fun ChannelOptionsSheet(item: ItemEntity, onDismiss: () -> Unit) {
                 item.name, style = MaterialTheme.typography.titleLarge, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = Mux.ScreenPadding, vertical = 8.dp).semantics { heading() },
             )
+            if (move != null) {
+                fun moveTo(up: Boolean) {
+                    move.onMove(up)
+                    Toast.makeText(context, res.getString(if (up) R.string.channel_moved_up else R.string.channel_moved_down, item.name), Toast.LENGTH_SHORT).show()
+                    onDismiss()
+                }
+                if (move.canUp) OptionRow(Icons.Rounded.ArrowUpward, stringResource(R.string.channel_move_up)) { moveTo(true) }
+                if (move.canDown) OptionRow(Icons.Rounded.ArrowDownward, stringResource(R.string.channel_move_down)) { moveTo(false) }
+            }
             val pinned = pref?.pinned == true
             OptionRow(Icons.Rounded.PushPin, stringResource(if (pinned) R.string.channel_unpin else R.string.channel_pin)) { edit { it.copy(pinned = !pinned) } }
             OptionRow(Icons.Rounded.Edit, stringResource(R.string.channel_rename)) { renaming = true }

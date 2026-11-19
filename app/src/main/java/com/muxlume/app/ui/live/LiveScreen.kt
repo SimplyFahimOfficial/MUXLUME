@@ -148,6 +148,10 @@ class BrowseViewModel(private val c: AppContainer, val kind: ItemKind) : ViewMod
     fun filter(f: GroupFilter) { browse.value = browse.value.copy(filter = f) }
     fun toggleSort() { browse.value = browse.value.copy(alphabetical = !browse.value.alphabetical) }
 
+    fun moveFavorite(item: ItemEntity, up: Boolean) = viewModelScope.launch {
+        c.db.favorites().move(item, sourceId.value, c.lock.unlockedNow(), up)
+    }
+
     fun toggleFavorite(item: ItemEntity, isFavorite: Boolean) = viewModelScope.launch {
         if (isFavorite) c.db.favorites().remove(item.sourceId, item.stableKey)
         else c.db.favorites().add(FavoriteEntity(item.sourceId, item.stableKey, System.currentTimeMillis()))
@@ -212,7 +216,12 @@ fun LiveScreen(nav: Nav) {
                 )
             }
         }
-        options?.let { ChannelOptionsSheet(it) { options = null } }
+        options?.let { ch ->
+            // Only in the Favorites list: its position among the rows shown decides what can move where.
+            val at = (0 until channels.itemCount).firstOrNull { channels.peek(it)?.id == ch.id }
+            val move = if (browse.filter is GroupFilter.Favorites && at != null) FavoriteMove(at > 0, at < channels.itemCount - 1) { up -> vm.moveFavorite(ch, up) } else null
+            ChannelOptionsSheet(ch, move) { options = null }
+        }
     }
 }
 
