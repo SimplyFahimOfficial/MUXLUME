@@ -108,7 +108,8 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
   while moving between screens (the TV guide screen also got its missing background).
 - Refreshing a playlist that answers with an empty file or an HTML page (HTTP 200) no longer empties
   its channels: the previous channels stay and the source shows an error. A valid playlist that the provider
-  emptied (only the "#EXTM3U" header) still removes them.
+  emptied (only the "#EXTM3U" header) still removes them. Only a source that already has channels is protected,
+  and a playlist without an "#EXTM3U" header that lists nothing counts as an error, not as emptied.
 - Saving a different playlist link or login while a refresh is running now imports the new one; the
   paused refresh's old channels are dropped instead of being published under the new link.
 - Favorites, hidden and pinned channels, history and reminders stay with a channel after a playlist edit
