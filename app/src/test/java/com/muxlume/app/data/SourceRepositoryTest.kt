@@ -28,6 +28,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import java.io.IOException
 
 @RunWith(AndroidJUnit4::class)
 // Plain Application: MuxlumeApp would start its own database and observers during the test.
@@ -102,6 +103,85 @@ class SourceRepositoryTest {
         assertThrows(HttpStatusException::class.java) { runBlocking { repo.refresh(id) } }
         assertThat(names(id)).hasSize(3)
         assertThat(repo.get(id)!!.lastError).contains("500")
+    }
+
+    @Test
+    fun `an empty or HTML body with HTTP 200 keeps the previous channels and records an error`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+        val refreshedAt = repo.get(id)!!.refreshedAt
+
+        for (body in listOf("<html><body><h1>Service unavailable</h1></body></html>", "")) {
+            serve(body)
+            assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+            assertThat(names(id)).containsExactly("a", "b").inOrder()
+            val source = repo.get(id)!!
+            assertThat(source.refreshedAt).isEqualTo(refreshedAt)
+            assertThat(source.lastError).isNotEmpty()
+        }
+    }
+
+    @Test
+    fun `a body with no header and no entries is an error for a source with channels, but a first import just records it`(): Unit = runBlocking {
+        val id = addM3u()
+        serve("# a comment, no header\n")
+        repo.refresh(id) // nothing to protect yet
+        assertThat(names(id)).isEmpty()
+        assertThat(repo.get(id)!!.lastError).isNull()
+
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+        serve("# a comment, no header\n")
+        assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+        assertThat(names(id)).containsExactly("a", "b").inOrder()
+    }
+
+    @Test
+    fun `a smaller valid headerless playlist still refreshes and clears the error`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+        serve("")
+        assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+        assertThat(repo.get(id)!!.lastError).isNotNull()
+
+        serve("https://cdn.example/only.m3u8\n")
+        repo.refresh(id)
+        assertThat(names(id)).hasSize(1)
+        assertThat(repo.get(id)!!.lastError).isNull()
+        assertThat(repo.get(id)!!.liveCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `a valid playlist emptied by the provider removes the previous channels`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+        serve("")
+        assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+
+        serve(playlist())
+        repo.refresh(id)
+        assertThat(names(id)).isEmpty()
+        val source = repo.get(id)!!
+        assertThat(source.lastError).isNull()
+        assertThat(source.liveCount).isEqualTo(0)
+        assertThat(source.refreshedAt).isNotNull()
+    }
+
+    @Test
+    fun `a playlist whose every entry is unplayable or cut off keeps the previous channels`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+
+        for (body in listOf("#EXTM3U\n#EXTINF:-1,Local\nfile:///sdcard/x.ts\n", "#EXTM3U\n#EXTINF:-1 group-title=\"News\",News HD\nudp://@239.0.0.1:5000\n", "#EXTM3U\n#EXTINF:-1,Cut off\n")) {
+            serve(body)
+            assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+            assertThat(names(id)).containsExactly("a", "b").inOrder()
+            assertThat(repo.get(id)!!.lastError).isNotEmpty()
+        }
     }
 
     @Test
