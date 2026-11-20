@@ -38,13 +38,6 @@ class M3uParserTest {
     }
 
     @Test
-    fun `header is reported even without entries, and not for empty or HTML bodies`() {
-        assertThat(parse("\uFEFF#EXTM3U\n").second.hasHeader).isTrue()
-        assertThat(parse("").second.hasHeader).isFalse()
-        assertThat(parse("<html><body>Error</body></html>").second.hasHeader).isFalse()
-    }
-
-    @Test
     fun `commas and special characters inside quoted attributes and titles`() {
         val (entries, _) = parse(
             "#EXTM3U\n#EXTINF:-1 group-title=\"News, World & More\" tvg-name=\"Ünïcødé 📺\",Title, with comma — ünicode\nhttps://a.example/s?x=1&y=2\n",
@@ -55,9 +48,20 @@ class M3uParserTest {
     }
 
     @Test
+    fun `an entry cut off after its #EXTINF counts as skipped`() {
+        val (entries, parser) = parse("#EXTM3U\n#EXTINF:-1,Cut off\n")
+        assertThat(entries).isEmpty()
+        assertThat(parser.skipped).isEqualTo(1)
+    }
+
+    @Test
     fun `empty and header-only playlists produce nothing`() {
         assertThat(parse("").first).isEmpty()
+        assertThat(parse("").second.hasHeader).isFalse()
         assertThat(parse("#EXTM3U\n\n\n").first).isEmpty()
+        assertThat(parse("#EXTM3U\n\n\n").second.hasHeader).isTrue()
+        assertThat(parse("\uFEFF#EXTM3U\n").second.hasHeader).isTrue()
+        assertThat(parse("<html><body>Error</body></html>").second.hasHeader).isFalse()
     }
 
     @Test

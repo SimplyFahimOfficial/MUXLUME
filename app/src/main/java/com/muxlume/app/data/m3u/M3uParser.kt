@@ -35,7 +35,7 @@ class M3uParser(
     var epgUrl: String? = null
         private set
 
-    /** Whether an #EXTM3U header was read: tells a playlist emptied on purpose from an empty body or an error page. */
+    /** True once an #EXTM3U header was read, so the body is a playlist and not an empty file or an error page. */
     var hasHeader = false
         private set
 
@@ -97,6 +97,8 @@ class M3uParser(
                 else -> entryFor(line)?.let { return it }
             }
         }
+        if (info != null) skipped++ // the file ended after an #EXTINF with no URL
+        info = null
         done = true
         return null
     }

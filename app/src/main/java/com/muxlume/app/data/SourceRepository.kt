@@ -251,9 +251,12 @@ class SourceRepository(
         }
         db.items().insertAll(batch)
         onProgress(position)
-        // An empty file or an HTML error page served with HTTP 200 must not wipe a working catalogue;
-        // a playlist with an #EXTM3U header and no entries was emptied on purpose and is applied.
-        if (position == 0 && !parser.hasHeader && source.liveCount + source.movieCount > 0) {
+        // An empty file or an HTML error page served with HTTP 200, or entries that were all rejected or cut off, must not wipe a
+        // working catalogue; a playlist the provider emptied on purpose (an #EXTM3U header and nothing skipped) is applied.
+        // Only a source that has channels is protected: a first import has nothing to lose and records what it got.
+        // shortcut: a provider that never sends #EXTM3U cannot empty its source this way; upgrade if one turns up (delete and re-add it meanwhile).
+        val emptiedOnPurpose = parser.hasHeader && parser.skipped == 0
+        if (position == 0 && source.liveCount + source.movieCount > 0 && !emptiedOnPurpose) {
             throw IOException("The playlist has no playable channels")
         }
         commit(source.id) {

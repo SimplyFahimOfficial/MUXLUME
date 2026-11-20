@@ -123,17 +123,18 @@ class SourceRepositoryTest {
     }
 
     @Test
-    fun `a valid playlist emptied on purpose removes the previous channels`(): Unit = runBlocking {
+    fun `a body with no header and no entries is an error for a source with channels, but a first import just records it`(): Unit = runBlocking {
         val id = addM3u()
+        serve("# a comment, no header\n")
+        repo.refresh(id) // nothing to protect yet
+        assertThat(names(id)).isEmpty()
+        assertThat(repo.get(id)!!.lastError).isNull()
+
         serve(playlist("a", "b"))
         repo.refresh(id)
-
-        serve(playlist())
-        repo.refresh(id)
-        assertThat(names(id)).isEmpty()
-        val source = repo.get(id)!!
-        assertThat(source.liveCount).isEqualTo(0)
-        assertThat(source.lastError).isNull()
+        serve("# a comment, no header\n")
+        assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+        assertThat(names(id)).containsExactly("a", "b").inOrder()
     }
 
     @Test
@@ -150,6 +151,37 @@ class SourceRepositoryTest {
         assertThat(names(id)).hasSize(1)
         assertThat(repo.get(id)!!.lastError).isNull()
         assertThat(repo.get(id)!!.liveCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `a valid playlist emptied by the provider removes the previous channels`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+        serve("")
+        assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+
+        serve(playlist())
+        repo.refresh(id)
+        assertThat(names(id)).isEmpty()
+        val source = repo.get(id)!!
+        assertThat(source.lastError).isNull()
+        assertThat(source.liveCount).isEqualTo(0)
+        assertThat(source.refreshedAt).isNotNull()
+    }
+
+    @Test
+    fun `a playlist whose every entry is unplayable or cut off keeps the previous channels`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+
+        for (body in listOf("#EXTM3U\n#EXTINF:-1,Local\nfile:///sdcard/x.ts\n", "#EXTM3U\n#EXTINF:-1 group-title=\"News\",News HD\nudp://@239.0.0.1:5000\n", "#EXTM3U\n#EXTINF:-1,Cut off\n")) {
+            serve(body)
+            assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+            assertThat(names(id)).containsExactly("a", "b").inOrder()
+            assertThat(repo.get(id)!!.lastError).isNotEmpty()
+        }
     }
 
     @Test
