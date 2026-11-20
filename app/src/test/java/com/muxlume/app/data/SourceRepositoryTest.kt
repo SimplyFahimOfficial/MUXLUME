@@ -123,6 +123,21 @@ class SourceRepositoryTest {
     }
 
     @Test
+    fun `a body with no header and no entries is an error for a source with channels, but a first import just records it`(): Unit = runBlocking {
+        val id = addM3u()
+        serve("# a comment, no header\n")
+        repo.refresh(id) // nothing to protect yet
+        assertThat(names(id)).isEmpty()
+        assertThat(repo.get(id)!!.lastError).isNull()
+
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+        serve("# a comment, no header\n")
+        assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+        assertThat(names(id)).containsExactly("a", "b").inOrder()
+    }
+
+    @Test
     fun `a smaller valid headerless playlist still refreshes and clears the error`(): Unit = runBlocking {
         val id = addM3u()
         serve(playlist("a", "b"))
@@ -161,7 +176,7 @@ class SourceRepositoryTest {
         serve(playlist("a", "b"))
         repo.refresh(id)
 
-        for (body in listOf("#EXTM3U\n#EXTINF:-1,Local\nfile:///sdcard/x.ts\n", "#EXTM3U\n#EXTINF:-1,Cut off\n")) {
+        for (body in listOf("#EXTM3U\n#EXTINF:-1,Local\nfile:///sdcard/x.ts\n", "#EXTM3U\n#EXTINF:-1 group-title=\"News\",News HD\nudp://@239.0.0.1:5000\n", "#EXTM3U\n#EXTINF:-1,Cut off\n")) {
             serve(body)
             assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
             assertThat(names(id)).containsExactly("a", "b").inOrder()
