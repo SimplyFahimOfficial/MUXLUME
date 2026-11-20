@@ -50,7 +50,10 @@ class M3uParserTest {
     @Test
     fun `empty and header-only playlists produce nothing`() {
         assertThat(parse("").first).isEmpty()
+        assertThat(parse("").second.hasHeader).isFalse()
         assertThat(parse("#EXTM3U\n\n\n").first).isEmpty()
+        assertThat(parse("#EXTM3U\n\n\n").second.hasHeader).isTrue()
+        assertThat(parse("<html><body>Error</body></html>").second.hasHeader).isFalse()
     }
 
     @Test

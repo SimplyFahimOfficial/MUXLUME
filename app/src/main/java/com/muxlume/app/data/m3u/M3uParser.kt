@@ -35,6 +35,10 @@ class M3uParser(
     var epgUrl: String? = null
         private set
 
+    /** True once an #EXTM3U header was read, so the body is a playlist and not an empty file or an error page. */
+    var hasHeader = false
+        private set
+
     var skipped = 0
         private set
     var produced = 0
@@ -69,6 +73,7 @@ class M3uParser(
             if (line.isEmpty()) continue
             when {
                 line.startsWith("#EXTM3U", ignoreCase = true) -> {
+                    hasHeader = true
                     val attrs = parseAttributes(line.substring(7))
                     epgUrl = epgUrl ?: (attrs["url-tvg"] ?: attrs["x-tvg-url"])?.split(',')?.firstOrNull { Urls.parseHttp(it) != null }?.trim()
                 }

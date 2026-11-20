@@ -139,6 +139,34 @@ class SourceRepositoryTest {
     }
 
     @Test
+    fun `a valid playlist emptied by the provider removes the previous channels`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+        serve("")
+        assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+
+        serve(playlist())
+        repo.refresh(id)
+        assertThat(names(id)).isEmpty()
+        val source = repo.get(id)!!
+        assertThat(source.lastError).isNull()
+        assertThat(source.liveCount).isEqualTo(0)
+        assertThat(source.refreshedAt).isNotNull()
+    }
+
+    @Test
+    fun `a playlist whose every entry is unplayable keeps the previous channels`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+
+        serve("#EXTM3U\n#EXTINF:-1,Local\nfile:///sdcard/x.ts\n")
+        assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+        assertThat(names(id)).containsExactly("a", "b").inOrder()
+    }
+
+    @Test
     fun `cancelled import rolls back and leaves no staged rows`(): Unit = runBlocking {
         val id = addM3u()
         serve(playlist("old"))

@@ -100,7 +100,8 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - Back gesture: the screen no longer shrinks and snaps at the end, and screens no longer show through each other
   while moving between screens (the TV guide screen also got its missing background).
 - Refreshing a playlist that answers with an empty file or an HTML page (HTTP 200) no longer empties
-  its channels: the previous channels stay and the source shows an error.
+  its channels: the previous channels stay and the source shows an error. A valid playlist that the provider
+  emptied (only the "#EXTM3U" header) still removes them.
 
 ### Added
 - Light theme and an Appearance screen: System/Light/Dark, five accent colours, Material You accent

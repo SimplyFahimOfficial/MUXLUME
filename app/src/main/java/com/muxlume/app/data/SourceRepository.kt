@@ -251,8 +251,12 @@ class SourceRepository(
         }
         db.items().insertAll(batch)
         onProgress(position)
-        // An empty file or an HTML error page served with HTTP 200 must not wipe a working catalogue.
-        if (position == 0 && source.liveCount + source.movieCount > 0) throw IOException("The playlist has no playable channels")
+        // An empty file or an HTML error page served with HTTP 200 must not wipe a working catalogue, but a
+        // well-formed playlist the provider emptied on purpose (an #EXTM3U header and nothing skipped) is applied.
+        val emptiedOnPurpose = parser.hasHeader && parser.skipped == 0
+        if (position == 0 && source.liveCount + source.movieCount > 0 && !emptiedOnPurpose) {
+            throw IOException("The playlist has no playable channels")
+        }
         commit(source.id) {
             it.copy(
                 refreshedAt = now(), lastError = null, liveCount = live, movieCount = movies, seriesCount = 0,
