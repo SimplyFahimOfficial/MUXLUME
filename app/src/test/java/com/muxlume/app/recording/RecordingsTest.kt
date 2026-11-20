@@ -241,4 +241,22 @@ class RecordingsAddTest {
         recordings().add(source, "k", "Chan", program(now + 600, now + 4200))
         assertThat(recordings().add(source, "k", "Chan", program(now + 600, now + 4200)) { error("no warning expected") }).isEqualTo(Recordings.Result.Already)
     }
+
+    @Test
+    fun `an answer that takes a while is acted on at the time it is given`(): Unit = runBlocking {
+        chooseFolder()
+        limitTo(1)
+        waiting("other", now + 500, now + 4000)
+        org.robolectric.shadows.ShadowAlarmManager.setCanScheduleExactAlarms(false)
+        var clockMs = now * 1000
+        val slow = Recordings(context, db, settings) { clockMs }
+
+        // The padded start (now + 540) passes while the dialog is open: record at once, not by a notification the user must tap.
+        assertThat(slow.add(source, "k", "Chan", program(now + 600, now + 4200)) { clockMs = (now + 700) * 1000; true }).isEqualTo(Recordings.Result.Started)
+
+        // The programme ends while the dialog is open: nothing is saved.
+        clockMs = now * 1000
+        assertThat(slow.add(source, "j", "Chan", program(now + 600, now + 900)) { clockMs = (now + 1000) * 1000; true }).isEqualTo(Recordings.Result.Ended)
+        assertThat(db.recordings().find(source, "j", now + 600)).isNull()
+    }
 }

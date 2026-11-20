@@ -13,6 +13,7 @@ import com.muxlume.app.PlainBox
 import com.muxlume.app.data.epg.EpgLinker
 import com.muxlume.app.data.db.FavoriteEntity
 import com.muxlume.app.data.db.ItemDao
+import com.muxlume.app.data.db.ItemEntity
 import com.muxlume.app.data.db.ItemKind
 import com.muxlume.app.data.db.MuxlumeDatabase
 import kotlinx.coroutines.CancellationException
@@ -174,6 +175,37 @@ class SourceRepositoryTest {
         assertThat(names(id)).hasSize(1)
         assertThat(repo.get(id)!!.lastError).isNull()
         assertThat(repo.get(id)!!.liveCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `a valid playlist emptied by the provider removes the previous channels`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+        serve("")
+        assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+
+        serve(playlist())
+        repo.refresh(id)
+        assertThat(names(id)).isEmpty()
+        val source = repo.get(id)!!
+        assertThat(source.lastError).isNull()
+        assertThat(source.liveCount).isEqualTo(0)
+        assertThat(source.refreshedAt).isNotNull()
+    }
+
+    @Test
+    fun `a playlist whose every entry is unplayable or cut off keeps the previous channels`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+
+        for (body in listOf("#EXTM3U\n#EXTINF:-1,Local\nfile:///sdcard/x.ts\n", "#EXTM3U\n#EXTINF:-1,Cut off\n")) {
+            serve(body)
+            assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+            assertThat(names(id)).containsExactly("a", "b").inOrder()
+            assertThat(repo.get(id)!!.lastError).isNotEmpty()
+        }
     }
 
     @Test
@@ -444,5 +476,45 @@ class SourceRepositoryTest {
         assertThat(importWith("2")).isEqualTo(2)
         assertThat(importWith("0")).isNull()
         assertThat(importWith(null)).isNull()
+    }
+
+    @Test
+    fun `a channel that kept its key through a rename keeps it when its tvg-id later becomes shared or is dropped`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(m3u(entry("One", one, "News", "one.tv")))
+        repo.refresh(id)
+        val old = key(id, "One")
+        serve(m3u(entry("One", one, "Sport", "one.tv"))) // group renamed: the key is kept, though it is no longer the hash of group and link
+        repo.refresh(id)
+        assertThat(key(id, "One")).isEqualTo(old)
+
+        // Unchanged group and link, but another channel now shares the tvg-id: still the same channel.
+        serve(m3u(entry("One", one, "Sport", "one.tv"), entry("One HD", two, "Sport", "one.tv")))
+        repo.refresh(id)
+        assertThat(key(id, "One")).isEqualTo(old)
+        assertThat(key(id, "One HD")).isNotEqualTo(old)
+
+        // And when its own tvg-id is dropped.
+        serve(m3u(entry("One", one, "Sport"), entry("One HD", two, "Sport", "one.tv")))
+        repo.refresh(id)
+        assertThat(key(id, "One")).isEqualTo(old)
+    }
+
+    @Test
+    fun `key reuse can be done in steps`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(m3u(*Array(2_500) { entry("c$it", "https://cdn.example/$it.m3u8", "G", "tv$it") }))
+        repo.refresh(id)
+        val old = key(id, "c2499")
+        db.items().insertAll(
+            List(2_500) { i ->
+                ItemEntity(sourceId = id, kind = ItemKind.LIVE, stableKey = "new$i", name = "c$i", groupTitle = "G", logo = null, url = "https://cdn2.example/$i.m3u8", tvgId = "tv$i", position = i, pending = true)
+            },
+        )
+        assertThat(db.items().hasUnmatchedStaged(id)).isTrue()
+        assertThat(listOf(1_000, 1_000, 1_000).map { db.items().reuseKeysByTvgId(id, it) }).containsExactly(1_000, 1_000, 500).inOrder()
+        assertThat(db.items().hasUnmatchedStaged(id)).isFalse()
+        db.items().commitPending(id)
+        assertThat(key(id, "c2499")).isEqualTo(old)
     }
 }

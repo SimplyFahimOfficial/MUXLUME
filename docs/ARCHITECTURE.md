@@ -51,10 +51,13 @@ ui/                            Compose screens, one ViewModel per screen where s
 (checking for cancellation between them), then one short transaction deletes the old rows and
 publishes the new ones. Every read filters `pending = 0`, so a running import is invisible and the
 rest of the app can keep writing. Imports of one source run one at a time (a per-source mutex); one that waited and finds `refreshedAt` changed returns the stored counts. Failure or cancellation deletes the staged rows.
-An M3U import that finds no playable entry in a source that had channels fails as an error instead of publishing an empty list, and the commit
-drops the staged rows if the source's link or login was changed while it ran (the new one is imported next). Before the commit, a staged live channel
-whose key is new takes the key of the earlier channel with the same tvg-id when that tvg-id is on exactly one earlier and one staged live channel of the
-source (`ItemDao.reuseKeys`), so favorites, preferences, history and reminders follow a changed group or stream link. Lists are read
+An M3U import that finds no playable entry in a source that had channels fails as an error instead of publishing an empty list, unless the
+body has an `#EXTM3U` header and no entry was skipped (a playlist the provider emptied on purpose). The commit
+drops the staged rows if the source's link or login was changed while it ran (the new one is imported next). Before the commit, when a staged live
+channel has a key no earlier row has, it takes the key of the earlier channel it is: first one whose group and link are unchanged but whose key is no
+longer their hash (it kept an older key), then one with the same tvg-id when that tvg-id is on exactly one earlier and one staged live channel of the
+source (`SourceRepository.reuseKeysByContent`, `ItemDao.reuseKeysByTvgId`), so favorites, preferences, history and reminders follow a changed group or
+stream link. Lists are read
 through Paging; search uses an FTS4 table (`items_fts`) kept in sync by Room.
 
 ## Playback

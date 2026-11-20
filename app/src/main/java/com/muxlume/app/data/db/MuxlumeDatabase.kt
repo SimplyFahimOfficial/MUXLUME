@@ -51,6 +51,9 @@ interface SourceDao {
 /** A staged item and the key it takes over from an earlier import. */
 data class KeyRemap(val id: Long, val stableKey: String)
 
+/** The parts of an earlier live channel its key was made from (an M3U channel's key is a hash of its group and link). */
+data class LiveLink(val id: Long, val stableKey: String, val groupTitle: String, val url: String?)
+
 /** SQL: the history row `h` is of an item (or a series' episode) in a locked group. Used as `NOT (...)` unless `:unlocked`. */
 internal const val HISTORY_LOCKED = """EXISTS (SELECT 1 FROM items li JOIN locked_groups lg ON lg.sourceId = li.sourceId AND lg.groupTitle = li.groupTitle
     WHERE li.sourceId = h.sourceId AND li.pending = 0
@@ -80,6 +83,28 @@ abstract class ItemDao {
     @Query("UPDATE items SET pending = 0 WHERE sourceId = :sourceId AND pending = 1")
     protected abstract suspend fun publishPending(sourceId: Long)
 
+    /** Whether a staged live channel has a key no earlier row has: only then is there anything to match (an unchanged refresh has none). */
+    @Query(
+        """SELECT EXISTS(SELECT 1 FROM items n WHERE n.sourceId = :sourceId AND n.pending = 1 AND n.kind = 'LIVE'
+           AND NOT EXISTS (SELECT 1 FROM items o WHERE o.sourceId = :sourceId AND o.pending = 0 AND o.stableKey = n.stableKey))""",
+    )
+    abstract suspend fun hasUnmatchedStaged(sourceId: Long): Boolean
+
+    /**
+     * One page of the earlier live channels after [afterId], with what their keys were made from. `+sourceId` keeps SQLite from sorting
+     * the whole source for every page: it walks the primary key from [afterId] instead.
+     */
+    @Query("SELECT id, stableKey, groupTitle, url FROM items WHERE id > :afterId AND +sourceId = :sourceId AND pending = 0 AND kind = 'LIVE' ORDER BY id LIMIT :limit")
+    abstract suspend fun liveLinks(sourceId: Long, afterId: Long, limit: Int): List<LiveLink>
+
+    /** Renames a staged live channel's key [from] to [to], unless an earlier row has [from] (it is that channel) or a staged one has [to]. */
+    @Query(
+        """UPDATE items SET stableKey = :to WHERE sourceId = :sourceId AND pending = 1 AND kind = 'LIVE' AND stableKey = :from
+           AND NOT EXISTS (SELECT 1 FROM items x WHERE x.sourceId = :sourceId AND x.pending = 0 AND x.stableKey = :from)
+           AND NOT EXISTS (SELECT 1 FROM items x WHERE x.sourceId = :sourceId AND x.pending = 1 AND x.stableKey = :to)""",
+    )
+    abstract suspend fun reuseKey(sourceId: Long, from: String, to: String): Int
+
     /**
      * Staged live channels (at most [limit]) whose key no earlier row has but whose tvg-id belongs to exactly one earlier and one staged
      * live channel of this source, with the earlier key. Rows whose own key or whose earlier key is already taken are left out.
@@ -95,21 +120,18 @@ abstract class ItemDao {
            AND NOT EXISTS (SELECT 1 FROM items x WHERE x.sourceId = :sourceId AND x.pending = 1 AND x.stableKey = o.stableKey)
            LIMIT :limit""",
     )
-    abstract suspend fun keyReuse(sourceId: Long, limit: Int): List<KeyRemap>
+    abstract suspend fun tvgIdReuse(sourceId: Long, limit: Int): List<KeyRemap>
 
     @Query("UPDATE items SET stableKey = :stableKey WHERE id = :id")
     protected abstract suspend fun setKey(id: Long, stableKey: String)
 
     /**
-     * Gives staged live channels the key of the earlier channel with the same tvg-id (see [keyReuse]), so favorites, history and
-     * preferences follow a channel whose group or stream link changed. Keys are never shared: an ambiguous tvg-id changes nothing.
+     * Gives staged live channels the key of the earlier channel with the same tvg-id (see [tvgIdReuse]), so favorites, history and preferences
+     * follow a channel whose group or stream link changed. Keys are never shared: an ambiguous tvg-id changes nothing. Returns how many
+     * keys changed; at most [limit] per call, so call it until it returns less.
      */
     @Transaction
-    open suspend fun reuseKeys(sourceId: Long, limit: Int): Int {
-        val rows = keyReuse(sourceId, limit)
-        rows.forEach { setKey(it.id, it.stableKey) }
-        return rows.size
-    }
+    open suspend fun reuseKeysByTvgId(sourceId: Long, limit: Int): Int = tvgIdReuse(sourceId, limit).also { rows -> rows.forEach { setKey(it.id, it.stableKey) } }.size
 
     /** Replaces the source's visible items with the staged (pending) ones, in one short transaction. */
     @Transaction
@@ -359,8 +381,9 @@ abstract class RecordingDao {
     @Query("UPDATE recordings SET state = 'FAILED', error = 'INTERRUPTED' WHERE state = 'RECORDING'")
     abstract suspend fun failRunning()
 
-    @Query("UPDATE recordings SET state = 'RECORDING', fileUri = :fileUri, error = NULL WHERE id = :id")
-    abstract suspend fun start(id: Long, fileUri: String)
+    /** [stopAt] (epoch seconds) is when it will stop: a recording cut short by the next one on its channel keeps that in [RecordingEntity.trailSeconds]. */
+    @Query("UPDATE recordings SET state = 'RECORDING', fileUri = :fileUri, error = NULL, trailSeconds = :stopAt - endAt WHERE id = :id")
+    abstract suspend fun start(id: Long, fileUri: String, stopAt: Long)
 
     @Query("UPDATE recordings SET bytes = :bytes WHERE id = :id")
     abstract suspend fun setBytes(id: Long, bytes: Long)
@@ -464,21 +487,29 @@ abstract class FavoriteDao {
     )
     protected abstract suspend fun shown(kind: ItemKind, unlocked: Boolean): List<FavoriteEntity>
 
+    /** Every favorite of [kind] that still has a channel, hidden and locked ones too, in the same order. */
+    @Query(
+        """SELECT f.* FROM favorites f JOIN items i ON i.sourceId = f.sourceId AND i.stableKey = f.stableKey AND i.pending = 0
+           WHERE i.kind = :kind ORDER BY COALESCE(f.sortOrder, -f.addedAt), i.id""",
+    )
+    protected abstract suspend fun everyone(kind: ItemKind): List<FavoriteEntity>
+
     @Query("UPDATE favorites SET sortOrder = :order WHERE sourceId = :sourceId AND stableKey = :key")
     protected abstract suspend fun setOrder(sourceId: Long, key: String, order: Int)
 
     /**
      * Moves a favorite one place up or down among the favorites a list shows ([listSourceId]: the playlist that list is limited to, if any).
-     * The first move writes the order lists already show as numbers, so nothing else shifts. False at the first or last place.
+     * The whole order, hidden and locked favorites included, is written as numbers first, so the ones the list does not show keep their place.
+     * False at the first or last place.
      */
     @Transaction
     open suspend fun move(item: ItemEntity, listSourceId: Long?, unlocked: Boolean, up: Boolean): Boolean {
-        val order = shown(item.kind, unlocked).toMutableList()
-        val list = order.filter { listSourceId == null || it.sourceId == listSourceId }
-        val at = list.indexOfFirst { it.sourceId == item.sourceId && it.stableKey == item.stableKey }
+        val order = everyone(item.kind).toMutableList()
+        val visible = shown(item.kind, unlocked).filter { listSourceId == null || it.sourceId == listSourceId }
+        val at = visible.indexOfFirst { it.sourceId == item.sourceId && it.stableKey == item.stableKey }
         val to = if (up) at - 1 else at + 1
-        if (at < 0 || to !in list.indices) return false
-        java.util.Collections.swap(order, order.indexOf(list[at]), order.indexOf(list[to]))
+        if (at < 0 || to !in visible.indices) return false
+        java.util.Collections.swap(order, order.indexOf(visible[at]), order.indexOf(visible[to]))
         order.forEachIndexed { i, f -> setOrder(f.sourceId, f.stableKey, i + 1) }
         return true
     }

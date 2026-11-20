@@ -271,10 +271,13 @@ class SourceRepository(
         }
         db.items().insertAll(batch)
         onProgress(position)
-        // Reuse earlier keys by tvg-id, a batch at a time, so favorites and preferences survive a changed group or stream link.
-        if (position > 0) do { val moved = db.items().reuseKeys(source.id, BATCH) } while (moved == BATCH)
-        // An empty file or an HTML error page served with HTTP 200 must not wipe a working catalogue.
-        if (position == 0 && source.liveCount + source.movieCount > 0) throw IOException("The playlist has no playable channels")
+        if (position > 0) reuseKeys(source)
+        // An empty file or an HTML error page served with HTTP 200 must not wipe a working catalogue, but a
+        // well-formed playlist the provider emptied on purpose (an #EXTM3U header and nothing skipped) is applied.
+        val emptiedOnPurpose = parser.hasHeader && parser.skipped == 0
+        if (position == 0 && source.liveCount + source.movieCount > 0 && !emptiedOnPurpose) {
+            throw IOException("The playlist has no playable channels")
+        }
         commit(source) {
             it.copy(
                 refreshedAt = now(), lastError = null, liveCount = live, movieCount = movies, seriesCount = 0,
@@ -282,6 +285,38 @@ class SourceRepository(
             )
         }
         ImportResult(live, movies, 0, parser.skipped, dupes)
+    }
+
+    /**
+     * Gives staged live channels the key of the earlier channel they are, so favorites and preferences survive a changed group or stream link.
+     * Skipped when nothing is new (an unchanged refresh) and on a first import; the matching reads the whole catalogue, so it runs in few, large steps.
+     */
+    private suspend fun reuseKeys(source: SourceEntity) {
+        if (source.liveCount == 0 || !db.items().hasUnmatchedStaged(source.id)) return
+        reuseKeysByContent(source.id)
+        do { val moved = db.items().reuseKeysByTvgId(source.id, REMAP_BATCH) } while (moved == REMAP_BATCH)
+    }
+
+    /**
+     * A channel that kept an earlier key through a rename is no longer stored under the hash of its group and link, so when those
+     * are unchanged the new import hashes to a key no earlier row has. Every earlier channel whose key is not that hash says which
+     * staged key is really it. Read page by page and compared in memory: SQLite has no hash function and no index on the link.
+     */
+    private suspend fun reuseKeysByContent(sourceId: Long) {
+        var after = 0L
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            val page = db.items().liveLinks(sourceId, after, BATCH)
+            if (page.isEmpty()) return
+            db.withTransaction {
+                for (link in page) {
+                    val url = link.url ?: continue
+                    val made = stableKey(link.groupTitle + "\n" + url)
+                    if (made != link.stableKey) db.items().reuseKey(sourceId, made, link.stableKey)
+                }
+            }
+            after = page.last().id
+        }
     }
 
     private suspend fun importXtream(source: SourceEntity, onProgress: (Int) -> Unit): ImportResult {
@@ -340,6 +375,7 @@ class SourceRepository(
 
     companion object {
         private const val BATCH = 1000
+        private const val REMAP_BATCH = 50_000
 
         private fun String?.cleanGuideUrl(): String? = this?.trim()?.takeIf { Urls.parseHttp(it) != null }
         private const val MAX_PLAYLIST_BYTES = 256L * 1024 * 1024

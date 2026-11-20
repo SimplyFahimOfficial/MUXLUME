@@ -135,7 +135,7 @@ class RecordingService : Service() {
             dao.finish(id, RecordingState.FAILED, 0, e.reason.name)
             return
         }
-        dao.start(id, plan.file.toString())
+        dao.start(id, plan.file.toString(), plan.endMs / MILLIS)
         val recorder = Recorder(container.http)
         val progress = scope.launch {
             while (true) {

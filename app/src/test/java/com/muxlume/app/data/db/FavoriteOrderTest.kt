@@ -130,11 +130,13 @@ class FavoriteOrderTest {
     }
 
     @Test
-    fun `hidden favorites stay out of the moves and keep where they were`(): Unit = runBlocking {
+    fun `hidden favorites stay out of the moves and keep their place when shown again`(): Unit = runBlocking {
         db.channelPrefs().edit(a, "a2") { it.copy(hidden = true) }
         assertEverywhere("a3", "b1", "a1")
         move("a1", up = true) // swaps with b1, the neighbour it can see
         assertEverywhere("a3", "a1", "b1")
+        db.channelPrefs().edit(a, "a2") { it.copy(hidden = false) }
+        assertEverywhere("a3", "a2", "a1", "b1") // a2 was never moved: it stays second, not first
     }
 
     @Test

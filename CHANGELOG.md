@@ -107,11 +107,13 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - Back gesture: the screen no longer shrinks and snaps at the end, and screens no longer show through each other
   while moving between screens (the TV guide screen also got its missing background).
 - Refreshing a playlist that answers with an empty file or an HTML page (HTTP 200) no longer empties
-  its channels: the previous channels stay and the source shows an error.
+  its channels: the previous channels stay and the source shows an error. A valid playlist that the provider
+  emptied (only the "#EXTM3U" header) still removes them.
 - Saving a different playlist link or login while a refresh is running now imports the new one; the
   paused refresh's old channels are dropped instead of being published under the new link.
 - Favorites, hidden and pinned channels, history and reminders stay with a channel after a playlist edit
-  that changes its group or stream link, when the playlist gives it a tvg-id that no other channel shares.
+  that changes its group or stream link, when the playlist gives it a tvg-id that no other channel shares, and on
+  later refreshes while its group and link stay as they are.
 - While another server plays a channel, channel up/down, number entry and the channel picker follow the
   channel you chose and its list, and only that channel is highlighted, also in Favorites that hold the same
   channel from two playlists.

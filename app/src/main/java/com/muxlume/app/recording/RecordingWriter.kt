@@ -37,13 +37,15 @@ internal suspend fun writeRecording(open: () -> OutputStream?, timedOut: () -> B
         reason = writeFailure(e)
     } catch (e: SecurityException) { // access to the folder was revoked
         reason = Reason.WRITE_FAILED
-    }
-    try {
-        out?.close()
-    } catch (e: IOException) {
-        reason = reason ?: writeFailure(e) // the last buffered bytes may be lost
-    } catch (e: SecurityException) {
-        reason = reason ?: Reason.WRITE_FAILED
+    } finally {
+        // Also for an unexpected exception, which then goes on: the stream must not stay open while the caller finalizes.
+        try {
+            out?.close()
+        } catch (e: IOException) {
+            reason = reason ?: writeFailure(e) // the last buffered bytes may be lost
+        } catch (e: SecurityException) {
+            reason = reason ?: Reason.WRITE_FAILED
+        }
     }
     return RecordingOutcome(if (reason == null) RecordingState.DONE else RecordingState.FAILED, reason?.name, stopped)
 }

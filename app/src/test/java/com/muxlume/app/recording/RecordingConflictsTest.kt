@@ -79,4 +79,14 @@ class RecordingConflictsTest {
         val w = check(null, rec("c", 150, 250), rec("c", 100, 200, state = RecordingState.RECORDING, id = 1))
         assertThat(w).isNull()
     }
+
+    @Test
+    fun `a running recording that was cut short by the next one counts only until it stops`() {
+        // Programme 100..200 with 50 s of trail would run to 250, but it was cut at 150 (where the next one on its channel starts): trail -50.
+        val cut = rec("c", 100, 200, state = RecordingState.RECORDING, trail = -50, id = 1)
+        val next = rec("c", 150, 300, id = 2)
+        assertThat(check(2, rec("d", 100, 300), cut, next)).isNull() // one stream at a time on c, plus the new one
+        val uncut = rec("c", 100, 200, state = RecordingState.RECORDING, trail = 50, id = 1)
+        assertThat(check(2, rec("d", 100, 300), uncut, next)!!.overLimit).isEqualTo(2)
+    }
 }

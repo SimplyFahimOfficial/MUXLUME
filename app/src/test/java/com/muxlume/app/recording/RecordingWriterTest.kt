@@ -14,6 +14,7 @@ import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
 import okio.Buffer
 import org.junit.After
+import org.junit.Assert.assertThrows
 import org.junit.Before
 import org.junit.Test
 import java.io.ByteArrayOutputStream
@@ -115,5 +116,14 @@ class RecordingWriterTest {
                 assertThat(outcome.error).isNull()
             }
         }
+    }
+
+    @Test
+    fun `an unexpected exception still closes the output before it goes on`(): Unit = runBlocking {
+        val out = FlakyOut()
+        assertThrows(IllegalStateException::class.java) {
+            runBlocking { writeRecording({ out }, { false }) { it.write(1); error("bug") } }
+        }
+        assertThat(out.closed).isTrue()
     }
 }

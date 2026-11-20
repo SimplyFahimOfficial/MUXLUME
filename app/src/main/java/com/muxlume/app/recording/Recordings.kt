@@ -71,8 +71,11 @@ class Recordings(
             trailSeconds = if (pad) current.recordTrailMinutes * SECONDS_PER_MINUTE else 0,
         )
         refusal(draft, now, current.recordingFolder != null, confirm)?.let { return it }
+        // The user may have taken a while to answer a warning: start or give up by the time it is now.
+        val later = clock() / MILLIS
+        if (draft.endAt <= later) return Result.Ended
         val id = db.recordings().insert(draft).takeIf { it > 0 } ?: return Result.Already
-        return when (RecordingPlan.start(draft.paddedStart, now, scheduler.canScheduleExact())) {
+        return when (RecordingPlan.start(draft.paddedStart, later, scheduler.canScheduleExact())) {
             RecordingPlan.Start.NOW -> {
                 ContextCompat.startForegroundService(context, RecordingService.startIntent(context, id))
                 Result.Started
