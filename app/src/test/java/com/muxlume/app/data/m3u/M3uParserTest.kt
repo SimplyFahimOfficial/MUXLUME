@@ -38,6 +38,13 @@ class M3uParserTest {
     }
 
     @Test
+    fun `header is reported even without entries, and not for empty or HTML bodies`() {
+        assertThat(parse("\uFEFF#EXTM3U\n").second.hasHeader).isTrue()
+        assertThat(parse("").second.hasHeader).isFalse()
+        assertThat(parse("<html><body>Error</body></html>").second.hasHeader).isFalse()
+    }
+
+    @Test
     fun `commas and special characters inside quoted attributes and titles`() {
         val (entries, _) = parse(
             "#EXTM3U\n#EXTINF:-1 group-title=\"News, World & More\" tvg-name=\"Ünïcødé 📺\",Title, with comma — ünicode\nhttps://a.example/s?x=1&y=2\n",

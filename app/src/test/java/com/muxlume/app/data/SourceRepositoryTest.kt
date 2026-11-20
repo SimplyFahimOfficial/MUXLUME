@@ -123,6 +123,20 @@ class SourceRepositoryTest {
     }
 
     @Test
+    fun `a valid playlist emptied on purpose removes the previous channels`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(playlist("a", "b"))
+        repo.refresh(id)
+
+        serve(playlist())
+        repo.refresh(id)
+        assertThat(names(id)).isEmpty()
+        val source = repo.get(id)!!
+        assertThat(source.liveCount).isEqualTo(0)
+        assertThat(source.lastError).isNull()
+    }
+
+    @Test
     fun `a smaller valid headerless playlist still refreshes and clears the error`(): Unit = runBlocking {
         val id = addM3u()
         serve(playlist("a", "b"))
