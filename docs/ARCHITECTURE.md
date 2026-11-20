@@ -55,7 +55,9 @@ An M3U import that finds no playable entry in a source that had channels fails a
 body has an `#EXTM3U` header and no entry was skipped (a playlist the provider emptied on purpose). The commit
 drops the staged rows if the source's link or login was changed while it ran (the new one is imported next). Before the commit, when a staged live
 channel has a key no earlier row has, it takes the key of the earlier channel it is: first the key remembered for its group and link
-(`key_aliases`, written when a tvg-id match gave a channel an older key, so it outlives the item rows and travels in the backup;
+(`key_aliases`, written when a tvg-id match gave a channel an older key, one per kept key (the latest link), so it outlives the item rows;
+the backup carries those a saved favorite, preference, history entry or server refers to, and restoring onto a playlist the device already has rewrites
+the backup's keys to the ones the device uses;
 `ItemDao.reuseKeysByAlias`), then the earlier channel with the same tvg-id when that tvg-id is on exactly one earlier and one staged live channel
 of the source (`ItemDao.reuseKeysByTvgId`, only when something is still new and the source had channels), so favorites, preferences, history and
 reminders follow a changed group or stream link. Lists are read

@@ -115,7 +115,7 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - Favorites, hidden and pinned channels, history and reminders stay with a channel after a playlist edit
   that changes its group or stream link, when the playlist gives it a tvg-id that no other channel shares, and on
   later refreshes while its group and link stay as they are, even if the playlist was emptied and restored in
-  between. The match is part of the backup.
+  between. The match is part of the backup; restoring onto a playlist you already have uses the keys that device uses.
 - While another server plays a channel, channel up/down, number entry and the channel picker follow the
   channel you chose and its list, and only that channel is highlighted, also in Favorites that hold the same
   channel from two playlists.

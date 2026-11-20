@@ -137,6 +137,13 @@ abstract class ItemDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     protected abstract suspend fun putAlias(alias: KeyAliasEntity)
 
+    @Query("DELETE FROM key_aliases WHERE sourceId = :sourceId AND stableKey = :stableKey")
+    protected abstract suspend fun dropAliasesFor(sourceId: Long, stableKey: String)
+
+    /** Whether a published item of the source has this key. */
+    @Query("SELECT EXISTS(SELECT 1 FROM items WHERE sourceId = :sourceId AND stableKey = :key AND pending = 0)")
+    abstract suspend fun hasKey(sourceId: Long, key: String): Boolean
+
     /**
      * Gives staged live channels the key they were remembered under ([aliasReuse]), so favorites and preferences follow a channel whose group
      * or stream link changed once and has not changed since. Returns how many keys changed; at most [limit] per call, so call it until it returns less.
@@ -145,7 +152,7 @@ abstract class ItemDao {
     open suspend fun reuseKeysByAlias(sourceId: Long, limit: Int): Int = aliasReuse(sourceId, limit).also { rows -> rows.forEach { setKey(it.id, it.stableKey) } }.size
 
     /**
-     * Gives staged live channels the key of the earlier channel with the same tvg-id (see [tvgIdReuse]) and remembers it, so favorites, history
+     * Gives staged live channels the key of the earlier channel with the same tvg-id (see [tvgIdReuse]) and remembers it (the latest link only), so favorites, history
      * and preferences follow a channel whose group or stream link changed. Keys are never shared: an ambiguous tvg-id changes nothing. Returns how
      * many keys changed; at most [limit] per call, so call it until it returns less.
      */
@@ -153,6 +160,7 @@ abstract class ItemDao {
     open suspend fun reuseKeysByTvgId(sourceId: Long, limit: Int): Int = tvgIdReuse(sourceId, limit).also { rows ->
         rows.forEach {
             setKey(it.id, it.stableKey)
+            dropAliasesFor(sourceId, it.stableKey) // only the latest link of a channel is remembered, so rotating links do not pile up
             putAlias(KeyAliasEntity(sourceId, it.linkKey, it.stableKey))
         }
     }.size

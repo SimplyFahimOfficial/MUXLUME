@@ -19,6 +19,7 @@ import com.muxlume.app.data.ThemeMode
 import com.muxlume.app.data.db.ChannelPrefEntity
 import com.muxlume.app.data.db.FavoriteEntity
 import com.muxlume.app.data.db.HistoryEntity
+import com.muxlume.app.data.db.ItemEntity
 import com.muxlume.app.data.db.ItemKind
 import com.muxlume.app.data.db.KeyAliasEntity
 import com.muxlume.app.data.db.LockedGroupEntity
@@ -31,6 +32,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.After
@@ -321,10 +323,12 @@ class BackupRepositoryTest {
     }
 
     @Test
-    fun `remembered keys are saved and restored, and checked like any other input`(): Unit = runBlocking {
+    fun `remembered keys that saved data refers to are saved and restored, and checked like any other input`(): Unit = runBlocking {
         val a = device("a")
         val home = a.sources.save(SourceInput.M3uUrl("Home", "https://example.com/list.m3u", allowHttp = false))
+        a.db.favorites().add(FavoriteEntity(home, "first-key", 1))
         a.db.keyAliases().add(KeyAliasEntity(home, "hash-of-new-group", "first-key"))
+        a.db.keyAliases().add(KeyAliasEntity(home, "hash-of-unused", "nothing-refers-to-this")) // cannot reconnect anything: not exported
         val b = device("b")
         b.import(a.export())
         val restored = b.db.sources().allNow().single().id
@@ -338,5 +342,27 @@ class BackupRepositoryTest {
         val c = device("c")
         c.import(BackupCrypto.encrypt(Json.encodeToString(BackupData.serializer(), bad).toByteArray(), pass))
         assertThat(c.db.keyAliases().all().map { it.linkKey }).containsExactly("ok")
+    }
+
+    @Test
+    fun `on a device that already has the playlist, data saved under an older key is restored under the key the device uses`(): Unit = runBlocking {
+        val a = device("a")
+        val home = a.sources.save(SourceInput.M3uUrl("Home", "https://example.com/list.m3u", allowHttp = false))
+        a.db.favorites().add(FavoriteEntity(home, "A", 5, sortOrder = 2))
+        a.db.channelPrefs().upsert(ChannelPrefEntity(home, "A", pinned = true))
+        a.db.keyAliases().add(KeyAliasEntity(home, "B", "A")) // the channel kept key A though its group and link now hash to B
+
+        val b = device("b")
+        val mine = b.sources.save(SourceInput.M3uUrl("Home", "https://example.com/list.m3u", allowHttp = false))
+        b.db.items().insertAll(
+            listOf(ItemEntity(sourceId = mine, kind = ItemKind.LIVE, stableKey = "B", name = "One", groupTitle = "G", logo = null, url = "https://x/1", position = 0)),
+        )
+        b.import(a.export())
+
+        assertThat(b.db.favorites().get(mine, "B")!!.sortOrder).isEqualTo(2)
+        assertThat(b.db.favorites().get(mine, "A")).isNull()
+        assertThat(b.db.channelPrefs().all().map { it.stableKey }).containsExactly("B")
+        assertThat(b.db.keyAliases().all()).isEmpty() // nothing left to remember: this device's rows already use B
+        assertThat(b.db.items().favorites(ItemKind.LIVE, mine, true).first().map { it.name }).containsExactly("One")
     }
 }

@@ -554,6 +554,21 @@ class SourceRepositoryTest {
     }
 
     @Test
+    fun `a channel whose link rotates again and again is remembered once`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(m3u(entry("One", one, "News", "one.tv")))
+        repo.refresh(id)
+        val old = key(id, "One")
+        for (round in 1..4) {
+            serve(m3u(entry("One", "https://cdn$round.example/1.m3u8", "News", "one.tv")))
+            repo.refresh(id)
+            assertThat(key(id, "One")).isEqualTo(old)
+        }
+        assertThat(db.keyAliases().all()).hasSize(1)
+        assertThat(db.keyAliases().all().single().stableKey).isEqualTo(old)
+    }
+
+    @Test
     fun `two staged channels with remembered keys for one earlier key share it one at a time`(): Unit = runBlocking {
         val id = addM3u()
         db.items().insertAll(listOf(ItemEntity(sourceId = id, kind = ItemKind.LIVE, stableKey = "kept", name = "Old", groupTitle = "G", logo = null, url = "u", position = 0)))

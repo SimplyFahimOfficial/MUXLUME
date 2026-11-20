@@ -141,6 +141,10 @@ class BackupRepository(
         val prefs = db.channelPrefs().all().mapNotNull { p ->
             index[p.sourceId]?.let { BackupChannelPref(it, p.stableKey, p.hidden, p.customName, p.pinned) }
         }
+        val servers = db.channelServers().all().mapNotNull { s ->
+            val from = index[s.sourceId] ?: return@mapNotNull null
+            index[s.serverSourceId]?.let { BackupServer(from, s.stableKey, it, s.serverStableKey, s.position) }
+        }
         val data = BackupData(
             sources = portable.map { BackupSource(it.name, it.type, sources.secretOf(it), it.allowHttp, it.guideEnabled) },
             favorites = favorites,
@@ -148,15 +152,28 @@ class BackupRepository(
             settings = settings.current().toBackup(),
             channelPrefs = prefs,
             lockedGroups = db.lockedGroups().all().mapNotNull { g -> index[g.sourceId]?.let { BackupLockedGroup(it, g.groupTitle) } },
-            servers = db.channelServers().all().mapNotNull { s ->
-                val from = index[s.sourceId] ?: return@mapNotNull null
-                index[s.serverSourceId]?.let { BackupServer(from, s.stableKey, it, s.serverStableKey, s.position) }
-            },
-            keyAliases = db.keyAliases().all().mapNotNull { a -> index[a.sourceId]?.let { BackupKeyAlias(it, a.linkKey, a.stableKey) } },
+            servers = servers,
+            keyAliases = aliasesFor(index, favorites, history, prefs, servers),
         )
         out.write(BackupCrypto.encrypt(JSON.encodeToString(BackupData.serializer(), data).toByteArray(), passphrase))
         out.flush()
         ExportSummary(portable.size, files.size, favorites.size, history.size)
+    }
+
+    /** Only the remembered keys that a saved favorite, preference, history entry or server refers to: the rest cannot reconnect anything. */
+    private suspend fun aliasesFor(
+        index: Map<Long, Int>,
+        favorites: List<BackupFavorite>,
+        history: List<BackupHistory>,
+        prefs: List<BackupChannelPref>,
+        servers: List<BackupServer>,
+    ): List<BackupKeyAlias> {
+        val used = HashSet<Pair<Int, String>>()
+        favorites.forEach { used += it.source to it.stableKey }
+        history.forEach { used += it.source to it.stableKey }
+        prefs.forEach { used += it.source to it.stableKey }
+        servers.forEach { used += it.source to it.stableKey; used += it.serverSource to it.serverStableKey }
+        return db.keyAliases().all().mapNotNull { a -> index[a.sourceId]?.takeIf { (it to a.stableKey) in used }?.let { BackupKeyAlias(it, a.linkKey, a.stableKey) } }
     }
 
     suspend fun import(input: InputStream, passphrase: CharArray): ImportSummary = withContext(Dispatchers.Default) {
@@ -176,16 +193,18 @@ class BackupRepository(
         restore(data)
     }
 
-    private suspend fun restore(data: BackupData): ImportSummary {
+    private suspend fun restore(backup: BackupData): ImportSummary {
         val existing = db.sources().allNow().associateBy { identity(it.type, sources.secretOf(it)) }
-        val ids = arrayOfNulls<Long>(data.sources.size)
+        val ids = arrayOfNulls<Long>(backup.sources.size)
+        val known = HashSet<Int>() // playlists this device already had
         val added = ArrayList<Long>()
         var already = 0
         var skipped = 0
-        data.sources.forEachIndexed { i, s ->
+        backup.sources.forEachIndexed { i, s ->
             val same = existing[identity(s.type, s.secret)]
             if (same != null) {
                 ids[i] = same.id
+                known += i
                 already++
                 return@forEachIndexed
             }
@@ -197,6 +216,8 @@ class BackupRepository(
                 added += id
             }
         }
+        val renamed = deviceKeys(backup, ids, known)
+        val data = backup.rekeyed(renamed)
         var favorites = 0
         data.favorites.forEach { f ->
             val id = ids.getOrNull(f.source) ?: return@forEach
@@ -204,7 +225,7 @@ class BackupRepository(
             favorites++
         }
         restoreChoices(data, ids)
-        restoreKeyAliases(data, ids)
+        restoreKeyAliases(data, ids, renamed.keys)
         var history = 0
         data.history.forEach { h ->
             val id = ids.getOrNull(h.source) ?: return@forEach
@@ -238,11 +259,37 @@ class BackupRepository(
         }
     }
 
-    private suspend fun restoreKeyAliases(data: BackupData, ids: Array<Long?>) {
+    /** [renamed] are the channels stored under another key here already: nothing is left to remember for them. */
+    private suspend fun restoreKeyAliases(data: BackupData, ids: Array<Long?>, renamed: Set<Pair<Int, String>>) {
         data.keyAliases.forEach { a ->
             val id = ids.getOrNull(a.source) ?: return@forEach
-            if (isKey(a.linkKey) && isKey(a.stableKey)) db.keyAliases().add(KeyAliasEntity(id, a.linkKey, a.stableKey))
+            if ((a.source to a.stableKey) !in renamed && isKey(a.linkKey) && isKey(a.stableKey)) db.keyAliases().add(KeyAliasEntity(id, a.linkKey, a.stableKey))
         }
+    }
+
+    /**
+     * For a playlist this device already imported, a channel the backup keeps under an older key A may be stored here under the hash B
+     * the backup remembers as A's link: B is the key this device's own data refers to, so the backup's data is restored under B.
+     * Maps (backup playlist index, A) to B.
+     */
+    private suspend fun deviceKeys(backup: BackupData, ids: Array<Long?>, known: Set<Int>): Map<Pair<Int, String>, String> {
+        val renamed = HashMap<Pair<Int, String>, String>()
+        for (a in backup.keyAliases) {
+            val id = ids.getOrNull(a.source)?.takeIf { a.source in known } ?: continue
+            if (db.items().hasKey(id, a.linkKey) && !db.items().hasKey(id, a.stableKey)) renamed[a.source to a.stableKey] = a.linkKey
+        }
+        return renamed
+    }
+
+    private fun BackupData.rekeyed(renamed: Map<Pair<Int, String>, String>): BackupData {
+        if (renamed.isEmpty()) return this
+        fun key(source: Int, key: String) = renamed[source to key] ?: key
+        return copy(
+            favorites = favorites.map { it.copy(stableKey = key(it.source, it.stableKey)) },
+            history = history.map { it.copy(stableKey = key(it.source, it.stableKey)) },
+            channelPrefs = channelPrefs.map { it.copy(stableKey = key(it.source, it.stableKey)) },
+            servers = servers.map { it.copy(stableKey = key(it.source, it.stableKey), serverStableKey = key(it.serverSource, it.serverStableKey)) },
+        )
     }
 
     private fun isKey(key: String) = key.isNotBlank() && key.length <= MAX_KEY
