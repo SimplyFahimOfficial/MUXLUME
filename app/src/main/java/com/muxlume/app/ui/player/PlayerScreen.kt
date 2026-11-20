@@ -129,6 +129,7 @@ import com.muxlume.app.playback.ChannelList
 import com.muxlume.app.ui.playChannel
 import com.muxlume.app.recording.RecordingService
 import com.muxlume.app.ui.guide.NowNextLine
+import com.muxlume.app.ui.guide.RecordingPrompt
 import com.muxlume.app.ui.guide.recordingMessage
 import com.muxlume.app.ui.guide.rememberNowNext
 import kotlinx.coroutines.delay
@@ -198,6 +199,7 @@ fun PlayerScreen(onBack: () -> Unit) {
     var portrait by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf(false) }
     var lengths by remember { mutableStateOf(false) }
+    val prompt = remember { RecordingPrompt() }
     var recordLockedUntil by remember { mutableLongStateOf(0L) }
     val scope = rememberCoroutineScope()
     val channel = if (ui.live) ui.mediaId?.let(MediaIds::parse) else null
@@ -222,8 +224,10 @@ fun PlayerScreen(onBack: () -> Unit) {
             val airing = if (seconds == null) c.epg.nowNext(sourceId, key).now else null
             if (seconds == null && airing == null) { lengths = true; return@launch }
             recordLockedUntil = System.currentTimeMillis() + RECORD_DEBOUNCE_MS
-            val result = if (airing != null) c.recordings.add(sourceId, key, ui.title, airing) else c.recordings.addNow(sourceId, key, ui.title, seconds ?: 0)
-            Toast.makeText(context, recordingMessage(res, result, airing?.start ?: 0), Toast.LENGTH_SHORT).show()
+            val result =
+                if (airing != null) c.recordings.add(sourceId, key, ui.title, airing, confirm = prompt::confirm)
+                else c.recordings.addNow(sourceId, key, ui.title, seconds ?: 0, prompt::confirm)
+            recordingMessage(res, result, airing?.start ?: 0)?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
         }
     }
 
@@ -418,9 +422,10 @@ fun PlayerScreen(onBack: () -> Unit) {
             )
         }
 
+        val chosenId = ui.primaryId
         picker?.let { list ->
-            ChannelPickerSheet(
-                sourceId = channel?.first ?: 0, list = list, currentKey = channel?.second,
+            if (chosenId != null) ChannelPickerSheet(
+                primaryId = chosenId, list = list,
                 onPick = { item ->
                     picker = null
                     if (p != null) scope.launch { context.playLike(p, item, context.container.lock.unlockedNow()) }
@@ -429,6 +434,7 @@ fun PlayerScreen(onBack: () -> Unit) {
             )
         }
 
+        prompt.Dialog()
         if (numberPad) NumberPadDialog(onGo = { numberPad = false; goTo(it) }, onDismiss = { numberPad = false })
 
         if (lengths) {

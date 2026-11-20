@@ -81,6 +81,13 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
   notification 5 minutes before; inexact timing; needs notification permission on Android 13+).
 - Support: highlighted entry, a separate "More ways to pay" card, tap the QR code to enlarge it with
   the payee name and UPI ID, and a link to the project's GitHub repository.
+- Recording warns before it schedules a clash: when the playlist is an Xtream account whose connection limit
+  the recordings would exceed at some moment (the limit is read at each import), or when a recording would
+  cut a recording of the same channel short. You can record anyway or cancel; nothing is saved until you choose.
+- Move up and Move down for favorites: press and hold a channel in Live TV → Favorites. The Favorites list, the home
+  row, the player's channel list and channel up/down all follow the same order. Until you move something, favorites stay
+  newest first; a favorite you add later goes to the top. The order is part of the backup (older backups restore in
+  the default order).
 
 ### Removed
 - Personal GitHub and Instagram links from the Support screen.
@@ -103,6 +110,20 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
   its channels: the previous channels stay and the source shows an error. A valid playlist that the provider
   emptied (only the "#EXTM3U" header) still removes them. Only a source that already has channels is protected,
   and a playlist without an "#EXTM3U" header that lists nothing counts as an error, not as emptied.
+- Saving a different playlist link or login while a refresh is running now imports the new one; the
+  paused refresh's old channels are dropped instead of being published under the new link.
+- Favorites, hidden and pinned channels, history and reminders stay with a channel after a playlist edit
+  that changes its group or stream link, when the playlist gives it a tvg-id that no other channel shares, and on
+  later refreshes while its group and link stay as they are, even if the playlist was emptied and restored in
+  between. The match is part of the backup.
+- While another server plays a channel, channel up/down, number entry and the channel picker follow the
+  channel you chose and its list, and only that channel is highlighted, also in Favorites that hold the same
+  channel from two playlists.
+- A programme's sheet drops "Remind me" when the programme starts and "Record" when it ends, also if the
+  sheet stayed open while the app was in the background.
+- A recording no longer shows as saved when the file could not be opened, written or closed: it is marked
+  stopped with the reason (storage full, file could not be written), the part already recorded is kept, and an
+  empty file is removed.
 
 ### Added
 - Light theme and an Appearance screen: System/Light/Dark, five accent colours, Material You accent

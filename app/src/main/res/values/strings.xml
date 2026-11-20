@@ -462,6 +462,10 @@
     <string name="channel_pin">Pin to top</string>
     <string name="channel_unpin">Unpin</string>
     <string name="channel_rename">Rename</string>
+    <string name="channel_move_up">Move up</string>
+    <string name="channel_move_down">Move down</string>
+    <string name="channel_moved_up">%1$s moved up in Favorites.</string>
+    <string name="channel_moved_down">%1$s moved down in Favorites.</string>
     <string name="channel_hide">Hide</string>
     <string name="channel_hidden">%1$s hidden. Bring it back in Settings → Hidden channels.</string>
     <string name="channel_rename_title">Rename channel</string>
@@ -534,6 +538,14 @@
     <string name="recording_trail">Stop later</string>
     <string name="recording_minutes">%1$d min</string>
     <string name="recording_padding_note">Programmes rarely start and end on time, so recordings begin and end a little outside them. Applies to recordings you schedule from now on. If the connection drops, MUXLUME keeps trying for up to two minutes. Some providers allow only one stream at a time; recording while watching may stop one of them.</string>
+    <string name="recording_conflict_title">Recording may clash</string>
+    <plurals name="recording_conflict_limit">
+        <item quantity="one">This playlist allows %1$d connection at a time, and other recordings already use it during this one.</item>
+        <item quantity="other">This playlist allows %1$d connections at a time, and other recordings already use them during this one.</item>
+    </plurals>
+    <string name="recording_conflict_new_shortened">This recording would end %1$d min early: another one on the same channel starts then.</string>
+    <string name="recording_conflict_old_shortened">\"%1$s\" would end %2$d min early: this recording starts on the same channel.</string>
+    <string name="recording_conflict_continue">Record anyway</string>
     <string name="recording_stop_recording">Stop recording</string>
     <string name="recording_length_title">Record for how long?</string>
     <string name="recording_length_body">There is no guide for this channel. Recording starts now and ends after the time you pick.</string>

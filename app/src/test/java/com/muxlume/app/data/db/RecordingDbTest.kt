@@ -66,7 +66,7 @@ class RecordingDbTest {
     @Test
     fun `progress is stored and finishing records how it went`(): Unit = runBlocking {
         val id = db.recordings().insert(row("kids", RecordingState.SCHEDULED, 0, null))
-        db.recordings().start(id, "content://tree/f")
+        db.recordings().start(id, "content://tree/f", 0)
         db.recordings().setBytes(id, 500)
         assertThat(db.recordings().get(id)!!.let { it.state to it.bytes }).isEqualTo(RecordingState.RECORDING to 500L)
         db.recordings().finish(id, RecordingState.FAILED, 800, "NETWORK")
@@ -98,10 +98,19 @@ class RecordingDbTest {
     }
 
     @Test
+    fun `starting records when it will stop, so a recording cut short by the next one ends there`(): Unit = runBlocking {
+        val id = db.recordings().insert(row("kids", RecordingState.SCHEDULED, 0, null).copy(startAt = 100, endAt = 200, trailSeconds = 50))
+        db.recordings().start(id, "content://tree/f", 150)
+        val running = db.recordings().get(id)!!
+        assertThat(running.paddedEnd).isEqualTo(150)
+        assertThat(running.endAt).isEqualTo(200) // the programme's own end is unchanged
+    }
+
+    @Test
     fun `a channel shows as being recorded only while its recording runs`(): Unit = runBlocking {
         val id = db.recordings().insert(row("kids", RecordingState.SCHEDULED, 0, null))
         assertThat(db.recordings().runningFor(source, "kids").first()).isNull()
-        db.recordings().start(id, "content://tree/f")
+        db.recordings().start(id, "content://tree/f", 0)
         assertThat(db.recordings().runningFor(source, "kids").first()).isEqualTo(id)
         assertThat(db.recordings().runningFor(source, "adult").first()).isNull() // another channel
         db.recordings().finish(id, RecordingState.DONE, 10, null)

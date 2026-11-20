@@ -166,6 +166,66 @@ class DatabaseTest {
     }
 
 
+    @Test
+    fun `migration 8 to 9 keeps sources and recordings and adds an unknown connection limit`() {
+        createAt(8) { old ->
+            sql(
+                old,
+                "INSERT INTO sources (id, name, type, secret, label, allowHttp, createdAt, liveCount, movieCount, seriesCount) VALUES (1, 'S', 'XTREAM', 'x', 'l', 0, 0, 1, 0, 0)",
+                "INSERT INTO recordings (sourceId, stableKey, channelName, title, startAt, endAt, state) VALUES (1, 'k', 'C', 'T', 10, 20, 'SCHEDULED')",
+            )
+        }
+        val migrated = openCurrent()
+        try {
+            assertThat(runBlocking { migrated.sources().get(1) }!!.maxConnections).isNull()
+            assertThat(runBlocking { migrated.recordings().find(1, "k", 10) }!!.state).isEqualTo(RecordingState.SCHEDULED)
+        } finally {
+            migrated.close()
+        }
+    }
+
+    @Test
+    fun `migration 9 to 10 keeps favorites in their newest-first order until they are moved`() {
+        createAt(9) { old ->
+            sql(
+                old,
+                "INSERT INTO sources (id, name, type, secret, label, allowHttp, createdAt, liveCount, movieCount, seriesCount) VALUES (1, 'S', 'M3U_URL', 'x', 'l', 0, 0, 3, 0, 0)",
+                "INSERT INTO items (sourceId, kind, stableKey, name, groupTitle, position) VALUES (1, 'LIVE', 'old', 'Old', 'G', 0), (1, 'LIVE', 'mid', 'Mid', 'G', 1), (1, 'LIVE', 'new', 'New', 'G', 2)",
+                "INSERT INTO favorites (sourceId, stableKey, addedAt) VALUES (1, 'old', 100), (1, 'mid', 200), (1, 'new', 300)",
+            )
+        }
+        val migrated = openCurrent()
+        try {
+            assertThat(runBlocking { migrated.favorites().all() }.map { it.sortOrder }).containsExactly(null, null, null)
+            assertThat(runBlocking { migrated.items().favorites(ItemKind.LIVE, null, true).first() }.map { it.name }).containsExactly("New", "Mid", "Old").inOrder()
+            assertThat(runBlocking { migrated.favorites().move(migrated.items().byKey(1, "old", true)!!, null, true, true) }).isTrue()
+            assertThat(runBlocking { migrated.items().favorites(ItemKind.LIVE, null, true).first() }.map { it.name }).containsExactly("New", "Old", "Mid").inOrder()
+        } finally {
+            migrated.close()
+        }
+    }
+
+    @Test
+    fun `migration 10 to 11 keeps the data and adds an empty table of remembered keys`() {
+        createAt(10) { old ->
+            sql(
+                old,
+                "INSERT INTO sources (id, name, type, secret, label, allowHttp, createdAt, liveCount, movieCount, seriesCount) VALUES (1, 'S', 'M3U_URL', 'x', 'l', 0, 0, 1, 0, 0)",
+                "INSERT INTO favorites (sourceId, stableKey, addedAt, sortOrder) VALUES (1, 'k', 100, 3)",
+            )
+        }
+        val migrated = openCurrent()
+        try {
+            assertThat(runBlocking { migrated.keyAliases().all() }).isEmpty()
+            assertThat(runBlocking { migrated.favorites().get(1, "k") }!!.sortOrder).isEqualTo(3)
+            runBlocking { migrated.keyAliases().add(KeyAliasEntity(1, "h", "k")) }
+            runBlocking { migrated.sources().delete(1) }
+            assertThat(runBlocking { migrated.keyAliases().all() }).isEmpty() // removed with its playlist
+        } finally {
+            migrated.close()
+        }
+    }
+
     // ---- Channel preferences (hide, rename, pin)
 
     private val prefs get() = db.channelPrefs()

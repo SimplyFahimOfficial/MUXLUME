@@ -44,6 +44,8 @@ data class SourceEntity(
     val epgRefreshedAt: Long? = null,
     val epgError: String? = null,
     @ColumnInfo(defaultValue = "0") val epgPrograms: Int = 0,
+    /** Xtream: how many streams the account may open at once, as the provider reported at the last import (null if unknown or not positive). */
+    val maxConnections: Int? = null,
 )
 
 /**
@@ -87,6 +89,17 @@ data class ItemEntity(
     val addedAt: Long? = null,
     @ColumnInfo(defaultValue = "0") val pending: Boolean = false,
 )
+
+/**
+ * "The channel whose group and link hash to [linkKey] is the one kept under [stableKey]". Remembered when an import gives a channel an
+ * older key (see SourceRepository), so the match outlives the item rows it was learned from (an emptied playlist, a restored backup).
+ */
+@Entity(
+    tableName = "key_aliases",
+    primaryKeys = ["sourceId", "linkKey"],
+    foreignKeys = [ForeignKey(entity = SourceEntity::class, parentColumns = ["id"], childColumns = ["sourceId"], onDelete = ForeignKey.CASCADE)],
+)
+data class KeyAliasEntity(val sourceId: Long, val linkKey: String, val stableKey: String)
 
 /** Full-text index over item names (kept in sync with `items` by Room's triggers). */
 @Fts4(contentEntity = ItemEntity::class)
@@ -196,7 +209,19 @@ data class LockedGroupEntity(val sourceId: Long, val groupTitle: String)
     primaryKeys = ["sourceId", "stableKey"],
     foreignKeys = [ForeignKey(entity = SourceEntity::class, parentColumns = ["id"], childColumns = ["sourceId"], onDelete = ForeignKey.CASCADE)],
 )
-data class FavoriteEntity(val sourceId: Long, val stableKey: String, val addedAt: Long)
+data class FavoriteEntity(
+    val sourceId: Long,
+    val stableKey: String,
+    val addedAt: Long,
+    /**
+     * Place in the list the user arranged, from 1; null until they move a favorite. Lists order by [orderKey], so favorites nobody
+     * placed stay newest first and a favorite added later goes to the top.
+     */
+    val sortOrder: Int? = null,
+) {
+    /** Smaller comes first. The same expression is in the favorites queries (`COALESCE(sortOrder, -addedAt)`). */
+    val orderKey: Long get() = sortOrder?.toLong() ?: -addedAt
+}
 
 /** Watch history and resume positions. [mediaId] is the playback id (see playback/MediaIds.kt). */
 @Entity(

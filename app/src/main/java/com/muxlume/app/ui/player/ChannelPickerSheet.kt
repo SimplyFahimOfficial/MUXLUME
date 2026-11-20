@@ -43,6 +43,7 @@ import com.muxlume.app.data.db.EpgDao
 import com.muxlume.app.data.db.ItemDao
 import com.muxlume.app.data.db.ItemEntity
 import com.muxlume.app.playback.ChannelList
+import com.muxlume.app.playback.MediaIds
 import com.muxlume.app.playback.pagingSource
 import com.muxlume.app.ui.components.Artwork
 import com.muxlume.app.ui.components.EmptyState
@@ -63,8 +64,9 @@ private const val SHEET_HEIGHT = 0.9f
  * until a row is chosen. Typing searches the live channels of the same playlist.
  */
 @Composable
-fun ChannelPickerSheet(sourceId: Long, list: ChannelList, currentKey: String?, onPick: (ItemEntity) -> Unit, onDismiss: () -> Unit) {
+fun ChannelPickerSheet(primaryId: String, list: ChannelList, onPick: (ItemEntity) -> Unit, onDismiss: () -> Unit) {
     val c = LocalContext.current.container
+    val sourceId = MediaIds.parse(primaryId)?.first ?: return
     val unlocked by c.lock.unlocked.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
     val paged = remember(list, unlocked) { Pager(PagingConfig(pageSize = PAGE_SIZE)) { list.pagingSource(c.db, sourceId, unlocked) }.flow }.collectAsLazyPagingItems()
@@ -78,16 +80,19 @@ fun ChannelPickerSheet(sourceId: Long, list: ChannelList, currentKey: String?, o
             SearchField(query, hint = R.string.player_channels_search, autoFocus = false) { query = it }
             val found = hits
             when {
-                found == null -> Paged(paged, currentKey, onPick)
+                found == null -> Paged(paged, primaryId, onPick)
                 found.isEmpty() -> EmptyState(stringResource(R.string.player_channels_none), stringResource(R.string.player_channels_none_body, query))
-                else -> LazyColumn { items(found, key = { it.id }) { PickerRow(it, it.stableKey == currentKey) { onPick(it) } } }
+                else -> LazyColumn { items(found, key = { it.id }) { PickerRow(it, isPlayingRow(it, primaryId)) { onPick(it) } } }
             }
         }
     }
 }
 
+/** A row is the playing one only if both its playlist and its key match the channel the user chose: two playlists can hold the same key. */
+internal fun isPlayingRow(item: ItemEntity, primaryId: String?) = primaryId == MediaIds.of(item.sourceId, item.stableKey)
+
 @Composable
-private fun Paged(channels: LazyPagingItems<ItemEntity>, currentKey: String?, onPick: (ItemEntity) -> Unit) {
+private fun Paged(channels: LazyPagingItems<ItemEntity>, primaryId: String, onPick: (ItemEntity) -> Unit) {
     if (channels.isLoadedEmpty) {
         EmptyState(stringResource(R.string.live_nothing_in_this_list), "")
         return
@@ -95,7 +100,7 @@ private fun Paged(channels: LazyPagingItems<ItemEntity>, currentKey: String?, on
     LazyColumn {
         items(channels.itemCount, key = channels.itemKey { it.id }) { i ->
             val ch = channels[i] ?: return@items // placeholder while the page loads
-            PickerRow(ch, ch.stableKey == currentKey) { onPick(ch) }
+            PickerRow(ch, isPlayingRow(ch, primaryId)) { onPick(ch) }
         }
     }
 }

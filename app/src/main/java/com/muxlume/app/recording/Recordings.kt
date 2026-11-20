@@ -46,25 +46,36 @@ class Recordings(
         data object Ended : Result
         data object Already : Result
         data object Started : Result
+        /** The user declined the warning (see [RecordingWarning]); nothing was saved or scheduled. */
+        data object Cancelled : Result
         class Scheduled(val unattended: Boolean) : Result
     }
 
     private val scheduler get() = RecordingScheduler(context)
 
-    /** [pad] false records exactly [program]'s window (a fixed length from the player has nothing to pad). */
-    suspend fun add(sourceId: Long, stableKey: String, channelName: String, program: ProgramEntity, pad: Boolean = true): Result {
+    /**
+     * [pad] false records exactly [program]'s window (a fixed length from the player has nothing to pad). [confirm] is asked before anything
+     * is saved when the recording would exceed the account's connections or cut a recording of the same channel short; false cancels.
+     */
+    @Suppress("LongParameterList") // the channel, the programme, its padding and the question
+    suspend fun add(
+        sourceId: Long, stableKey: String, channelName: String, program: ProgramEntity, pad: Boolean = true,
+        confirm: suspend (RecordingWarning) -> Boolean = { true },
+    ): Result {
         val now = clock() / MILLIS
-        if (program.stop <= now) return Result.Ended
         val current = settings.current()
-        if (current.recordingFolder == null) return Result.NoFolder
         val draft = RecordingEntity(
             sourceId = sourceId, stableKey = stableKey, channelName = channelName.take(MAX_NAME), title = program.title.take(MAX_NAME),
             startAt = program.start, endAt = program.stop, state = RecordingState.SCHEDULED,
             leadSeconds = if (pad) current.recordLeadMinutes * SECONDS_PER_MINUTE else 0,
             trailSeconds = if (pad) current.recordTrailMinutes * SECONDS_PER_MINUTE else 0,
         )
+        refusal(draft, now, current.recordingFolder != null, confirm)?.let { return it }
+        // The user may have taken a while to answer a warning: start or give up by the time it is now.
+        val later = clock() / MILLIS
+        if (draft.endAt <= later) return Result.Ended
         val id = db.recordings().insert(draft).takeIf { it > 0 } ?: return Result.Already
-        return when (RecordingPlan.start(draft.paddedStart, now, scheduler.canScheduleExact())) {
+        return when (RecordingPlan.start(draft.paddedStart, later, scheduler.canScheduleExact())) {
             RecordingPlan.Start.NOW -> {
                 ContextCompat.startForegroundService(context, RecordingService.startIntent(context, id))
                 Result.Started
@@ -74,11 +85,22 @@ class Recordings(
         }
     }
 
+    /** Why [draft] must not be saved: over, no folder, already there, or the user declined the warning. Null if it may be. */
+    private suspend fun refusal(draft: RecordingEntity, now: Long, hasFolder: Boolean, confirm: suspend (RecordingWarning) -> Boolean): Result? {
+        if (draft.endAt <= now) return Result.Ended
+        if (!hasFolder) return Result.NoFolder
+        if (db.recordings().find(draft.sourceId, draft.stableKey, draft.startAt) != null) return Result.Already
+        val waiting = db.recordings().activeFor(draft.sourceId).filter { it.paddedEnd > now }
+        val limit = db.sources().get(draft.sourceId)?.maxConnections
+        val warning = RecordingConflicts.check(limit, waiting, draft)
+        return if (warning != null && !confirm(warning)) Result.Cancelled else null
+    }
+
     /** Records the channel from now for [seconds], with no padding, titled "<channel> <date time>". */
-    suspend fun addNow(sourceId: Long, stableKey: String, channelName: String, seconds: Long): Result {
+    suspend fun addNow(sourceId: Long, stableKey: String, channelName: String, seconds: Long, confirm: suspend (RecordingWarning) -> Boolean = { true }): Result {
         val now = clock() / MILLIS
         val title = "$channelName ${EpgTime.date(now)} ${EpgTime.time(now)}"
-        return add(sourceId, stableKey, channelName, ProgramEntity(sourceId = sourceId, channelId = "", start = now, stop = now + seconds, title = title), pad = false)
+        return add(sourceId, stableKey, channelName, ProgramEntity(sourceId = sourceId, channelId = "", start = now, stop = now + seconds, title = title), pad = false, confirm = confirm)
     }
 
     /** Alarms do not survive a reboot or an update: arm the future ones again, and give up on those whose time has passed. */

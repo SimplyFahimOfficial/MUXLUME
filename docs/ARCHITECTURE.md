@@ -29,6 +29,8 @@ ui/                            Compose screens, one ViewModel per screen where s
 - `items`: live channels, movies and series of a source. Replaced on every refresh. Unique
   `(sourceId, stableKey)`: `live:<id>`/`movie:<id>`/`series:<id>` for Xtream, a hash of
   group + URL for M3U (exact duplicates merge).
+- `favorites.sortOrder` is null until the user moves a favorite (then 1..n for the favorites a list shows); every favorites query, the player's
+  picker and channel up/down order by `COALESCE(sortOrder, -addedAt), id`, so unplaced favorites stay newest first and new ones come first.
 - `favorites`, `channel_prefs` and `history` reference `(sourceId, stableKey)` / the playback id, so they
   survive refreshes, and cascade when a source is removed.
 - `channel_prefs` holds what the user did to a channel: hidden, renamed (`customName`), pinned. Rows with
@@ -48,7 +50,15 @@ ui/                            Compose screens, one ViewModel per screen where s
 `SourceRepository.refresh` writes the new list as hidden `pending` rows in short batches of 1,000
 (checking for cancellation between them), then one short transaction deletes the old rows and
 publishes the new ones. Every read filters `pending = 0`, so a running import is invisible and the
-rest of the app can keep writing. Imports of one source run one at a time (a per-source mutex); one that waited and finds `refreshedAt` changed returns the stored counts. Failure or cancellation deletes the staged rows. Lists are read
+rest of the app can keep writing. Imports of one source run one at a time (a per-source mutex); one that waited and finds `refreshedAt` changed returns the stored counts. Failure or cancellation deletes the staged rows.
+An M3U import that finds no playable entry in a source that had channels fails as an error instead of publishing an empty list, unless the
+body has an `#EXTM3U` header and no entry was skipped (a playlist the provider emptied on purpose). The commit
+drops the staged rows if the source's link or login was changed while it ran (the new one is imported next). Before the commit, when a staged live
+channel has a key no earlier row has, it takes the key of the earlier channel it is: first the key remembered for its group and link
+(`key_aliases`, written when a tvg-id match gave a channel an older key, so it outlives the item rows and travels in the backup;
+`ItemDao.reuseKeysByAlias`), then the earlier channel with the same tvg-id when that tvg-id is on exactly one earlier and one staged live channel
+of the source (`ItemDao.reuseKeysByTvgId`, only when something is still new and the source had channels), so favorites, preferences, history and
+reminders follow a changed group or stream link. Lists are read
 through Paging; search uses an FTS4 table (`items_fts`) kept in sync by Room.
 
 ## Playback
@@ -59,7 +69,8 @@ URL (Xtream URLs include credentials, so they are built only here), applies play
 the saved resume position. A live channel carries the list it was picked from (`ChannelList`:
 provider order, A–Z, group, favorites); `ChannelSwitcher` answers next/previous (app, remote keys,
 notification, Bluetooth) by looking up the neighbouring row in the database, so it works in lists of
-any size. Links without `.m3u8` that fail as an unknown container are retried once as HLS. The service saves history every 10 s while playing and on pause,
+any size. While another server plays, the list, number entry and the picker use `primaryId` (the channel the user chose), while stream
+resolution and the servers sheet use the playing id. Links without `.m3u8` that fail as an unknown container are retried once as HLS. The service saves history every 10 s while playing and on pause,
 retries network errors three times (2/4/8 s) and rejoins live streams that fell behind.
 
 Background playback: off by default; leaving the player pauses unless PiP is active. When enabled,
@@ -113,6 +124,10 @@ The player's Record button calls `Recordings.add` with the programme airing now 
 `Recordings.addNow` (fixed length, no padding); `RecordingDao.runningFor` drives its red state and the same button stops the
 recording through `RecordingService.stopIntent`. A recording opens its own connection to the stream, so a provider that
 allows one stream per account may refuse it or end playback.
+The file is finalized by `writeRecording`: opening, writing and closing must all work for DONE; any failure stores `STORAGE_FULL` or `WRITE_FAILED`,
+keeps the bytes written, and an empty file is deleted. Before a recording is saved, `RecordingConflicts` compares its padded window with the waiting and
+running ones of the same source against the account's `maxConnections` (read at each Xtream import) and reports same-channel truncation;
+the guide and the player both pass `RecordingPrompt.confirm` to `Recordings.add`, which saves nothing until the user continues.
 
 ## Navigation
 

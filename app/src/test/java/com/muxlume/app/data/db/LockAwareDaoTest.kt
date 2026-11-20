@@ -23,6 +23,7 @@ class LockAwareDaoTest {
         "RecordingDao.get" to "the service, receiver and screens look up the recording they were started for; the service resolves its stream lock-aware",
         "RecordingDao.find" to "keyed by a channel and programme the user is looking at",
         "RecordingDao.scheduledAfter" to "re-arms alarms only; nothing is shown",
+        "RecordingDao.activeFor" to "windows for the conflict check; only a recording on the very channel being recorded is ever named",
     )
 
     private data class Query(val dao: String, val method: String, val returns: String, val sql: String)

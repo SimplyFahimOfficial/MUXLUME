@@ -23,9 +23,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
@@ -33,6 +36,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.muxlume.app.R
 import com.muxlume.app.container
@@ -46,15 +50,41 @@ import com.muxlume.app.ui.components.SecondaryButton
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
 import com.muxlume.app.ui.theme.SectionLabel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** What to tell the user after asking to record; [startAt] is the programme's start, for a scheduled one. */
-fun recordingMessage(res: android.content.res.Resources, r: Recordings.Result, startAt: Long): String = when (r) {
+fun recordingMessage(res: android.content.res.Resources, r: Recordings.Result, startAt: Long): String? = when (r) {
+    Recordings.Result.Cancelled -> null // the user chose not to record
     Recordings.Result.NoFolder -> res.getString(R.string.recording_no_folder)
     Recordings.Result.Ended -> res.getString(R.string.recording_ended)
     Recordings.Result.Already -> res.getString(R.string.recording_already)
     Recordings.Result.Started -> res.getString(R.string.recording_started)
     is Recordings.Result.Scheduled -> res.getString(if (r.unattended) R.string.recording_scheduled else R.string.recording_scheduled_notify, EpgTime.time(startAt))
+}
+
+/** What a programme still offers at a moment: a reminder only before it starts, a recording until it ends. */
+data class ProgramActions(val canRemind: Boolean, val canRecord: Boolean)
+
+internal fun programActions(program: ProgramEntity, nowSeconds: Long) = ProgramActions(program.start > nowSeconds, program.stop > nowSeconds)
+
+/**
+ * The actions [program] offers now. They change at the programme's start and end, so one timer waits for the next of those
+ * (no polling), and coming back to the screen re-reads the clock because a timer does not tick while the device sleeps.
+ */
+@Composable
+internal fun rememberProgramActions(program: ProgramEntity, clock: () -> Long = System::currentTimeMillis): ProgramActions {
+    var nowMs by remember(program) { mutableLongStateOf(clock()) }
+    LifecycleResumeEffect(program) {
+        nowMs = clock()
+        onPauseOrDispose { }
+    }
+    LaunchedEffect(program, nowMs) {
+        val next = listOf(program.start, program.stop).map { it * MILLIS }.filter { it > nowMs }.minOrNull() ?: return@LaunchedEffect
+        delay(next - nowMs)
+        nowMs = clock()
+    }
+    return programActions(program, nowMs / MILLIS)
 }
 
 /** A programme's details with Watch and, for programmes that haven't started, a reminder. */
@@ -65,8 +95,8 @@ fun ProgramSheet(item: ItemEntity, program: ProgramEntity, onWatch: () -> Unit, 
     val c = context.container
     val scope = rememberCoroutineScope()
     val reminder by c.db.reminders().reminderFor(item.sourceId, item.stableKey, program.start).collectAsStateWithLifecycle(null)
-    val canRemind = remember(program) { program.start > System.currentTimeMillis() / MILLIS }
-    val canRecord = remember(program) { program.stop > System.currentTimeMillis() / MILLIS }
+    val (canRemind, canRecord) = rememberProgramActions(program)
+    val prompt = remember { RecordingPrompt() }
 
     fun toast(id: Int, vararg args: Any) = Toast.makeText(context, res.getString(id, *args), Toast.LENGTH_SHORT).show()
 
@@ -81,8 +111,8 @@ fun ProgramSheet(item: ItemEntity, program: ProgramEntity, onWatch: () -> Unit, 
     }
 
     fun onRecord() = scope.launch {
-        val r = c.recordings.add(item.sourceId, item.stableKey, item.name, program)
-        Toast.makeText(context, recordingMessage(res, r, program.start), Toast.LENGTH_SHORT).show()
+        val r = c.recordings.add(item.sourceId, item.stableKey, item.name, program, confirm = prompt::confirm)
+        recordingMessage(res, r, program.start)?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
     }
 
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -103,6 +133,7 @@ fun ProgramSheet(item: ItemEntity, program: ProgramEntity, onWatch: () -> Unit, 
         }
     }
 
+    prompt.Dialog()
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MuxTheme.Surface) {
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = Mux.ScreenPadding).padding(bottom = 28.dp),

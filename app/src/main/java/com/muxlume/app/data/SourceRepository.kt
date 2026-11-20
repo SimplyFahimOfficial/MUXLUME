@@ -134,7 +134,16 @@ class SourceRepository(
         val sealed = secrets.seal(Json.encodeToString(SourceSecret.serializer(), secret))
         val name = input.name.trim().ifEmpty { label }.take(80)
         return if (existing != null) {
-            db.sources().update(existing.copy(name = name, type = type, secret = sealed, label = label, allowHttp = input.allowHttp))
+            // Re-read in the transaction: an import that commits meanwhile must not be overwritten with its old counts and timestamp.
+            db.withTransaction {
+                val current = db.sources().get(existing.id) ?: throw IOException("Source not found")
+                db.sources().update(
+                    current.copy(
+                        name = name, type = type, secret = sealed, label = label, allowHttp = input.allowHttp,
+                        maxConnections = current.maxConnections.takeIf { type == SourceType.XTREAM },
+                    ),
+                )
+            }
             existing.id
         } else {
             db.sources().insert(SourceEntity(name = name, type = type, secret = sealed, label = label, allowHttp = input.allowHttp, createdAt = now()))
@@ -201,10 +210,21 @@ class SourceRepository(
     }
 
     /** Makes the staged rows visible and records the import, re-reading the source so a rename made meanwhile is kept. */
-    private suspend fun commit(id: Long, update: (SourceEntity) -> SourceEntity) = db.withTransaction {
-        val current = db.sources().get(id) ?: throw IOException("Source not found")
-        db.items().commitPending(id)
-        db.sources().update(update(current))
+    private suspend fun commit(source: SourceEntity, update: (SourceEntity) -> SourceEntity) = db.withTransaction {
+        val current = db.sources().get(source.id) ?: throw IOException("Source not found")
+        if (!sameCatalogue(source, current)) {
+            // The user saved another link or login while this import ran; its rows belong to the old one.
+            db.items().deletePending(source.id)
+        } else {
+            db.items().commitPending(source.id)
+            db.sources().update(update(current))
+        }
+    }
+
+    private fun sameCatalogue(a: SourceEntity, b: SourceEntity): Boolean {
+        val x = secretOf(a)
+        val y = secretOf(b)
+        return a.type == b.type && x.url == y.url && x.username == y.username && x.password == y.password
     }
 
     /** The sealed secret with the guide link the playlist header announced (null if it announces none now). */
@@ -251,6 +271,7 @@ class SourceRepository(
         }
         db.items().insertAll(batch)
         onProgress(position)
+        if (position > 0) reuseKeys(source)
         // An empty file or an HTML error page served with HTTP 200, or entries that were all rejected or cut off, must not wipe a
         // working catalogue; a playlist the provider emptied on purpose (an #EXTM3U header and nothing skipped) is applied.
         // Only a source that has channels is protected: a first import has nothing to lose and records what it got.
@@ -259,13 +280,25 @@ class SourceRepository(
         if (position == 0 && source.liveCount + source.movieCount > 0 && !emptiedOnPurpose) {
             throw IOException("The playlist has no playable channels")
         }
-        commit(source.id) {
+        commit(source) {
             it.copy(
                 refreshedAt = now(), lastError = null, liveCount = live, movieCount = movies, seriesCount = 0,
                 secret = withAnnouncedGuide(it, parser.epgUrl),
             )
         }
         ImportResult(live, movies, 0, parser.skipped, dupes)
+    }
+
+    /**
+     * Gives staged live channels the key of the earlier channel they are, so favorites and preferences survive a changed group or stream link:
+     * first the key remembered for an unchanged group and link, then, for what is still new, the earlier channel with a tvg-id only they share.
+     * The tvg-id step reads the whole catalogue, so it is skipped when nothing is new (an unchanged refresh) and on a first import.
+     */
+    private suspend fun reuseKeys(source: SourceEntity) {
+        val items = db.items()
+        if (items.hasAliases(source.id)) do { val moved = items.reuseKeysByAlias(source.id, REMAP_BATCH) } while (moved == REMAP_BATCH)
+        if (source.liveCount == 0 || !items.hasUnmatchedStaged(source.id)) return
+        do { val moved = items.reuseKeysByTvgId(source.id, REMAP_BATCH) } while (moved == REMAP_BATCH)
     }
 
     private suspend fun importXtream(source: SourceEntity, onProgress: (Int) -> Unit): ImportResult {
@@ -312,10 +345,11 @@ class SourceRepository(
             onProgress(count)
         }
         // epgUrl stays null for Xtream: the guide URL contains the credentials and is built when needed.
-        commit(source.id) {
+        commit(source) {
             it.copy(
                 refreshedAt = now(), lastError = null, liveCount = counts[0], movieCount = counts[1], seriesCount = counts[2],
                 liveExtension = account.liveExtension, expiresAt = account.expiresAtEpochSec,
+                maxConnections = account.maxConnections?.takeIf { n -> n > 0 },
             )
         }
         return ImportResult(counts[0], counts[1], counts[2], 0, 0)
@@ -323,6 +357,7 @@ class SourceRepository(
 
     companion object {
         private const val BATCH = 1000
+        private const val REMAP_BATCH = 50_000
 
         private fun String?.cleanGuideUrl(): String? = this?.trim()?.takeIf { Urls.parseHttp(it) != null }
         private const val MAX_PLAYLIST_BYTES = 256L * 1024 * 1024

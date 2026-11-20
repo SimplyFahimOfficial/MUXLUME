@@ -19,7 +19,6 @@ import com.muxlume.app.data.db.RecordingEntity
 import com.muxlume.app.data.db.RecordingState
 import com.muxlume.app.playback.ResolvedStream
 import com.muxlume.app.reminders.Notifications
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -27,7 +26,9 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
@@ -134,7 +135,7 @@ class RecordingService : Service() {
             dao.finish(id, RecordingState.FAILED, 0, e.reason.name)
             return
         }
-        dao.start(id, plan.file.toString())
+        dao.start(id, plan.file.toString(), plan.endMs / MILLIS)
         val recorder = Recorder(container.http)
         val progress = scope.launch {
             while (true) {
@@ -142,27 +143,20 @@ class RecordingService : Service() {
                 dao.setBytes(id, recorder.bytes)
             }
         }
-        var state = RecordingState.DONE
-        var error: String? = null
+        // Only a finished writeRecording can say DONE; anything that escapes it is stored as a failed write.
+        var outcome = RecordingOutcome(RecordingState.FAILED, RecordingException.Reason.WRITE_FAILED.name, stopped = false)
         try {
-            val out = contentResolver.openOutputStream(plan.file, "w") ?: refuse(RecordingException.Reason.WRITE_FAILED)
-            out.use { recorder.record(plan.stream.url, plan.stream.headers, plan.stream.policy, plan.endMs, it) }
-        } catch (e: RecordingException) {
-            state = RecordingState.FAILED
-            error = e.reason.name
-        } catch (e: CancellationException) {
-            if (timedOut) {
-                state = RecordingState.FAILED
-                error = RecordingException.Reason.TIME_LIMIT.name
+            outcome = writeRecording({ contentResolver.openOutputStream(plan.file, "w") }, { timedOut }) { out ->
+                recorder.record(plan.stream.url, plan.stream.headers, plan.stream.policy, plan.endMs, out)
             }
-            throw e // a Stop the user asked for ends as DONE
         } finally {
             progress.cancel()
             withContext(NonCancellable) {
-                dao.finish(id, state, recorder.bytes, error)
+                dao.finish(id, outcome.state, recorder.bytes, outcome.error)
                 if (recorder.bytes == 0L) RecordingFiles.delete(contentResolver, plan.file) // nothing worth keeping
             }
         }
+        if (outcome.stopped) currentCoroutineContext().ensureActive() // a Stop the user asked for ends the job, as DONE
     }
 
     companion object {

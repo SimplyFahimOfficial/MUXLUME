@@ -48,6 +48,18 @@ interface SourceDao {
     suspend fun allNow(): List<SourceEntity>
 }
 
+/** A staged item, the hash of its group and link it was staged under ([linkKey]), and the earlier key it takes over. */
+data class KeyRemap(val id: Long, val linkKey: String, val stableKey: String)
+
+@Dao
+interface KeyAliasDao {
+    @Query("SELECT * FROM key_aliases")
+    suspend fun all(): List<KeyAliasEntity>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun add(alias: KeyAliasEntity)
+}
+
 /** SQL: the history row `h` is of an item (or a series' episode) in a locked group. Used as `NOT (...)` unless `:unlocked`. */
 internal const val HISTORY_LOCKED = """EXISTS (SELECT 1 FROM items li JOIN locked_groups lg ON lg.sourceId = li.sourceId AND lg.groupTitle = li.groupTitle
     WHERE li.sourceId = h.sourceId AND li.pending = 0
@@ -63,6 +75,7 @@ internal const val CHANNEL_LOCKED = """EXISTS (SELECT 1 FROM items li JOIN locke
  */
 @Dao
 @RewriteQueriesToDropUnusedColumns
+@Suppress("TooManyFunctions") // every read and write of items is here
 abstract class ItemDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract suspend fun insertAll(items: List<ItemEntity>)
@@ -75,6 +88,74 @@ abstract class ItemDao {
 
     @Query("UPDATE items SET pending = 0 WHERE sourceId = :sourceId AND pending = 1")
     protected abstract suspend fun publishPending(sourceId: Long)
+
+    /** Whether a staged live channel has a key no earlier row has: only then is there anything to match (an unchanged refresh has none). */
+    @Query(
+        """SELECT EXISTS(SELECT 1 FROM items n WHERE n.sourceId = :sourceId AND n.pending = 1 AND n.kind = 'LIVE'
+           AND NOT EXISTS (SELECT 1 FROM items o WHERE o.sourceId = :sourceId AND o.pending = 0 AND o.stableKey = n.stableKey))""",
+    )
+    abstract suspend fun hasUnmatchedStaged(sourceId: Long): Boolean
+
+    @Query("SELECT EXISTS(SELECT 1 FROM key_aliases WHERE sourceId = :sourceId)")
+    abstract suspend fun hasAliases(sourceId: Long): Boolean
+
+    /**
+     * Staged live channels (at most [limit]) stored under the hash of a group and link that [KeyAliasEntity] says is an older key, with that
+     * key. A channel an earlier row already has the key of is that channel, and a key a staged row has is taken; two staged channels that
+     * share an alias get it one at a time.
+     */
+    @Query(
+        """SELECT MIN(n.id) AS id, n.stableKey AS linkKey, a.stableKey AS stableKey FROM items n
+           JOIN key_aliases a ON a.sourceId = n.sourceId AND a.linkKey = n.stableKey
+           WHERE n.sourceId = :sourceId AND n.pending = 1 AND n.kind = 'LIVE'
+           AND NOT EXISTS (SELECT 1 FROM items x WHERE x.sourceId = :sourceId AND x.pending = 0 AND x.stableKey = n.stableKey)
+           AND NOT EXISTS (SELECT 1 FROM items x WHERE x.sourceId = :sourceId AND x.pending = 1 AND x.stableKey = a.stableKey)
+           GROUP BY a.stableKey LIMIT :limit""",
+    )
+    abstract suspend fun aliasReuse(sourceId: Long, limit: Int): List<KeyRemap>
+
+    /**
+     * Staged live channels (at most [limit]) whose key no earlier row has but whose tvg-id belongs to exactly one earlier and one staged
+     * live channel of this source, with the earlier key. Rows whose own key or whose earlier key is already taken are left out.
+     */
+    @Query(
+        """SELECT n.id AS id, n.stableKey AS linkKey, o.stableKey AS stableKey FROM items n
+           JOIN (SELECT tvgId, MIN(stableKey) AS stableKey FROM items WHERE sourceId = :sourceId AND pending = 0 AND kind = 'LIVE' AND tvgId IS NOT NULL
+                 GROUP BY tvgId HAVING COUNT(*) = 1) o ON o.tvgId = n.tvgId
+           WHERE n.sourceId = :sourceId AND n.pending = 1 AND n.kind = 'LIVE' AND n.stableKey != o.stableKey
+           AND n.tvgId IN (SELECT tvgId FROM items WHERE sourceId = :sourceId AND pending = 1 AND kind = 'LIVE' AND tvgId IS NOT NULL
+                           GROUP BY tvgId HAVING COUNT(*) = 1)
+           AND NOT EXISTS (SELECT 1 FROM items x WHERE x.sourceId = :sourceId AND x.pending = 0 AND x.stableKey = n.stableKey)
+           AND NOT EXISTS (SELECT 1 FROM items x WHERE x.sourceId = :sourceId AND x.pending = 1 AND x.stableKey = o.stableKey)
+           LIMIT :limit""",
+    )
+    abstract suspend fun tvgIdReuse(sourceId: Long, limit: Int): List<KeyRemap>
+
+    @Query("UPDATE items SET stableKey = :stableKey WHERE id = :id")
+    protected abstract suspend fun setKey(id: Long, stableKey: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    protected abstract suspend fun putAlias(alias: KeyAliasEntity)
+
+    /**
+     * Gives staged live channels the key they were remembered under ([aliasReuse]), so favorites and preferences follow a channel whose group
+     * or stream link changed once and has not changed since. Returns how many keys changed; at most [limit] per call, so call it until it returns less.
+     */
+    @Transaction
+    open suspend fun reuseKeysByAlias(sourceId: Long, limit: Int): Int = aliasReuse(sourceId, limit).also { rows -> rows.forEach { setKey(it.id, it.stableKey) } }.size
+
+    /**
+     * Gives staged live channels the key of the earlier channel with the same tvg-id (see [tvgIdReuse]) and remembers it, so favorites, history
+     * and preferences follow a channel whose group or stream link changed. Keys are never shared: an ambiguous tvg-id changes nothing. Returns how
+     * many keys changed; at most [limit] per call, so call it until it returns less.
+     */
+    @Transaction
+    open suspend fun reuseKeysByTvgId(sourceId: Long, limit: Int): Int = tvgIdReuse(sourceId, limit).also { rows ->
+        rows.forEach {
+            setKey(it.id, it.stableKey)
+            putAlias(KeyAliasEntity(sourceId, it.linkKey, it.stableKey))
+        }
+    }.size
 
     /** Replaces the source's visible items with the staged (pending) ones, in one short transaction. */
     @Transaction
@@ -107,14 +188,14 @@ abstract class ItemDao {
     @Query(
         """SELECT v.* FROM visible_items v JOIN favorites f ON f.sourceId = v.sourceId AND f.stableKey = v.stableKey
            WHERE v.kind = :kind AND (:sourceId IS NULL OR v.sourceId = :sourceId) AND (:unlocked OR v.isLocked = 0)
-           ORDER BY f.addedAt DESC, v.id""",
+           ORDER BY COALESCE(f.sortOrder, -f.addedAt), v.id""",
     )
     abstract fun favoritesPage(kind: ItemKind, sourceId: Long?, unlocked: Boolean): PagingSource<Int, ItemEntity>
 
     @Query(
         """SELECT v.* FROM visible_items v JOIN favorites f ON f.sourceId = v.sourceId AND f.stableKey = v.stableKey
            WHERE v.kind = :kind AND (:sourceId IS NULL OR v.sourceId = :sourceId) AND (:unlocked OR v.isLocked = 0)
-           ORDER BY f.addedAt DESC, v.id""",
+           ORDER BY COALESCE(f.sortOrder, -f.addedAt), v.id""",
     )
     abstract fun favorites(kind: ItemKind, sourceId: Long?, unlocked: Boolean): Flow<List<ItemEntity>>
 
@@ -186,16 +267,18 @@ abstract class ItemDao {
     @Query(
         """SELECT v.* FROM visible_items v JOIN favorites f ON f.sourceId = v.sourceId AND f.stableKey = v.stableKey
            WHERE v.kind = 'LIVE' AND (:sourceId IS NULL OR v.sourceId = :sourceId) AND (:unlocked OR v.isLocked = 0)
-           AND (f.addedAt < :addedAt OR (f.addedAt = :addedAt AND v.id > :id)) ORDER BY f.addedAt DESC, v.id LIMIT 1""",
+           AND (COALESCE(f.sortOrder, -f.addedAt) > :orderKey OR (COALESCE(f.sortOrder, -f.addedAt) = :orderKey AND v.id > :id))
+           ORDER BY COALESCE(f.sortOrder, -f.addedAt), v.id LIMIT 1""",
     )
-    abstract suspend fun nextFavorite(sourceId: Long?, addedAt: Long, id: Long, unlocked: Boolean): ItemEntity?
+    abstract suspend fun nextFavorite(sourceId: Long?, orderKey: Long, id: Long, unlocked: Boolean): ItemEntity?
 
     @Query(
         """SELECT v.* FROM visible_items v JOIN favorites f ON f.sourceId = v.sourceId AND f.stableKey = v.stableKey
            WHERE v.kind = 'LIVE' AND (:sourceId IS NULL OR v.sourceId = :sourceId) AND (:unlocked OR v.isLocked = 0)
-           AND (f.addedAt > :addedAt OR (f.addedAt = :addedAt AND v.id < :id)) ORDER BY f.addedAt, v.id DESC LIMIT 1""",
+           AND (COALESCE(f.sortOrder, -f.addedAt) < :orderKey OR (COALESCE(f.sortOrder, -f.addedAt) = :orderKey AND v.id < :id))
+           ORDER BY COALESCE(f.sortOrder, -f.addedAt) DESC, v.id DESC LIMIT 1""",
     )
-    abstract suspend fun previousFavorite(sourceId: Long?, addedAt: Long, id: Long, unlocked: Boolean): ItemEntity?
+    abstract suspend fun previousFavorite(sourceId: Long?, orderKey: Long, id: Long, unlocked: Boolean): ItemEntity?
 
     companion object {
         private const val MAX_SEARCH_WORDS = 8
@@ -304,6 +387,10 @@ abstract class RecordingDao {
     @Query("SELECT id FROM recordings WHERE sourceId = :sourceId AND stableKey = :stableKey AND state = 'RECORDING' ORDER BY id DESC LIMIT 1")
     abstract fun runningFor(sourceId: Long, stableKey: String): Flow<Long?>
 
+    /** The recordings of a source that are waiting or running: what a new one has to share the account's connections with. */
+    @Query("SELECT * FROM recordings WHERE sourceId = :sourceId AND state IN ('SCHEDULED', 'RECORDING')")
+    abstract suspend fun activeFor(sourceId: Long): List<RecordingEntity>
+
     @Query("SELECT * FROM recordings WHERE state = 'SCHEDULED' AND startAt - leadSeconds > :now")
     abstract suspend fun scheduledAfter(now: Long): List<RecordingEntity>
 
@@ -318,8 +405,9 @@ abstract class RecordingDao {
     @Query("UPDATE recordings SET state = 'FAILED', error = 'INTERRUPTED' WHERE state = 'RECORDING'")
     abstract suspend fun failRunning()
 
-    @Query("UPDATE recordings SET state = 'RECORDING', fileUri = :fileUri, error = NULL WHERE id = :id")
-    abstract suspend fun start(id: Long, fileUri: String)
+    /** [stopAt] (epoch seconds) is when it will stop: a recording cut short by the next one on its channel keeps that in [RecordingEntity.trailSeconds]. */
+    @Query("UPDATE recordings SET state = 'RECORDING', fileUri = :fileUri, error = NULL, trailSeconds = :stopAt - endAt WHERE id = :id")
+    abstract suspend fun start(id: Long, fileUri: String, stopAt: Long)
 
     @Query("UPDATE recordings SET bytes = :bytes WHERE id = :id")
     abstract suspend fun setBytes(id: Long, bytes: Long)
@@ -397,24 +485,58 @@ interface LockedGroupDao {
 }
 
 @Dao
-interface FavoriteDao {
+abstract class FavoriteDao {
     @Query("SELECT stableKey FROM favorites WHERE sourceId = :sourceId")
-    fun keys(sourceId: Long): Flow<List<String>>
+    abstract fun keys(sourceId: Long): Flow<List<String>>
 
     @Query("SELECT * FROM favorites")
-    suspend fun all(): List<FavoriteEntity>
+    abstract suspend fun all(): List<FavoriteEntity>
 
     @Query("SELECT * FROM favorites WHERE sourceId = :sourceId AND stableKey = :key")
-    suspend fun get(sourceId: Long, key: String): FavoriteEntity?
+    abstract suspend fun get(sourceId: Long, key: String): FavoriteEntity?
 
     @Query("SELECT EXISTS(SELECT 1 FROM favorites WHERE sourceId = :sourceId AND stableKey = :key)")
-    fun isFavorite(sourceId: Long, key: String): Flow<Boolean>
+    abstract fun isFavorite(sourceId: Long, key: String): Flow<Boolean>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun add(favorite: FavoriteEntity)
+    abstract suspend fun add(favorite: FavoriteEntity)
 
     @Query("DELETE FROM favorites WHERE sourceId = :sourceId AND stableKey = :key")
-    suspend fun remove(sourceId: Long, key: String)
+    abstract suspend fun remove(sourceId: Long, key: String)
+
+    /** The favorites of [kind] that lists show, in the order they show them (see [FavoriteEntity.orderKey]). */
+    @Query(
+        """SELECT f.* FROM favorites f JOIN visible_items v ON v.sourceId = f.sourceId AND v.stableKey = f.stableKey
+           WHERE v.kind = :kind AND (:unlocked OR v.isLocked = 0) ORDER BY COALESCE(f.sortOrder, -f.addedAt), v.id""",
+    )
+    protected abstract suspend fun shown(kind: ItemKind, unlocked: Boolean): List<FavoriteEntity>
+
+    /** Every favorite, also of channels that are gone for now, hidden or locked, in the same order. */
+    @Query(
+        """SELECT f.* FROM favorites f LEFT JOIN items i ON i.sourceId = f.sourceId AND i.stableKey = f.stableKey AND i.pending = 0
+           ORDER BY COALESCE(f.sortOrder, -f.addedAt), i.id""",
+    )
+    protected abstract suspend fun everyone(): List<FavoriteEntity>
+
+    @Query("UPDATE favorites SET sortOrder = :order WHERE sourceId = :sourceId AND stableKey = :key")
+    protected abstract suspend fun setOrder(sourceId: Long, key: String, order: Int)
+
+    /**
+     * Moves a favorite one place up or down among the favorites a list shows ([listSourceId]: the playlist that list is limited to, if any).
+     * The whole order, favorites of hidden, locked or absent channels included, is written as numbers first, so the ones the list does not show keep their place.
+     * False at the first or last place.
+     */
+    @Transaction
+    open suspend fun move(item: ItemEntity, listSourceId: Long?, unlocked: Boolean, up: Boolean): Boolean {
+        val order = everyone().toMutableList()
+        val visible = shown(item.kind, unlocked).filter { listSourceId == null || it.sourceId == listSourceId }
+        val at = visible.indexOfFirst { it.sourceId == item.sourceId && it.stableKey == item.stableKey }
+        val to = if (up) at - 1 else at + 1
+        if (at < 0 || to !in visible.indices) return false
+        java.util.Collections.swap(order, order.indexOf(visible[at]), order.indexOf(visible[to]))
+        order.forEachIndexed { i, f -> setOrder(f.sourceId, f.stableKey, i + 1) }
+        return true
+    }
 }
 
 @Dao
@@ -456,10 +578,10 @@ interface HistoryDao {
     entities = [
         SourceEntity::class, ItemEntity::class, ItemFtsEntity::class, FavoriteEntity::class, HistoryEntity::class,
         EpgChannelEntity::class, ProgramEntity::class, EpgLinkEntity::class, ReminderEntity::class, ChannelPrefEntity::class,
-        LockedGroupEntity::class, RecordingEntity::class, ChannelServerEntity::class,
+        LockedGroupEntity::class, RecordingEntity::class, ChannelServerEntity::class, KeyAliasEntity::class,
     ],
     views = [VisibleItem::class],
-    version = 8,
+    version = 11,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = MuxlumeDatabase.Migration1To2::class),
@@ -469,6 +591,9 @@ interface HistoryDao {
         AutoMigration(from = 5, to = 6),
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8),
+        AutoMigration(from = 8, to = 9),
+        AutoMigration(from = 9, to = 10),
+        AutoMigration(from = 10, to = 11),
     ],
 )
 abstract class MuxlumeDatabase : RoomDatabase() {
@@ -479,6 +604,7 @@ abstract class MuxlumeDatabase : RoomDatabase() {
     abstract fun lockedGroups(): LockedGroupDao
     abstract fun recordings(): RecordingDao
     abstract fun channelServers(): ChannelServerDao
+    abstract fun keyAliases(): KeyAliasDao
     abstract fun history(): HistoryDao
     abstract fun epg(): EpgDao
 
