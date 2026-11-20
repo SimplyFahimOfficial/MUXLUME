@@ -156,14 +156,17 @@ class SourceRepositoryTest {
     }
 
     @Test
-    fun `a playlist whose every entry is unplayable keeps the previous channels`(): Unit = runBlocking {
+    fun `a playlist whose every entry is unplayable or cut off keeps the previous channels`(): Unit = runBlocking {
         val id = addM3u()
         serve(playlist("a", "b"))
         repo.refresh(id)
 
-        serve("#EXTM3U\n#EXTINF:-1,Local\nfile:///sdcard/x.ts\n")
-        assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
-        assertThat(names(id)).containsExactly("a", "b").inOrder()
+        for (body in listOf("#EXTM3U\n#EXTINF:-1,Local\nfile:///sdcard/x.ts\n", "#EXTM3U\n#EXTINF:-1,Cut off\n")) {
+            serve(body)
+            assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+            assertThat(names(id)).containsExactly("a", "b").inOrder()
+            assertThat(repo.get(id)!!.lastError).isNotEmpty()
+        }
     }
 
     @Test

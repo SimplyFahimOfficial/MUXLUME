@@ -97,6 +97,8 @@ class M3uParser(
                 else -> entryFor(line)?.let { return it }
             }
         }
+        if (info != null) skipped++ // the file ended after an #EXTINF with no URL
+        info = null
         done = true
         return null
     }
