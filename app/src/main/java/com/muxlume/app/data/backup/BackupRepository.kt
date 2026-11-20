@@ -14,6 +14,7 @@ import com.muxlume.app.data.ThemeMode
 import com.muxlume.app.data.db.ChannelPrefEntity
 import com.muxlume.app.data.db.FavoriteEntity
 import com.muxlume.app.data.db.HistoryEntity
+import com.muxlume.app.data.db.KeyAliasEntity
 import com.muxlume.app.data.db.LockedGroupEntity
 import com.muxlume.app.data.db.ItemKind
 import com.muxlume.app.data.db.MuxlumeDatabase
@@ -44,6 +45,8 @@ data class BackupData(
     val lockedGroups: List<BackupLockedGroup> = emptyList(),
     /** Saved servers of channels. Absent in older backups. */
     val servers: List<BackupServer> = emptyList(),
+    /** Which older key a channel kept through a rename. Absent in older backups. */
+    val keyAliases: List<BackupKeyAlias> = emptyList(),
 ) {
     companion object {
         const val VERSION = 1
@@ -62,6 +65,10 @@ data class BackupFavorite(
     /** Place in the order the user arranged; absent in older backups and for favorites never placed. */
     val order: Int? = null,
 )
+
+/** [source] is an index into [BackupData.sources]. See [com.muxlume.app.data.db.KeyAliasEntity]. */
+@Serializable
+data class BackupKeyAlias(val source: Int, val linkKey: String, val stableKey: String)
 
 /** A saved server: [serverSource] and [source] are indexes into [BackupData.sources]. */
 @Serializable
@@ -145,6 +152,7 @@ class BackupRepository(
                 val from = index[s.sourceId] ?: return@mapNotNull null
                 index[s.serverSourceId]?.let { BackupServer(from, s.stableKey, it, s.serverStableKey, s.position) }
             },
+            keyAliases = db.keyAliases().all().mapNotNull { a -> index[a.sourceId]?.let { BackupKeyAlias(it, a.linkKey, a.stableKey) } },
         )
         out.write(BackupCrypto.encrypt(JSON.encodeToString(BackupData.serializer(), data).toByteArray(), passphrase))
         out.flush()
@@ -163,7 +171,7 @@ class BackupRepository(
             throw BackupException(BackupException.Reason.NOT_A_BACKUP).apply { initCause(e) }
         }
         if (data.version > BackupData.VERSION) throw BackupException(BackupException.Reason.TOO_NEW)
-        val rows = maxOf(data.favorites.size, data.history.size, data.channelPrefs.size, data.lockedGroups.size, data.servers.size)
+        val rows = maxOf(data.favorites.size, data.history.size, data.channelPrefs.size, data.lockedGroups.size, data.servers.size, data.keyAliases.size)
         if (data.sources.size > MAX_SOURCES || rows > MAX_ROWS) throw BackupException(BackupException.Reason.TOO_LARGE)
         restore(data)
     }
@@ -196,6 +204,7 @@ class BackupRepository(
             favorites++
         }
         restoreChoices(data, ids)
+        restoreKeyAliases(data, ids)
         var history = 0
         data.history.forEach { h ->
             val id = ids.getOrNull(h.source) ?: return@forEach
@@ -228,6 +237,15 @@ class BackupRepository(
             if (g.groupTitle.length <= MAX_KEY) db.lockedGroups().add(LockedGroupEntity(id, g.groupTitle))
         }
     }
+
+    private suspend fun restoreKeyAliases(data: BackupData, ids: Array<Long?>) {
+        data.keyAliases.forEach { a ->
+            val id = ids.getOrNull(a.source) ?: return@forEach
+            if (isKey(a.linkKey) && isKey(a.stableKey)) db.keyAliases().add(KeyAliasEntity(id, a.linkKey, a.stableKey))
+        }
+    }
+
+    private fun isKey(key: String) = key.isNotBlank() && key.length <= MAX_KEY
 
     /** Goes through the same validation and sealing as a playlist added by hand. */
     private suspend fun add(s: BackupSource): Long {

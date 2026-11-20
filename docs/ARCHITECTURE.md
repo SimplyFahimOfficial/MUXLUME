@@ -54,10 +54,11 @@ rest of the app can keep writing. Imports of one source run one at a time (a per
 An M3U import that finds no playable entry in a source that had channels fails as an error instead of publishing an empty list, unless the
 body has an `#EXTM3U` header and no entry was skipped (a playlist the provider emptied on purpose). The commit
 drops the staged rows if the source's link or login was changed while it ran (the new one is imported next). Before the commit, when a staged live
-channel has a key no earlier row has, it takes the key of the earlier channel it is: first one whose group and link are unchanged but whose key is no
-longer their hash (it kept an older key), then one with the same tvg-id when that tvg-id is on exactly one earlier and one staged live channel of the
-source (`SourceRepository.reuseKeysByContent`, `ItemDao.reuseKeysByTvgId`), so favorites, preferences, history and reminders follow a changed group or
-stream link. Lists are read
+channel has a key no earlier row has, it takes the key of the earlier channel it is: first the key remembered for its group and link
+(`key_aliases`, written when a tvg-id match gave a channel an older key, so it outlives the item rows and travels in the backup;
+`ItemDao.reuseKeysByAlias`), then the earlier channel with the same tvg-id when that tvg-id is on exactly one earlier and one staged live channel
+of the source (`ItemDao.reuseKeysByTvgId`, only when something is still new and the source had channels), so favorites, preferences, history and
+reminders follow a changed group or stream link. Lists are read
 through Paging; search uses an FTS4 table (`items_fts`) kept in sync by Room.
 
 ## Playback

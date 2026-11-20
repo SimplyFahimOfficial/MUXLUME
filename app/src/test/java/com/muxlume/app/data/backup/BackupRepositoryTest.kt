@@ -20,6 +20,7 @@ import com.muxlume.app.data.db.ChannelPrefEntity
 import com.muxlume.app.data.db.FavoriteEntity
 import com.muxlume.app.data.db.HistoryEntity
 import com.muxlume.app.data.db.ItemKind
+import com.muxlume.app.data.db.KeyAliasEntity
 import com.muxlume.app.data.db.LockedGroupEntity
 import com.muxlume.app.data.db.MuxlumeDatabase
 import com.muxlume.app.data.db.SourceType
@@ -317,5 +318,25 @@ class BackupRepositoryTest {
         val b = device("b")
         b.import(BackupCrypto.encrypt(Json.encodeToString(BackupData.serializer(), data).toByteArray(), pass))
         assertThat(b.db.favorites().all().associate { it.stableKey to it.sortOrder }).containsExactly("neg", null, "huge", null, "ok", 4)
+    }
+
+    @Test
+    fun `remembered keys are saved and restored, and checked like any other input`(): Unit = runBlocking {
+        val a = device("a")
+        val home = a.sources.save(SourceInput.M3uUrl("Home", "https://example.com/list.m3u", allowHttp = false))
+        a.db.keyAliases().add(KeyAliasEntity(home, "hash-of-new-group", "first-key"))
+        val b = device("b")
+        b.import(a.export())
+        val restored = b.db.sources().allNow().single().id
+        assertThat(b.db.keyAliases().all()).containsExactly(KeyAliasEntity(restored, "hash-of-new-group", "first-key"))
+
+        val source = BackupSource("Other", SourceType.M3U_URL, SourceSecret(url = "https://example.org/list.m3u"), allowHttp = false, guideEnabled = false)
+        val bad = BackupData(
+            sources = listOf(source),
+            keyAliases = listOf(BackupKeyAlias(0, "", "k"), BackupKeyAlias(0, "h", "x".repeat(600)), BackupKeyAlias(7, "h", "k"), BackupKeyAlias(0, "ok", "key")),
+        )
+        val c = device("c")
+        c.import(BackupCrypto.encrypt(Json.encodeToString(BackupData.serializer(), bad).toByteArray(), pass))
+        assertThat(c.db.keyAliases().all().map { it.linkKey }).containsExactly("ok")
     }
 }

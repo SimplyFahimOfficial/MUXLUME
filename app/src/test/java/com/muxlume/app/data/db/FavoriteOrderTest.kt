@@ -140,6 +140,16 @@ class FavoriteOrderTest {
     }
 
     @Test
+    fun `a favorite whose channel is gone for now keeps its place when the channel comes back`(): Unit = runBlocking {
+        db.openHelper.writableDatabase.execSQL("DELETE FROM items WHERE stableKey = 'a2'") // a refresh dropped it
+        assertEverywhere("a3", "b1", "a1")
+        move("a1", up = true)
+        assertEverywhere("a3", "a1", "b1")
+        db.items().insertAll(listOf(live(a, "a2", 1))) // and a later one brings it back
+        assertEverywhere("a3", "a2", "a1", "b1")
+    }
+
+    @Test
     fun `the order survives closing and reopening the database`(): Unit = runBlocking {
         move("a1", up = true)
         move("a1", up = true)

@@ -205,6 +205,27 @@ class DatabaseTest {
         }
     }
 
+    @Test
+    fun `migration 10 to 11 keeps the data and adds an empty table of remembered keys`() {
+        createAt(10) { old ->
+            sql(
+                old,
+                "INSERT INTO sources (id, name, type, secret, label, allowHttp, createdAt, liveCount, movieCount, seriesCount) VALUES (1, 'S', 'M3U_URL', 'x', 'l', 0, 0, 1, 0, 0)",
+                "INSERT INTO favorites (sourceId, stableKey, addedAt, sortOrder) VALUES (1, 'k', 100, 3)",
+            )
+        }
+        val migrated = openCurrent()
+        try {
+            assertThat(runBlocking { migrated.keyAliases().all() }).isEmpty()
+            assertThat(runBlocking { migrated.favorites().get(1, "k") }!!.sortOrder).isEqualTo(3)
+            runBlocking { migrated.keyAliases().add(KeyAliasEntity(1, "h", "k")) }
+            runBlocking { migrated.sources().delete(1) }
+            assertThat(runBlocking { migrated.keyAliases().all() }).isEmpty() // removed with its playlist
+        } finally {
+            migrated.close()
+        }
+    }
+
     // ---- Channel preferences (hide, rename, pin)
 
     private val prefs get() = db.channelPrefs()

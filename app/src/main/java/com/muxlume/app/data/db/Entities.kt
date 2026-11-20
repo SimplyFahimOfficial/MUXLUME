@@ -90,6 +90,17 @@ data class ItemEntity(
     @ColumnInfo(defaultValue = "0") val pending: Boolean = false,
 )
 
+/**
+ * "The channel whose group and link hash to [linkKey] is the one kept under [stableKey]". Remembered when an import gives a channel an
+ * older key (see SourceRepository), so the match outlives the item rows it was learned from (an emptied playlist, a restored backup).
+ */
+@Entity(
+    tableName = "key_aliases",
+    primaryKeys = ["sourceId", "linkKey"],
+    foreignKeys = [ForeignKey(entity = SourceEntity::class, parentColumns = ["id"], childColumns = ["sourceId"], onDelete = ForeignKey.CASCADE)],
+)
+data class KeyAliasEntity(val sourceId: Long, val linkKey: String, val stableKey: String)
+
 /** Full-text index over item names (kept in sync with `items` by Room's triggers). */
 @Fts4(contentEntity = ItemEntity::class)
 @Entity(tableName = "items_fts")

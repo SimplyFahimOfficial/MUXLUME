@@ -290,35 +290,15 @@ class SourceRepository(
     }
 
     /**
-     * Gives staged live channels the key of the earlier channel they are, so favorites and preferences survive a changed group or stream link.
-     * Skipped when nothing is new (an unchanged refresh) and on a first import; the matching reads the whole catalogue, so it runs in few, large steps.
+     * Gives staged live channels the key of the earlier channel they are, so favorites and preferences survive a changed group or stream link:
+     * first the key remembered for an unchanged group and link, then, for what is still new, the earlier channel with a tvg-id only they share.
+     * The tvg-id step reads the whole catalogue, so it is skipped when nothing is new (an unchanged refresh) and on a first import.
      */
     private suspend fun reuseKeys(source: SourceEntity) {
-        if (source.liveCount == 0 || !db.items().hasUnmatchedStaged(source.id)) return
-        reuseKeysByContent(source.id)
-        do { val moved = db.items().reuseKeysByTvgId(source.id, REMAP_BATCH) } while (moved == REMAP_BATCH)
-    }
-
-    /**
-     * A channel that kept an earlier key through a rename is no longer stored under the hash of its group and link, so when those
-     * are unchanged the new import hashes to a key no earlier row has. Every earlier channel whose key is not that hash says which
-     * staged key is really it. Read page by page and compared in memory: SQLite has no hash function and no index on the link.
-     */
-    private suspend fun reuseKeysByContent(sourceId: Long) {
-        var after = 0L
-        while (true) {
-            currentCoroutineContext().ensureActive()
-            val page = db.items().liveLinks(sourceId, after, BATCH)
-            if (page.isEmpty()) return
-            db.withTransaction {
-                for (link in page) {
-                    val url = link.url ?: continue
-                    val made = stableKey(link.groupTitle + "\n" + url)
-                    if (made != link.stableKey) db.items().reuseKey(sourceId, made, link.stableKey)
-                }
-            }
-            after = page.last().id
-        }
+        val items = db.items()
+        if (items.hasAliases(source.id)) do { val moved = items.reuseKeysByAlias(source.id, REMAP_BATCH) } while (moved == REMAP_BATCH)
+        if (source.liveCount == 0 || !items.hasUnmatchedStaged(source.id)) return
+        do { val moved = items.reuseKeysByTvgId(source.id, REMAP_BATCH) } while (moved == REMAP_BATCH)
     }
 
     private suspend fun importXtream(source: SourceEntity, onProgress: (Int) -> Unit): ImportResult {

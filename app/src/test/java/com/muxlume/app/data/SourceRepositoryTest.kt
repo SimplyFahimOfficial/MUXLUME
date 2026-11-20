@@ -15,6 +15,7 @@ import com.muxlume.app.data.db.FavoriteEntity
 import com.muxlume.app.data.db.ItemDao
 import com.muxlume.app.data.db.ItemEntity
 import com.muxlume.app.data.db.ItemKind
+import com.muxlume.app.data.db.KeyAliasEntity
 import com.muxlume.app.data.db.MuxlumeDatabase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -531,5 +532,40 @@ class SourceRepositoryTest {
         assertThat(db.items().hasUnmatchedStaged(id)).isFalse()
         db.items().commitPending(id)
         assertThat(key(id, "c2499")).isEqualTo(old)
+    }
+
+    @Test
+    fun `a renamed channel gets its old identity back after the playlist was emptied and restored`(): Unit = runBlocking {
+        val id = addM3u()
+        serve(m3u(entry("One", one, "News", "one.tv")))
+        repo.refresh(id)
+        val old = key(id, "One")
+        db.favorites().add(FavoriteEntity(id, old, 1))
+        serve(m3u(entry("One", one, "Sport", "one.tv"))) // group renamed: the key is kept and remembered
+        repo.refresh(id)
+        serve("#EXTM3U\n") // the provider empties the playlist on purpose
+        repo.refresh(id)
+        assertThat(names(id)).isEmpty()
+
+        serve(m3u(entry("One", one, "Sport", "one.tv"))) // and brings it back: no earlier row is left to match against
+        repo.refresh(id)
+        assertThat(key(id, "One")).isEqualTo(old)
+        assertThat(db.items().favorites(ItemKind.LIVE, id, true).first().map { it.name }).containsExactly("One")
+    }
+
+    @Test
+    fun `two staged channels with remembered keys for one earlier key share it one at a time`(): Unit = runBlocking {
+        val id = addM3u()
+        db.items().insertAll(listOf(ItemEntity(sourceId = id, kind = ItemKind.LIVE, stableKey = "kept", name = "Old", groupTitle = "G", logo = null, url = "u", position = 0)))
+        db.keyAliases().add(KeyAliasEntity(id, "h2", "kept"))
+        db.keyAliases().add(KeyAliasEntity(id, "h3", "kept"))
+        db.items().insertAll(listOf("h2", "h3").mapIndexed { i, k -> ItemEntity(sourceId = id, kind = ItemKind.LIVE, stableKey = k, name = "N$i", groupTitle = "G", logo = null, url = "u$i", position = i, pending = true) })
+        // "kept" is an earlier row's key and a staged row may take it: the old row is replaced at commit.
+        assertThat(db.items().reuseKeysByAlias(id, 10)).isEqualTo(1)
+        assertThat(db.items().reuseKeysByAlias(id, 10)).isEqualTo(0) // the other one is left under its own key
+        db.items().commitPending(id)
+        assertThat(names(id)).containsExactly("N0", "N1").inOrder()
+        assertThat(key(id, "N0")).isEqualTo("kept")
+        assertThat(key(id, "N1")).isEqualTo("h3")
     }
 }
