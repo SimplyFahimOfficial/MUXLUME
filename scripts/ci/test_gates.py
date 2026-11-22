@@ -8,8 +8,10 @@ import json
 import os
 import subprocess
 import sys
+import re
 import tempfile
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -34,10 +36,23 @@ def job(name, conclusion="success", failed=(), skipped=()):
 
 
 def scan(conclusion="success", failed=(), skipped=()):
-    return job(SCAN, conclusion, failed, skipped)
+    """The scan job as it looks when it ran; a failed or skipped step is not among the successful ones."""
+    j = job(SCAN, conclusion, failed, skipped)
+    j["steps"] += [{"name": n, "conclusion": "success"} for n in (VULNS, LICENCES) if n not in failed and n not in skipped]
+    return j
 
 
-class ReleaseGateTest(unittest.TestCase):
+class QuietEnvironment(unittest.TestCase):
+    """The checks write their reports to GITHUB_STEP_SUMMARY when it is set; a test must not put fabricated findings there."""
+
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("GITHUB_STEP_SUMMARY", None)
+
+
+class ReleaseGateTest(QuietEnvironment):
     def check(self, workflow, runs, jobs=None):
         return gate.evaluate(workflow, runs, SHA, lambda r: (jobs or {}).get(r["id"], []))
 
@@ -94,6 +109,15 @@ class ReleaseGateTest(unittest.TestCase):
         self.assertEqual(v.title, "Release: dependency scan infrastructure failure")
         self.assertIn("incomplete", v.message)
 
+    def test_a_green_scan_job_whose_deciding_steps_did_not_pass_does_not_count(self):
+        # A step that gained an `if:` or continue-on-error would otherwise turn the scan into a no-op.
+        no_vulns = scan(skipped=[VULNS])
+        no_vulns["steps"] = [s for s in no_vulns["steps"] if s["name"] != VULNS] + [{"name": VULNS, "conclusion": "skipped"}]
+        for j in (no_vulns, dict(scan(), steps=[{"name": "Set up job", "conclusion": "success"}])):
+            v = self.check("security.yml", [run(1)], {1: [j]})
+            self.assertEqual(v.title, "Release: dependency scan skipped")
+            self.assertIn("did not run and pass", v.message)
+
     def test_a_cancelled_scan_is_not_a_pass(self):
         v = self.check("security.yml", [run(1, "cancelled")], {1: [scan("cancelled")]})
         self.assertEqual(v.title, "Release: dependency scan infrastructure failure")
@@ -134,6 +158,21 @@ class ReleaseGateTest(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertEqual(text.count("::error title=Release: no check run"), 3)
 
+    def test_more_jobs_than_one_page_is_an_error_too(self):
+        def fetch(path):
+            if "/jobs" in path:
+                return {"total_count": 150, "jobs": [scan()]}
+            return {"total_count": 1, "workflow_runs": [run(2)]}
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(gate.main(["--repo", "o/r", "--sha", SHA], fetch=fetch), 2)
+        self.assertIn("could not read the checks", out.getvalue())
+
+    def test_a_blocked_release_writes_its_reasons_to_the_summary(self):
+        with tempfile.NamedTemporaryFile("r", suffix=".md") as summary:
+            os.environ["GITHUB_STEP_SUMMARY"] = summary.name
+            self.assertEqual(self.main({})[0], 1)
+            self.assertIn("Release blocked", summary.read())
+
     def test_an_unreadable_api_is_not_reported_as_a_failed_check(self):
         status, text = self.main({}, fail=True)
         self.assertEqual(status, 2)
@@ -171,7 +210,7 @@ PROPRIETARY = CLEAN.replace("+--- com.google.zxing:core:3.5.4", "+--- com.google
 GRADLE_ERROR = "FAILURE: Build failed with an exception.\n* What went wrong:\nConfiguration with name 'fdroidReleaseRuntimeClasspath' not found.\n"
 
 
-class DepsCheckTest(unittest.TestCase):
+class DepsCheckTest(QuietEnvironment):
     def tool(self, *args):
         p = subprocess.run([sys.executable, os.path.join(HERE, "deps_check.py"), *args], capture_output=True, text=True)
         return p.returncode, p.stdout + p.stderr
@@ -217,6 +256,23 @@ class DepsCheckTest(unittest.TestCase):
             self.assertNotIn("Traceback", out)
             self.assertIn("not a finding", out)
 
+    def test_a_constraint_line_naming_a_proprietary_library_still_fails(self):
+        # The old grep matched any line, constraints included; this stays as strict.
+        text = CLEAN.replace("+--- com.google.zxing:core:3.5.4", "+--- com.google.zxing:core:3.5.4\n|    \\--- com.google.android.gms:play-services-base:18.0.0 (c)")
+        self.assertEqual(self.fdroid(text)[0], 1)
+
+    def test_unreadable_inputs_are_a_scan_failure_before_any_judging_step(self):
+        bad = os.path.join(HERE, "no-such-file.json")
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+            fh.write("{}")
+        try:
+            self.assertEqual(self.tool("inputs", "--osv", fh.name, "--sbom", fh.name)[0], 0)
+            self.assertEqual(self.tool("inputs", "--osv", bad, "--sbom", fh.name)[0], 2)
+            self.assertEqual(self.tool("inputs", "--osv", fh.name, "--sbom", bad)[0], 2)
+            self.assertEqual(self.tool("licenses", "--sbom", fh.name, "--only", bad)[0], 2)
+        finally:
+            os.unlink(fh.name)
+
     def test_a_high_vulnerability_is_a_finding(self):
         report = {"results": [{"packages": [{"package": {"name": "a:b", "version": "1"}, "groups": [{"ids": ["GHSA-x"], "max_severity": "8.1"}]}]}]}
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
@@ -225,6 +281,38 @@ class DepsCheckTest(unittest.TestCase):
             self.assertEqual(self.tool("vulns", "--osv", fh.name, "--fail-at", "high")[0], 1)
         finally:
             os.unlink(fh.name)
+
+
+class WorkflowContractTest(unittest.TestCase):
+    """The gate reads names from security.yml and runs from release-github.yml; renaming one silently would block or weaken releases."""
+
+    def text(self, name):
+        with open(os.path.join(HERE, "..", "..", ".github", "workflows", name), encoding="utf-8") as fh:
+            return fh.read()
+
+    def scan_job(self):
+        text = self.text("security.yml")
+        start = text.index(f"    name: {gate.SCAN_JOB}\n")
+        end = re.search(r"\n  [a-z-]+:\n", text[start:])
+        return text[start:start + end.start()] if end else text[start:]
+
+    def test_the_scan_job_and_its_deciding_steps_exist_under_the_names_the_gate_reads(self):
+        job = self.scan_job()
+        self.assertIn("if: github.event_name != 'pull_request'", job)
+        for step in gate.REQUIRED_STEPS:
+            self.assertIn(f"- name: {step}\n", job)
+
+    def test_unreadable_inputs_are_checked_before_the_steps_that_judge_them(self):
+        job = self.scan_job()
+        self.assertLess(job.index("- name: Check the scan inputs"), job.index(f"- name: {gate.VULNS_STEP}"))
+        licences = job[job.index(f"- name: {gate.LICENCES_STEP}"):]
+        self.assertIn("steps.inputs.outcome == 'success'", licences)
+
+    def test_the_release_runs_the_gate_from_its_own_revision_and_copies_it_before_checking_out_the_tag(self):
+        text = self.text("release-github.yml")
+        self.assertLess(text.index('cp scripts/ci/release_gate.py "$RUNNER_TEMP/release_gate.py"'), text.index('git checkout --quiet "$sha"'))
+        self.assertIn('python3 "$RUNNER_TEMP/release_gate.py"', text)
+        self.assertNotIn("status=success", text)  # the old any-successful-run query
 
 
 if __name__ == "__main__":

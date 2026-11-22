@@ -127,10 +127,9 @@ jobs:
           cache-provider: basic
           cache-read-only: true
 
-      # The step names below are read by scripts/ci/release_gate.py: a failed "Known vulnerabilities" or "Licences"
-      # step is a finding; any other failed step means the scan did not complete.
+      # The job and step names below are read by scripts/ci/release_gate.py (and checked by scripts/ci/test_gates.py): a failed
+      # "Known vulnerabilities" or "Licences" step is a finding; any other failed step means the scan did not complete.
       - name: SBOM of the release APK
-        id: sbom
         run: ./gradlew :app:cyclonedxDirectBom
 
       - name: Download OSV-Scanner
@@ -150,12 +149,17 @@ jobs:
           # 0: no vulnerabilities, 1: vulnerabilities found (judged in the next step by severity), other: scanner error.
           if [ "$rc" -gt 1 ]; then echo "::error title=OSV-Scanner::scanner failed (exit $rc)"; exit "$rc"; fi
 
+      # Unreadable reports fail here, so a failure of the two steps below is always a finding.
+      - name: Check the scan inputs
+        id: inputs
+        run: python3 scripts/ci/deps_check.py inputs --osv build/reports/deps/osv.json --sbom app/build/reports/sbom/muxlume-bom.json
+
       - name: Known vulnerabilities (fails at high and critical)
         run: python3 scripts/ci/deps_check.py vulns --osv build/reports/deps/osv.json --fail-at high
 
-      # Reported even when the vulnerability check fails, but not without an SBOM to read.
+      # Reported even when the vulnerability check fails, but not without readable inputs.
       - name: Licences
-        if: ${{ always() && steps.sbom.outcome == 'success' }}
+        if: ${{ always() && steps.inputs.outcome == 'success' }}
         run: python3 scripts/ci/deps_check.py licenses --sbom app/build/reports/sbom/muxlume-bom.json
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

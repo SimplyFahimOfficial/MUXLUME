@@ -58,6 +58,8 @@ jobs:
             echo "::error title=Release::'$tag' is not a vMAJOR.MINOR.PATCH[-prerelease] tag"; exit 1
           fi
           sha="$(git rev-parse --verify "refs/tags/$tag^{commit}")" || { echo "::error title=Release::tag $tag does not exist"; exit 1; }
+          # The gate comes from the revision of this workflow, not from the commit being released: an older tag has none.
+          cp scripts/ci/release_gate.py "$RUNNER_TEMP/release_gate.py"
           git checkout --quiet "$sha"
           if ! git merge-base --is-ancestor "$sha" origin/main; then
             echo "::error title=Release::$tag ($sha) is not on main. Tag a commit that has been merged to main."; exit 1
@@ -92,7 +94,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ steps.tag.outputs.sha }}
-        run: python3 scripts/ci/release_gate.py --repo "$GITHUB_REPOSITORY" --sha "$SHA"
+        run: python3 "$RUNNER_TEMP/release_gate.py" --repo "$GITHUB_REPOSITORY" --sha "$SHA"
 
   build:
     name: Build unsigned release

@@ -13,6 +13,10 @@
       Compare two SBOMs; write the purls added or changed by head; summarise added, changed and
       removed components.
 
+  deps_check.py inputs --osv osv.json --sbom bom.json
+      Fail (status 2) unless both files are readable JSON. A step of its own, so that a report that cannot be
+      read is a scan failure, never mistaken for a finding of the vulns or licenses steps.
+
   deps_check.py fdroid --report fdroid-deps.txt
       Read the output of `gradle :app:dependencies --configuration fdroidReleaseRuntimeClasspath` and fail if
       the fdroid build depends on a proprietary library, or if the report is not a complete dependency tree.
@@ -65,8 +69,11 @@ def report(lines):
 def read_only(path):
     if not path:
         return None
-    with open(path, encoding="utf-8") as fh:
-        return {l.strip() for l in fh if l.strip()}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return {l.strip() for l in fh if l.strip()}
+    except OSError as e:
+        raise InputError(f"the list of added or changed dependencies ({path}) is missing: {e.__class__.__name__}") from e
 
 
 def level(score):
@@ -175,8 +182,17 @@ def cmd_diff(a):
     return 0
 
 
+def cmd_inputs(a):
+    load_json(a.osv, "the OSV-Scanner report")
+    load_json(a.sbom, "the SBOM")
+    print("Scan inputs are readable.")
+    return 0
+
+
 # What the fdroid flavor must never depend on (F-Droid only accepts free software).
 PROPRIETARY = re.compile(r"com\.google\.android\.(gms|play)|com\.google\.firebase|com\.android\.billingclient")
+# Lines marked (c), constraints, are checked too: that is the old grep's behaviour, and a constraint naming a proprietary
+# library is worth a look (the library itself is on the classpath only if it has a line of its own).
 # A line of Gradle's dependency tree: "+--- group:name:version", "|    \--- ...", "\--- ...".
 TREE_LINE = re.compile(r"^[| ]*[+\\]--- ")
 CONFIGURATION = "fdroidReleaseRuntimeClasspath"
@@ -219,11 +235,14 @@ def main():
     d.add_argument("--base", required=True)
     d.add_argument("--head", required=True)
     d.add_argument("--out", required=True)
+    i = sub.add_parser("inputs")
+    i.add_argument("--osv", required=True)
+    i.add_argument("--sbom", required=True)
     f = sub.add_parser("fdroid")
     f.add_argument("--report", required=True)
     a = ap.parse_args()
     try:
-        return {"vulns": cmd_vulns, "licenses": cmd_licenses, "diff": cmd_diff, "fdroid": cmd_fdroid}[a.cmd](a)
+        return {"vulns": cmd_vulns, "licenses": cmd_licenses, "diff": cmd_diff, "fdroid": cmd_fdroid, "inputs": cmd_inputs}[a.cmd](a)
     except InputError as e:
         print(f"::error title=Dependency check could not run::{e}. Nothing can be concluded: this is a scanner or build failure, not a finding. Re-run it, or fix what it could not resolve.")
         return 2

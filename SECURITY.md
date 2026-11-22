@@ -46,7 +46,7 @@ network-config weakening (user CAs, `usesCleartextTraffic`).
 | Workflow | What |
 |---|---|
 | `android-ci.yml` | Lint with security checks as errors, tests, detekt, APK audit (permissions allowlist, exported components, debuggable, backups, network config), 16 KB alignment, emulator launch, no proprietary or unresolved dependency in the F-Droid build |
-| `security.yml` | gitleaks secret scan, tracked keystore/credential files, OSV-Scanner on the release SBOM (fails at high), licence allowlist. Runs on `main`, weekly and on demand; pull requests use `dependency-review.yml` |
+| `security.yml` | gitleaks secret scan, tracked keystore/credential files, OSV-Scanner on the release SBOM (fails at high), licence allowlist. The dependency scan runs on `main`, weekly and on demand (pull requests use `dependency-review.yml`); gitleaks and the tracked-file check run on every pull request and push |
 | `codeql.yml` | CodeQL `security-extended` for Java/Kotlin, gated at high |
 | `dependency-review.yml` | New or changed shipped dependencies: vulnerabilities and licences |
 | `workflow-audit.yml` | actionlint and zizmor (medium and above); third-party actions pinned to commit SHAs |

@@ -36,6 +36,9 @@ SCAN_JOB = "Shipped dependencies (OSV, licences)"
 VULNS_STEP = "Known vulnerabilities (fails at high and critical)"
 LICENCES_STEP = "Licences"
 REQUIRED_JOBS = {"security.yml": [SCAN_JOB]}
+# Steps of that job that must have run and passed (not just a green job: a step that gains an `if:` or
+# `continue-on-error` must not turn the check into a no-op).
+REQUIRED_STEPS = [VULNS_STEP, LICENCES_STEP]
 
 
 class Verdict:
@@ -106,12 +109,24 @@ def evaluate(workflow, runs, sha, jobs_of):
             job = next((j for j in jobs if j.get("name") == name), None)
             if job is None or job.get("conclusion") != "success":
                 return Verdict(False, "Release: dependency scan skipped", f"the {workflow} run succeeded without a successful '{name}' job ({run.get('html_url', '')}).")
+            done = {s.get("name") for s in job.get("steps", []) if s.get("conclusion") == "success"}
+            missing = [s for s in REQUIRED_STEPS if s not in done]
+            if missing:
+                return Verdict(False, "Release: dependency scan skipped", f"the '{name}' job did not run and pass: {', '.join(missing)} ({run.get('html_url', '')}).")
     return Verdict(True, message=f"{workflow}: {run.get('html_url', '')}")
 
 
 def gh_api(path):
     out = subprocess.run(["gh", "api", path], check=True, capture_output=True, text=True).stdout
     return json.loads(out)
+
+
+def jobs_of(fetch, repo, run):
+    listing = fetch(f"repos/{repo}/actions/runs/{run['id']}/jobs?per_page=100")
+    jobs = listing.get("jobs", [])
+    if listing.get("total_count", len(jobs)) > len(jobs):
+        raise ValueError(f"{listing['total_count']} jobs, more than one page")
+    return jobs
 
 
 def main(argv=None, fetch=gh_api):
@@ -126,7 +141,7 @@ def main(argv=None, fetch=gh_api):
             runs = listing.get("workflow_runs", [])
             if listing.get("total_count", len(runs)) > len(runs):
                 raise ValueError(f"{listing['total_count']} runs, more than one page")
-            verdict = evaluate(wf, runs, a.sha, lambda r: fetch(f"repos/{a.repo}/actions/runs/{r['id']}/jobs?per_page=100").get("jobs", []))
+            verdict = evaluate(wf, runs, a.sha, lambda r: jobs_of(fetch, a.repo, r))
         except (subprocess.CalledProcessError, ValueError, KeyError, OSError) as e:
             print(f"::error title=Release: could not read the checks::{wf}: {e.__class__.__name__}. Re-run when the GitHub API answers.")
             return 2
