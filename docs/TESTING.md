@@ -3,6 +3,7 @@
 ```sh
 ./gradlew testDebugUnitTest            # JVM + Robolectric + Compose UI tests
 ./gradlew lintDebug
+python3 -m unittest discover -s scripts/ci -p 'test_*.py'   # release gate and dependency checks (no Gradle)
 ```
 
 All fixtures are generated in the tests or served by MockWebServer; no real IPTV service is
@@ -30,6 +31,7 @@ contacted.
 | `ChannelNavigationTest`, `ProgramActionsTest`, `RecordingPromptTest` | Number entry, up/down and the picker start from the chosen channel while a server of another playlist plays, hidden and locked channels stay out, one playing row in cross-playlist favorites; reminder and recording availability at the programme's start and end and after the app was in the background; the conflict dialog |
 | `RecordingWriterTest`, `RecordingConflictsTest` | Open, write and close failures map to failure states and keep partial bytes, success is the only DONE, a Stop is DONE and the service time limit is not; connection-limit overlaps (touching windows, disjoint overlaps, unknown limit, other source) and same-channel truncation |
 | `FavoriteOrderTest`, `FavoriteMoveUiTest`, `BackupRepositoryTest` (favorite order) | Default newest first, move up/down on the list, the player's picker and channel up/down in both directions, first and last places, removal, adding after reordering, one-playlist lists, hidden favorites, reopening the database; migration 9 → 10 in `DatabaseTest`; Move up/Move down as labelled actions and only the possible ones; order in the backup, an older backup without it, out-of-range values ignored |
+| `scripts/ci/test_gates.py` (unittest, run by the `static` job) | Release gate: the full scan on the exact commit passes; a pull request run, a skipped or missing scan job, a newer failed, cancelled or running run over an older green one, and another commit's runs do not; an unreadable API is a different outcome from a failed check; a scan that could not run is told apart from a vulnerability or licence finding. F-Droid check: a clean tree passes, a prohibited dependency fails, an unresolved dependency, an empty report or a Gradle error is an incomplete graph; a missing SBOM or scan report is not a finding |
 | `CrashLogTest` | Links removed in messages and causes in any case, the rest of the report kept, 64 KB cap, a second crash replaces the first, the handler writes then calls the previous one, an unwritable log does not hide the crash |
 | `GuideFilterTest` (Robolectric, Room) | Guide favorites and on-now filters, alone and with a group: start inclusive, end exclusive, staged programmes ignored, hidden and locked channels never listed |
 | `TrackLanguagesTest` | Default audio and subtitle language on the player's track selection: automatic changes nothing, a language or the device language replaces the preference, subtitles off and back on (only when the app turned them off), restoring what the player started with, hand-picked overrides kept, backup values checked |

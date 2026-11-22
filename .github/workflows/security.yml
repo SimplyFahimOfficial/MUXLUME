@@ -127,7 +127,10 @@ jobs:
           cache-provider: basic
           cache-read-only: true
 
+      # The step names below are read by scripts/ci/release_gate.py: a failed "Known vulnerabilities" or "Licences"
+      # step is a finding; any other failed step means the scan did not complete.
       - name: SBOM of the release APK
+        id: sbom
         run: ./gradlew :app:cyclonedxDirectBom
 
       - name: Download OSV-Scanner
@@ -135,7 +138,7 @@ jobs:
           scripts/ci/fetch-tool.sh "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64" "$OSV_SHA256" "$RUNNER_TEMP/osv-scanner"
           chmod +x "$RUNNER_TEMP/osv-scanner"
 
-      - name: Known vulnerabilities (fails at high and critical)
+      - name: Scan the SBOM with OSV-Scanner
         run: |
           mkdir -p build/reports/deps
           # OSV-Scanner recognises CycloneDX files by the .cdx.json suffix.
@@ -144,12 +147,15 @@ jobs:
           "$RUNNER_TEMP/osv-scanner" scan source -L build/reports/deps/muxlume.cdx.json --format json > build/reports/deps/osv.json
           rc=$?
           set -e
-          # 0: no vulnerabilities, 1: vulnerabilities found (judged below by severity), other: scanner error.
+          # 0: no vulnerabilities, 1: vulnerabilities found (judged in the next step by severity), other: scanner error.
           if [ "$rc" -gt 1 ]; then echo "::error title=OSV-Scanner::scanner failed (exit $rc)"; exit "$rc"; fi
-          python3 scripts/ci/deps_check.py vulns --osv build/reports/deps/osv.json --fail-at high
 
+      - name: Known vulnerabilities (fails at high and critical)
+        run: python3 scripts/ci/deps_check.py vulns --osv build/reports/deps/osv.json --fail-at high
+
+      # Reported even when the vulnerability check fails, but not without an SBOM to read.
       - name: Licences
-        if: always()
+        if: ${{ always() && steps.sbom.outcome == 'success' }}
         run: python3 scripts/ci/deps_check.py licenses --sbom app/build/reports/sbom/muxlume-bom.json
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

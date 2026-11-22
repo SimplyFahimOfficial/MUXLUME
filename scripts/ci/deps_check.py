@@ -13,11 +13,19 @@
       Compare two SBOMs; write the purls added or changed by head; summarise added, changed and
       removed components.
 
+  deps_check.py fdroid --report fdroid-deps.txt
+      Read the output of `gradle :app:dependencies --configuration fdroidReleaseRuntimeClasspath` and fail if
+      the fdroid build depends on a proprietary library, or if the report is not a complete dependency tree.
+
 Every subcommand prints a Markdown report and appends it to GITHUB_STEP_SUMMARY when set.
+
+Exit status: 0 clean, 1 a finding (vulnerability, licence, proprietary dependency), 2 the input was missing,
+unreadable or incomplete, so nothing can be said (a scanner or build failure, not a finding).
 """
 import argparse
 import json
 import os
+import re
 import sys
 
 LEVELS = ["unknown", "low", "medium", "high", "critical"]
@@ -32,6 +40,18 @@ REVIEWED_NAMED = {
     "Android Software Development Kit License": ["com.google.android.gms"],
     "Play Core Software Development Kit Terms of Service": ["com.google.android.play"],
 }
+
+
+class InputError(Exception):
+    """The file a check reads is missing, unreadable or incomplete: not a finding."""
+
+
+def load_json(path, what):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError) as e:
+        raise InputError(f"{what} ({path}) is missing or not valid JSON: {e.__class__.__name__}") from e
 
 
 def report(lines):
@@ -63,7 +83,7 @@ def purl_key(purl):
 
 
 def cmd_vulns(a):
-    data = json.load(open(a.osv, encoding="utf-8"))
+    data = load_json(a.osv, "the OSV-Scanner report")
     only = read_only(a.only)
     rows = []
     for res in data.get("results", []):
@@ -103,7 +123,7 @@ def allowed(group, lic):
 
 
 def cmd_licenses(a):
-    bom = json.load(open(a.sbom, encoding="utf-8"))
+    bom = load_json(a.sbom, "the SBOM")
     only = read_only(a.only)
     bad, counts = [], {}
     for c in bom.get("components", []):
@@ -126,7 +146,7 @@ def cmd_licenses(a):
 
 
 def components(path):
-    bom = json.load(open(path, encoding="utf-8"))
+    bom = load_json(path, "the SBOM")
     out = {}
     for c in bom.get("components", []):
         purl = purl_key(c.get("purl", ""))
@@ -155,6 +175,36 @@ def cmd_diff(a):
     return 0
 
 
+# What the fdroid flavor must never depend on (F-Droid only accepts free software).
+PROPRIETARY = re.compile(r"com\.google\.android\.(gms|play)|com\.google\.firebase|com\.android\.billingclient")
+# A line of Gradle's dependency tree: "+--- group:name:version", "|    \--- ...", "\--- ...".
+TREE_LINE = re.compile(r"^[| ]*[+\\]--- ")
+CONFIGURATION = "fdroidReleaseRuntimeClasspath"
+
+
+def cmd_fdroid(a):
+    try:
+        with open(a.report, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    except OSError as e:
+        raise InputError(f"the dependency report ({a.report}) is missing: {e.__class__.__name__}") from e
+    tree = [l for l in lines if TREE_LINE.match(l)]
+    # Gradle exits 0 and marks what it could not resolve; the part of the tree below it is then missing.
+    unresolved = [l.strip() for l in tree if l.rstrip().endswith(" FAILED")]
+    prohibited = sorted({l.strip() for l in tree if PROPRIETARY.search(l)})
+    complete = any(l.startswith(CONFIGURATION + " - ") for l in lines) and bool(tree) and not unresolved
+    out = ["## F-Droid dependencies", "", f"{len(tree)} dependency line(s) in `{CONFIGURATION}`; proprietary: {len(prohibited)}; unresolved: {len(unresolved)}"]
+    out += [f"- proprietary: `{l}`" for l in prohibited] + [f"- unresolved: `{l}`" for l in unresolved]
+    report(out)
+    for l in prohibited:
+        print(f"::error title=F-Droid: proprietary dependency::{l}. The fdroid flavor must not depend on Google Play services, Firebase or similar.")
+    if prohibited:
+        return 1
+    if not complete:
+        raise InputError("the fdroid dependency graph is incomplete: " + ("unresolved dependencies (listed above)" if unresolved else f"no `{CONFIGURATION}` dependency tree in the report"))
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -169,8 +219,14 @@ def main():
     d.add_argument("--base", required=True)
     d.add_argument("--head", required=True)
     d.add_argument("--out", required=True)
+    f = sub.add_parser("fdroid")
+    f.add_argument("--report", required=True)
     a = ap.parse_args()
-    return {"vulns": cmd_vulns, "licenses": cmd_licenses, "diff": cmd_diff}[a.cmd](a)
+    try:
+        return {"vulns": cmd_vulns, "licenses": cmd_licenses, "diff": cmd_diff, "fdroid": cmd_fdroid}[a.cmd](a)
+    except InputError as e:
+        print(f"::error title=Dependency check could not run::{e}. Nothing can be concluded: this is a scanner or build failure, not a finding. Re-run it, or fix what it could not resolve.")
+        return 2
 
 
 if __name__ == "__main__":

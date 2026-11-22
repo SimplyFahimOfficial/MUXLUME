@@ -57,11 +57,12 @@ jobs:
         run: ./gradlew assembleRelease bundlePlayRelease :app:cyclonedxDirectBom --stacktrace
 
       # F-Droid only accepts free software: the fdroid build must not pull in Google Play services, Firebase or similar.
+      # The report goes to a file, not into a pipe: a failed Gradle run fails the step, and the check also fails on a
+      # dependency Gradle could not resolve (it prints FAILED and exits 0, hiding what that dependency would bring in).
       - name: F-Droid build has no proprietary dependencies
         run: |
-          if ./gradlew -q :app:dependencies --configuration fdroidReleaseRuntimeClasspath | grep -E 'com\.google\.android\.(gms|play)|com\.google\.firebase|com\.android\.billingclient'; then
-            echo "::error title=F-Droid::the fdroid flavor depends on proprietary libraries (listed above)"; exit 1
-          fi
+          ./gradlew -q :app:dependencies --configuration fdroidReleaseRuntimeClasspath > "$RUNNER_TEMP/fdroid-deps.txt"
+          python3 scripts/ci/deps_check.py fdroid --report "$RUNNER_TEMP/fdroid-deps.txt"
 
       - name: Audit the release APKs (fdroid, github, play)
         run: |
@@ -123,6 +124,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: CI script tests
+        run: python3 -m unittest discover -s scripts/ci -p 'test_*.py'
 
       - name: Whitespace and line endings (.editorconfig)
         run: |
