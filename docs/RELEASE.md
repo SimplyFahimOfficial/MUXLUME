@@ -12,7 +12,12 @@
 
 1. Bump `versionName`/`versionCode`, add the changelog section and
    `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`, merge to `main`.
-2. Wait for Android CI, Security and CodeQL to pass on that commit.
+2. Wait for Android CI, Security and CodeQL to pass on that commit. The release workflow
+   (`scripts/ci/release_gate.py`) reads the newest push, scheduled or manual run of each on that exact commit:
+   a pull request run does not count, an older green run does not count once a newer one failed, and the
+   shipped-dependency job of Security must have run and passed. When it blocks, the message says whether the
+   dependency scan could not run (re-run the failed jobs) or found a vulnerability or licence problem
+   (fix the dependency).
 3. Tag it: `git tag -s vX.Y.Z && git push origin vX.Y.Z` (or run *Release (GitHub)* manually with the tag).
 4. Approve the `release` environment when asked. The workflow builds unsigned in a job without
    secrets, signs in the protected job, verifies the certificate, launches the APK on an emulator,

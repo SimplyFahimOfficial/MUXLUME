@@ -58,6 +58,8 @@ jobs:
             echo "::error title=Release::'$tag' is not a vMAJOR.MINOR.PATCH[-prerelease] tag"; exit 1
           fi
           sha="$(git rev-parse --verify "refs/tags/$tag^{commit}")" || { echo "::error title=Release::tag $tag does not exist"; exit 1; }
+          # The gate comes from the revision of this workflow, not from the commit being released: an older tag has none.
+          cp scripts/ci/release_gate.py "$RUNNER_TEMP/release_gate.py"
           git checkout --quiet "$sha"
           if ! git merge-base --is-ancestor "$sha" origin/main; then
             echo "::error title=Release::$tag ($sha) is not on main. Tag a commit that has been merged to main."; exit 1
@@ -86,17 +88,13 @@ jobs:
             echo "::error title=Release::CHANGELOG.md has no '## [$VERSION]' section"; exit 1
           fi
 
+      # The newest push, schedule or manual run of each workflow on this exact commit decides (not a pull request run,
+      # not an older green one), and the dependency scan must have run. See scripts/ci/release_gate.py.
       - name: CI and security checks passed on the tagged commit
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ steps.tag.outputs.sha }}
-        run: |
-          for wf in android-ci.yml security.yml codeql.yml; do
-            count="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$wf/runs?head_sha=$SHA&status=success&per_page=1" --jq '.total_count')"
-            if [ "$count" -lt 1 ]; then
-              echo "::error title=Release::no successful $wf run for $SHA. Wait for the checks on main, then re-run."; exit 1
-            fi
-          done
+        run: python3 "$RUNNER_TEMP/release_gate.py" --repo "$GITHUB_REPOSITORY" --sha "$SHA"
 
   build:
     name: Build unsigned release
