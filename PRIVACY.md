@@ -1,6 +1,6 @@
 # Privacy policy
 
-_Last updated: 2026-11-10. Applies to MUXLUME 0.1.0 and later._
+_Last updated: 2026-11-22. Applies to MUXLUME 0.1.0 and later._
 
 MUXLUME is a local media player. It has no user accounts and the developer runs no server for it.
 
@@ -22,7 +22,12 @@ The Google Play build contacts Google Play to look for an update only when you t
 A backup file is created only when you ask for one, is saved where you choose, and is encrypted with a passphrase only you know. The app does not upload it.
 
 None of it is sent to the developer or anyone else, and none of it is included in Android backups or
-device-to-device transfers. **Settings → Delete all data** removes everything; uninstalling does too.
+device-to-device transfers. **Settings → Delete all data** removes everything the app stored, even while it is
+playing or recording: playlists and logins, favorites, history, the list of your recordings, settings, the PIN, the
+crash report, cached images, and the app's access to the folder you chose for recordings and to playlist files you
+picked. It stops playback and a running recording first. It does **not** delete the recording files in your folder or
+the backup files you saved: they are yours, outside the app, so delete them yourself. Uninstalling removes what the
+app stored, and leaves those files too.
 
 ## Network connections
 

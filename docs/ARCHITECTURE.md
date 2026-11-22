@@ -44,6 +44,16 @@ ui/                            Compose screens, one ViewModel per screen where s
   `AND (:unlocked OR … = 0)`. `ParentalLock` (PIN hash, lockout, in-memory unlocked state, 5-minute relock) supplies
   `unlocked`; view models re-query when it changes, and the playback service asks it before resolving an id (an
   episode is as locked as its series). `LockAwareDaoTest` fails if a new query of that kind has no `:unlocked`.
+  When the lock closes, `PlaybackLockGuard` judges what plays: the playing item (a finished recording through its channel, an
+  episode through its series) and, during failover, the channel the user chose; a verdict applies only to the item it was made for.
+
+## Delete all data
+
+`DataReset` (Settings → Delete all data) stops playback and a running recording, then clears the database, the PIN, the crash
+report, the image cache and the access to picked files (each grant for the modes it holds), and the settings file last. Every step
+can be repeated; until the last one the app still looks set up. It runs in the app's scope, so leaving the screen does not stop it.
+No step is needed for scheduled work: every table cascades from `sources`, so a late writer is refused, and the settings that
+schedule background work go with the file. Recording files and saved backups are outside the app and are left alone.
 
 ## Import
 

@@ -152,23 +152,20 @@ fun SettingsScreen(nav: Nav) {
             confirmButton = {
                 TextButton({
                     confirm = null
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            if (what == "all") {
-                                c.db.clearAllTables()
-                                c.crashLog.clear()
-                                c.lock.clear() // the PIN goes with everything else; this is how a forgotten PIN is reset
-                                c.settings.setRecordingFolder(null) // the folder permission is released just below; the files stay where they are
-                                context.cacheDir.resolve("images").deleteRecursively()
-                                context.contentResolver.persistedUriPermissions.forEach {
-                                    context.contentResolver.releasePersistableUriPermission(it.uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                            } else {
-                                c.db.history().clear()
+                    if (what == "all") {
+                        // In the app's scope: leaving this screen must not stop a reset half way. Success is reported once everything is gone.
+                        c.appScope.launch {
+                            val done = runCatching { c.dataReset.run() }.isSuccess
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, res.getString(if (done) R.string.settings_all_data_deleted else R.string.settings_delete_failed), Toast.LENGTH_SHORT).show()
+                                if (done) nav.home()
                             }
                         }
-                        Toast.makeText(context, res.getString(if (what == "all") R.string.settings_all_data_deleted else R.string.settings_watch_history_cleared), Toast.LENGTH_SHORT).show()
-                        if (what == "all") nav.home()
+                    } else {
+                        scope.launch {
+                            withContext(Dispatchers.IO) { c.db.history().clear() }
+                            Toast.makeText(context, res.getString(R.string.settings_watch_history_cleared), Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }) { Text(stringResource(if (what == "all") R.string.settings_delete else R.string.settings_clear), color = MuxTheme.Error) }
             },

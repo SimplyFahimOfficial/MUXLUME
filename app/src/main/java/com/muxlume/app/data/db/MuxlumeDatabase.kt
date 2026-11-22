@@ -391,6 +391,10 @@ abstract class RecordingDao {
     @Query("SELECT * FROM recordings WHERE sourceId = :sourceId AND state IN ('SCHEDULED', 'RECORDING')")
     abstract suspend fun activeFor(sourceId: Long): List<RecordingEntity>
 
+    /** Whether a recording is being written right now. */
+    @Query("SELECT EXISTS(SELECT 1 FROM recordings WHERE state = 'RECORDING')")
+    abstract suspend fun anyRunning(): Boolean
+
     @Query("SELECT * FROM recordings WHERE state = 'SCHEDULED' AND startAt - leadSeconds > :now")
     abstract suspend fun scheduledAfter(now: Long): List<RecordingEntity>
 

@@ -15,6 +15,9 @@ import coil3.request.crossfade
 import com.muxlume.app.core.net.CleartextGate
 import com.muxlume.app.core.net.Http
 import com.muxlume.app.core.security.SecretBox
+import com.muxlume.app.data.DataReset
+import com.muxlume.app.data.ResetTargets
+import com.muxlume.app.data.ResolverGrants
 import com.muxlume.app.data.backup.BackupRepository
 import com.muxlume.app.data.PlaylistRefresh
 import com.muxlume.app.data.PlaylistRefresher
@@ -32,6 +35,7 @@ import com.muxlume.app.data.db.MuxlumeDatabase
 import com.muxlume.app.data.settingsDataStore
 import com.muxlume.app.playback.PlaybackService
 import com.muxlume.app.playback.StreamResolver
+import com.muxlume.app.recording.RecordingService
 import com.muxlume.app.recording.Recordings
 import com.muxlume.app.support.CrashLog
 import kotlinx.coroutines.CoroutineScope
@@ -63,6 +67,14 @@ class AppContainer(context: Context) {
     val backup by lazy { BackupRepository(db, sources, settings, epg) }
     val streams by lazy { StreamResolver(db, sources) }
     val recordings by lazy { Recordings(app, db, settings) }
+    val dataReset by lazy {
+        DataReset(
+            db, settings, lock,
+            ResetTargets(crashLog, app.cacheDir.resolve("images"), ResolverGrants(app.contentResolver), ::stopPlayback) {
+                app.startService(RecordingService.stopIntent(app, -1))
+            },
+        )
+    }
     val crashLog by lazy {
         CrashLog(File(app.filesDir, "crash.log")) {
             "MUXLUME ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) on Android ${Build.VERSION.SDK_INT}, ${Build.MANUFACTURER} ${Build.MODEL}"
@@ -74,6 +86,17 @@ class AppContainer(context: Context) {
 
     private val controllerLock = Mutex()
     private var controller: MediaController? = null
+
+    /**
+     * Stops what plays and empties the queue. Only a controller this process already connected can be playing: nothing else starts
+     * the service, so none connected means nothing to stop (and connecting one just to stop would start it).
+     */
+    suspend fun stopPlayback() = withContext(Dispatchers.Main) {
+        controllerLock.withLock { controller?.takeIf { it.isConnected } }?.run {
+            stop()
+            clearMediaItems()
+        }
+    }
 
     /** The app's MediaController (main thread only), connected on first use and reconnected if the service went away. */
     suspend fun player(): MediaController = withContext(Dispatchers.Main) {
