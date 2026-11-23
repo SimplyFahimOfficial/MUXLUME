@@ -29,9 +29,15 @@ class TooLargeException(limit: Long) : IOException("Response larger than ${limit
 
 /**
  * Whether a request may use plain HTTP: the setting of the source it belongs to, attached as an
- * OkHttp request tag (`Request.Builder.tag(HttpPolicy::class.java, …)`).
+ * OkHttp request tag (`Request.Builder.tag(HttpPolicy::class.java, …)`). A tag survives redirects.
+ *
+ * [origin] is where a stream's playlist headers are meant for (see [narrowReferer]); null when the request has no such home. It holds
+ * the scheme, host and port only: a stream's path and query can carry its login, and a policy is passed around and may be printed.
  */
-data class HttpPolicy(val allowHttp: Boolean) {
+data class HttpPolicy(val allowHttp: Boolean, val origin: HttpUrl? = null) {
+    /** The same setting for the requests of the stream at [stream]: other origins get its Referer without path and query. */
+    fun scopedTo(stream: HttpUrl) = copy(origin = stream.newBuilder().username("").password("").encodedPath("/").query(null).fragment(null).build())
+
     companion object {
         val HTTPS_ONLY = HttpPolicy(false)
         val ALLOW_HTTP = HttpPolicy(true)
@@ -42,21 +48,47 @@ data class HttpPolicy(val allowHttp: Boolean) {
 /**
  * Android must permit cleartext at the platform level because IPTV hosts are user-defined at
  * runtime (no domain list is possible). This gate is the real control: a plain-HTTP request is
- * refused unless the source it was made for allows HTTP ([HttpPolicy] tag). Requests without a tag
- * are artwork, which isn't tied to one source and carries no credentials: those may use HTTP when
- * any source allows it ([artworkAllowed]).
+ * refused unless the source it was made for allows HTTP ([HttpPolicy] tag). A request without a
+ * tag belongs to no source and is HTTPS-only; artwork of a source that allows HTTP asks for it
+ * with [ALLOW_HTTP_HEADER].
  */
 object CleartextGate {
-    @Volatile var artworkAllowed: Boolean = false
-
-    fun permits(request: Request): Boolean =
-        request.url.isHttps || (request.tag(HttpPolicy::class.java)?.allowHttp ?: artworkAllowed)
+    fun permits(request: Request): Boolean = request.url.isHttps || request.tag(HttpPolicy::class.java)?.allowHttp == true
 
     val interceptor = Interceptor { chain ->
         val request = chain.request()
         if (!permits(request)) throw CleartextBlockedException(request.url.host)
         chain.proceed(request)
     }
+}
+
+/**
+ * Coil cannot tag a request, so artwork of a source that allows HTTP carries this header instead; [artworkPolicy] turns it into the
+ * [HttpPolicy] tag before the gate looks, and it never reaches the network. Only the app's own image requests set it.
+ */
+const val ALLOW_HTTP_HEADER = "X-Muxlume-Allow-Http"
+
+private val artworkPolicy = Interceptor { chain ->
+    val request = chain.request()
+    chain.proceed(
+        if (request.header(ALLOW_HTTP_HEADER) == null) request
+        else request.newBuilder().removeHeader(ALLOW_HTTP_HEADER).tag(HttpPolicy::class.java, HttpPolicy.ALLOW_HTTP).build(),
+    )
+}
+
+private fun HttpUrl.sameOrigin(other: HttpUrl) = scheme == other.scheme && host == other.host && port == other.port
+
+/**
+ * A playlist's Referer is meant for its stream's own server. Every hop of a request (each redirect, and each playlist and segment the
+ * request's [HttpPolicy.origin] points to) that goes to another origin gets only the origin of that Referer, as a browser sends across
+ * origins, so a path or token in it is not handed to a CDN. The same origin keeps it whole; a Referer that is no URL is not sent.
+ * Unscoped requests count the call's first URL as their own origin.
+ */
+internal fun narrowReferer(request: Request, firstUrl: HttpUrl): Request {
+    val referer = request.header("Referer") ?: return request
+    if (request.url.sameOrigin(request.tag(HttpPolicy::class.java)?.origin ?: firstUrl)) return request
+    val origin = Urls.parseHttp(referer)?.newBuilder()?.username("")?.password("")?.encodedPath("/")?.query(null)?.fragment(null)?.build()
+    return request.newBuilder().apply { if (origin == null) removeHeader("Referer") else header("Referer", origin.toString()) }.build()
 }
 
 /** A request for [url] that may only use plain HTTP if [policy] allows it. */
@@ -93,9 +125,11 @@ object Http {
         .callTimeout(0, TimeUnit.SECONDS) // large playlists stream for minutes; read timeout bounds stalls
         // Never follow a redirect that switches between https and http (blocks silent downgrades).
         .followSslRedirects(false)
+        .addInterceptor(artworkPolicy)
         .addInterceptor(CleartextGate.interceptor)
+        // A network interceptor sees every hop, redirects included.
         .addNetworkInterceptor { chain ->
-            val req = chain.request()
+            val req = narrowReferer(chain.request(), chain.call().request().url)
             chain.proceed(if (req.header("User-Agent") == null) req.newBuilder().header("User-Agent", USER_AGENT).build() else req)
         }
         .build()

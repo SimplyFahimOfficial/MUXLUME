@@ -14,7 +14,8 @@ secrets (playlist links that often embed tokens, provider usernames and password
 
 | Asset / risk | Control | Where |
 |---|---|---|
-| Stored credentials | AES-256-GCM, key in Android Keystore (non-exportable); only ciphertext in the database | `core/security/SecretBox.kt` |
+| Source configuration | The playlist link or file location, the guide link and the Xtream login are AES-256-GCM sealed, key in Android Keystore (non-exportable); only ciphertext in the database | `core/security/SecretBox.kt` |
+| Imported channel data | **Not encrypted.** An M3U playlist's channel stream links and their User-Agent/Referer headers are stored as plain text in the app-private Room database (stream links often carry a token or login). Xtream stream links are not stored: they are built from the sealed login when played. The protection is Android's per-app storage, `allowBackup=false` and the transfer exclusions below, and Settings → Delete all data; the database itself is not encrypted, which is a separate change from this transport control | `data/db/Entities.kt` (`ItemEntity.url`, `headers`) |
 | Backups / device transfer | `allowBackup=false`, data extraction rules exclude every domain | `AndroidManifest.xml`, `res/xml/` |
 | Logs and diagnostics | No logging of URLs or credentials; error texts never contain URLs; player diagnostics list codecs and sizes only | `data/ErrorText.kt`, `ui/player/PlayerScreen.kt` |
 | Plain HTTP | See below | `core/net/Http.kt` |
@@ -33,10 +34,21 @@ secrets (playlist links that often embed tokens, provider usernames and password
 Many IPTV servers only offer HTTP and their hosts are user-defined, so the network security config
 must permit cleartext at the platform level. The control is in-app: every request goes through one
 OkHttp client whose `CleartextGate` refuses plain HTTP unless the request's own source allows it.
-Playlist downloads, provider API calls and stream/segment requests carry their source's setting as
-a request tag, so one source's opt-in never covers another. Artwork isn't tied to one source and
-carries no credentials; it may use HTTP while any source allows HTTP. RTSP (which bypasses OkHttp)
-is only played for sources with the opt-in.
+Playlist downloads, provider API calls, stream/segment requests and artwork carry their source's setting as
+a request tag, so one source's opt-in never covers another. A request without a tag belongs to no
+source and is HTTPS only. Artwork of a source that allows HTTP is requested with the setting of the source
+that owns the image (Coil: a marker header turned into the tag inside the client; notifications: the
+playback service marks each item from the database); a cached image is shown whatever its owner's
+setting. A stream that is playing loses the setting when the source stops allowing it. The choice can
+be made for an https playlist too (Library → edit), because its channels may be http://. RTSP (which
+bypasses OkHttp) is only played for sources with the opt-in. Redirects between https and http are
+never followed (`followSslRedirects(false)`, tested against a local TLS server).
+
+A playlist's Referer is meant for its stream's own server. A request to another origin (a redirect to
+a CDN, or an HLS playlist or segment hosted elsewhere) carries the Referer reduced to its origin, as a
+browser sends across origins: the path, query and any login in it are not handed on, and a Referer that
+is not a URL is not sent. The stream's own origin, and the User-Agent everywhere, are unchanged. This can
+affect a CDN that checks the full Referer path or query rather than the host.
 
 `scripts/ci/apk_audit.py` records this as the only reviewed exception and fails on any other
 network-config weakening (user CAs, `usesCleartextTraffic`).

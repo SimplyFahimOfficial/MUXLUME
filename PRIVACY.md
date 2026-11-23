@@ -7,7 +7,11 @@ MUXLUME is a local media player. It has no user accounts and the developer runs 
 ## What the app stores, on your device only
 
 - The playlists and provider accounts you add: links, usernames and passwords (encrypted with a key
-  in your device's Android Keystore), and the channel, movie and series lists they contain.
+  in your device's Android Keystore).
+- The channel, movie and series lists they contain. These are **not encrypted**: for a playlist, each
+  channel's stream link and any User-Agent or Referer it names are kept as plain text in the app's private
+  storage, and a stream link can contain a token or login your provider put there. Other apps cannot read
+  that storage, and Delete all data removes it.
 - Favorites, watch history and resume positions.
 - Which channels you hid, renamed or pinned.
 - After a crash, a short report (the error, app version, phone model; web links removed) until you share or delete it.
@@ -41,7 +45,7 @@ The app connects only to:
 
 There are no analytics, advertising, crash-reporting or tracking SDKs. Servers you connect to see
 your IP address and what you request, as with any streaming app; their own privacy policies apply.
-Unencrypted (HTTP) servers are blocked unless you allow them, because others on the network could
+Unencrypted (HTTP) servers are blocked unless you allow them for a playlist (this also covers that playlist's artwork and its http:// channels, and no other playlist's), because others on the network could
 read that traffic.
 
 ## Permissions

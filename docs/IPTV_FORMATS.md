@@ -9,7 +9,8 @@ Supported:
   `group-title`; quoted values may contain commas. Titles after the first unquoted comma.
 - `#EXTGRP:` when no `group-title` is given.
 - Headers: `#EXTVLCOPT:http-user-agent=` / `http-referrer=` and Kodi-style `url|User-Agent=…&Referer=…`.
-  Only User-Agent and Referer are used; values with control characters are dropped.
+  Only User-Agent and Referer are used; values with control characters are dropped. They are sent to the stream's own server;
+  to any other server (a redirect, an HLS segment on a CDN) the Referer goes without its path and query.
 - Bare URL lines without `#EXTINF` (named after the last path segment).
 - UTF-8 with or without BOM, LF or CRLF.
 

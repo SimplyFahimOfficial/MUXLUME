@@ -2,7 +2,6 @@ package com.muxlume.app.data.xtream
 
 import com.google.common.truth.Truth.assertThat
 import com.muxlume.app.core.net.CleartextBlockedException
-import com.muxlume.app.core.net.CleartextGate
 import com.muxlume.app.core.net.Http
 import com.muxlume.app.core.net.HttpPolicy
 import com.muxlume.app.core.net.HttpStatusException
@@ -127,9 +126,7 @@ class XtreamApiTest {
     @Test
     fun `plain http is refused unless the source allows it`() {
         val httpsOnly = XtreamApi(Http.client(), server.url("/"), "u", "p", HttpPolicy.HTTPS_ONLY)
-        CleartextGate.artworkAllowed = true // another source allowing HTTP must not matter
         assertThrows(CleartextBlockedException::class.java) { httpsOnly.account() }
-        CleartextGate.artworkAllowed = false
         assertThat(server.requestCount).isEqualTo(0)
     }
 }

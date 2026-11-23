@@ -16,6 +16,7 @@ import com.muxlume.app.data.db.LockedGroupEntity
 import com.muxlume.app.data.db.MuxlumeDatabase
 import com.muxlume.app.data.epg.EpgLinker
 import kotlinx.coroutines.runBlocking
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -52,7 +53,8 @@ class StreamResolverTest {
         val r = resolver.resolve(s, "a", null, unlocked = false)!!
         assertThat(r.url).isEqualTo("https://cdn.example/a.m3u8?token=T")
         assertThat(r.headers).containsExactly("User-Agent", "Tester", "Referer", "https://r.example/")
-        assertThat(r.policy).isEqualTo(HttpPolicy.HTTPS_ONLY)
+        assertThat(r.policy).isEqualTo(HttpPolicy.HTTPS_ONLY.scopedTo("https://cdn.example/".toHttpUrl())) // the stream's origin, never its path or token
+        assertThat(r.policy.toString()).doesNotContain("token")
         assertThat(r.toString()).doesNotContain("cdn.example")
     }
 

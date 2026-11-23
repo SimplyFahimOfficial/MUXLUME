@@ -6,7 +6,6 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import com.muxlume.app.core.net.CleartextBlockedException
-import com.muxlume.app.core.net.CleartextGate
 import com.muxlume.app.core.net.Http
 import com.muxlume.app.core.net.HttpStatusException
 import com.muxlume.app.PlainBox
@@ -63,7 +62,6 @@ class SourceRepositoryTest {
     fun tearDown() {
         db.close()
         server.close()
-        CleartextGate.artworkAllowed = false
     }
 
     private fun playlist(vararg channels: String) = buildString {
@@ -265,7 +263,6 @@ class SourceRepositoryTest {
     @Test
     fun `one source's HTTP opt-in doesn't apply to another source`(): Unit = runBlocking {
         addM3u(allowHttp = true)
-        CleartextGate.artworkAllowed = true // as the app does once any source allows HTTP
         val strict = addM3u(allowHttp = false)
         assertThrows(CleartextBlockedException::class.java) { runBlocking { repo.refresh(strict) } }
         assertThat(server.requestCount).isEqualTo(0)

@@ -182,7 +182,7 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
                 item {
                     Box(Modifier.fillMaxWidth().aspectRatio(0.8f)) {
-                        Artwork(extra.backdrop ?: it.logo, it.name, Modifier.fillMaxSize(), monogramSize = 72)
+                        Artwork(extra.backdrop ?: it.logo, it.name, it.sourceId, Modifier.fillMaxSize(), monogramSize = 72)
                         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to MuxTheme.Background)))
                     }
                 }
@@ -245,7 +245,7 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
                     item { Spacer(Modifier.height(12.dp)) }
                     itemsIndexed(episodes, key = { _, e -> e.id }) { i, ep ->
                         val h = history[MediaIds.of(it.sourceId, MediaIds.episodeKey(ep.id, ep.extension))]
-                        EpisodeRow(ep, h) { scope.launch { if (context.play(episodes.map { e -> vm.episodeRequest(it, e) }, i)) nav.player() } }
+                        EpisodeRow(ep, it.sourceId, h) { scope.launch { if (context.play(episodes.map { e -> vm.episodeRequest(it, e) }, i)) nav.player() } }
                     }
                 }
             }
@@ -270,13 +270,13 @@ private fun nextEpisode(all: List<XtreamEpisode>, history: Map<String, HistoryEn
 }
 
 @Composable
-private fun EpisodeRow(ep: XtreamEpisode, h: HistoryEntity?, onClick: () -> Unit) {
+private fun EpisodeRow(ep: XtreamEpisode, sourceId: Long, h: HistoryEntity?, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().pressable(onClick, label = stringResource(R.string.detail_play_2, ep.title)).padding(horizontal = Mux.ScreenPadding, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.width(132.dp).aspectRatio(16f / 9f).clip(Mux.CardShape)) {
-            Artwork(ep.image, ep.title, Modifier.fillMaxSize(), monogramSize = 18)
+            Artwork(ep.image, ep.title, sourceId, Modifier.fillMaxSize(), monogramSize = 18)
             if (h != null && h.durationMs > 0) {
                 Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(MuxTheme.Scrim)) {
                     Box(Modifier.fillMaxWidth((h.positionMs.toFloat() / h.durationMs).coerceIn(0f, 1f)).height(3.dp).background(MuxTheme.Accent))

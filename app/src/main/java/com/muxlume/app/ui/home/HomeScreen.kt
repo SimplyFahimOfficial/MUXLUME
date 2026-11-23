@@ -121,43 +121,43 @@ fun HomeScreen(nav: Nav, openTab: (Tab) -> Unit) {
         if (hero != null) {
             item {
                 Hero(
-                    title = hero.title, subtitle = hero.subtitle, artwork = hero.artwork, live = false,
+                    title = hero.title, subtitle = hero.subtitle, artwork = hero.artwork, sourceId = hero.sourceId, live = false,
                     progress = if (hero.durationMs > 0) hero.positionMs.toFloat() / hero.durationMs else null,
                     action = stringResource(R.string.home_resume), onPlay = { playEntry(hero) },
                 )
             }
         } else if (s.favoriteChannels.isNotEmpty()) {
             val ch = s.favoriteChannels.first()
-            item { Hero(ch.name, ch.groupTitle, ch.logo, live = true, progress = null, action = stringResource(R.string.home_watch_live), onPlay = { playFavorite(ch) }, fitArt = true) }
+            item { Hero(ch.name, ch.groupTitle, ch.logo, ch.sourceId, live = true, progress = null, action = stringResource(R.string.home_watch_live), onPlay = { playFavorite(ch) }, fitArt = true) }
         }
         if (s.continueWatching.size > 1) {
             item {
                 Shelf(stringResource(R.string.home_continue_watching), s.continueWatching.drop(1)) { e ->
-                    WideCard(e.title, e.subtitle, e.artwork, { playEntry(e) }, progress = if (e.durationMs > 0) e.positionMs.toFloat() / e.durationMs else null)
+                    WideCard(e.title, e.subtitle, e.artwork, e.sourceId, { playEntry(e) }, progress = if (e.durationMs > 0) e.positionMs.toFloat() / e.durationMs else null)
                 }
             }
         }
         if (s.favoriteChannels.isNotEmpty()) {
             item {
                 Shelf(stringResource(R.string.home_favorite_channels), s.favoriteChannels, action = stringResource(R.string.home_all_channels), onAction = { openTab(Tab.LIVE) }) { ch ->
-                    WideCard(ch.name, ch.groupTitle.ifEmpty { null }, ch.logo, { playFavorite(ch) }, fit = true)
+                    WideCard(ch.name, ch.groupTitle.ifEmpty { null }, ch.logo, ch.sourceId, { playFavorite(ch) }, fit = true)
                 }
             }
         }
         if (s.recentChannels.isNotEmpty()) {
-            item { Shelf(stringResource(R.string.home_recently_watched), s.recentChannels) { e -> WideCard(e.title, e.subtitle, e.artwork, { playEntry(e) }, fit = true) } }
+            item { Shelf(stringResource(R.string.home_recently_watched), s.recentChannels) { e -> WideCard(e.title, e.subtitle, e.artwork, e.sourceId, { playEntry(e) }, fit = true) } }
         }
         if (s.newMovies.isNotEmpty()) {
             item {
                 Shelf(stringResource(R.string.home_recently_added_movies), s.newMovies, action = stringResource(R.string.home_movies), onAction = { openTab(Tab.MOVIES) }) { m ->
-                    PosterCard(m.name, m.logo, { nav.detail(m.sourceId, m.stableKey) }, subtitle = m.year)
+                    PosterCard(m.name, m.logo, m.sourceId, { nav.detail(m.sourceId, m.stableKey) }, subtitle = m.year)
                 }
             }
         }
         if (s.newSeries.isNotEmpty()) {
             item {
                 Shelf(stringResource(R.string.home_new_series), s.newSeries, action = stringResource(R.string.home_series), onAction = { openTab(Tab.SERIES) }) { m ->
-                    PosterCard(m.name, m.logo, { nav.detail(m.sourceId, m.stableKey) }, subtitle = m.year)
+                    PosterCard(m.name, m.logo, m.sourceId, { nav.detail(m.sourceId, m.stableKey) }, subtitle = m.year)
                 }
             }
         }
@@ -205,12 +205,12 @@ private fun <T> Shelf(title: String, items: List<T>, action: String? = null, onA
 
 /** The cinematic lead card: artwork edge to edge, a fade only where text sits, one clear action. */
 @Composable
-private fun Hero(title: String, subtitle: String?, artwork: String?, live: Boolean, progress: Float?, action: String, onPlay: () -> Unit, fitArt: Boolean = false) {
+private fun Hero(title: String, subtitle: String?, artwork: String?, sourceId: Long?, live: Boolean, progress: Float?, action: String, onPlay: () -> Unit, fitArt: Boolean = false) {
     // Text sits on artwork, so force the dark palette here regardless of the app theme.
     OnMedia {
         Box(Modifier.padding(horizontal = Mux.ScreenPadding).fillMaxWidth().aspectRatio(4f / 5f).clip(Mux.HeroShape).background(MuxTheme.Surface)) {
             Artwork(
-                artwork, title,
+                artwork, title, sourceId,
                 Modifier.fillMaxWidth().aspectRatio(if (fitArt) 1.3f else 4f / 5f).padding(if (fitArt) 48.dp else 0.dp),
                 contentScale = if (fitArt) androidx.compose.ui.layout.ContentScale.Fit else androidx.compose.ui.layout.ContentScale.Crop,
                 monogramSize = 64,

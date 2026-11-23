@@ -5,7 +5,7 @@ measured build or maintenance benefit.
 
 ```
 MuxlumeApp / AppContainer      manual dependency graph (no DI framework), process lifetime
-core/net/Http.kt               the single OkHttp client, CleartextGate, URL validation/redaction, size limits
+core/net/Http.kt               the single OkHttp client, CleartextGate (per-request source policy; untagged = https only), Referer narrowing, URL validation/redaction, size limits
 core/security/SecretBox.kt     Keystore AES-GCM for source secrets
 data/m3u/M3uParser.kt          streaming, bounded M3U parser (Iterator)
 data/xtream/XtreamApi.kt       Xtream Codes-compatible player_api client, lenient JSON, streamed lists

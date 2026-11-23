@@ -257,7 +257,10 @@ private fun ChannelRow(ch: ItemEntity, favorite: Boolean, guide: Boolean, onClic
             .padding(horizontal = Mux.ScreenPadding, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Artwork(ch.logo, ch.name, Modifier.size(width = 72.dp, height = 52.dp).clip(Mux.CardShape).background(MuxTheme.Raised).padding(6.dp), contentScale = ContentScale.Fit, monogramSize = 16)
+        Artwork(
+            ch.logo, ch.name, ch.sourceId, Modifier.size(width = 72.dp, height = 52.dp).clip(Mux.CardShape).background(MuxTheme.Raised).padding(6.dp),
+            contentScale = ContentScale.Fit, monogramSize = 16,
+        )
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(ch.name, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)

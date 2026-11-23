@@ -152,7 +152,7 @@ private fun ResultRow(item: ItemEntity, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().pressable(onClick, label = item.name).padding(horizontal = Mux.ScreenPadding, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         val live = item.kind == ItemKind.LIVE
         Artwork(
-            item.logo, item.name,
+            item.logo, item.name, item.sourceId,
             Modifier.size(width = if (live) 64.dp else 44.dp, height = if (live) 46.dp else 64.dp).clip(Mux.CardShape).padding(if (live) 4.dp else 0.dp),
             contentScale = if (live) ContentScale.Fit else ContentScale.Crop, monogramSize = 14,
         )

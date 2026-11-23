@@ -119,7 +119,7 @@ fun LibraryScreen(nav: Nav) {
                 SectionHeader(stringResource(R.string.library_watchlist))
                 Spacer(Modifier.height(10.dp))
                 LazyRow(contentPadding = PaddingValues(horizontal = Mux.ScreenPadding), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(watchlist, key = { it.id }) { m -> PosterCard(m.name, m.logo, { nav.detail(m.sourceId, m.stableKey) }, width = 112.dp) }
+                    items(watchlist, key = { it.id }) { m -> PosterCard(m.name, m.logo, m.sourceId, { nav.detail(m.sourceId, m.stableKey) }, width = 112.dp) }
                 }
             }
         }

@@ -422,7 +422,7 @@ private fun ChannelRow(
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Artwork(item.logo, item.name, Modifier.size(32.dp).clip(Mux.CardShape).background(MuxTheme.Raised).padding(3.dp), contentScale = ContentScale.Fit, monogramSize = 10)
+            Artwork(item.logo, item.name, item.sourceId, Modifier.size(32.dp).clip(Mux.CardShape).background(MuxTheme.Raised).padding(3.dp), contentScale = ContentScale.Fit, monogramSize = 10)
             Spacer(Modifier.width(6.dp))
             Text(item.name, style = MaterialTheme.typography.labelSmall, color = MuxTheme.TextPrimary, maxLines = 3, overflow = TextOverflow.Ellipsis)
         }

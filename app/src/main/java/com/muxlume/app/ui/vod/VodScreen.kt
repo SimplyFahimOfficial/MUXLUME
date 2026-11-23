@@ -75,7 +75,7 @@ fun VodScreen(kind: ItemKind, nav: Nav) {
         ) {
             items(items.itemCount, key = items.itemKey { it.id }) { i ->
                 val item = items[i] ?: return@items // placeholder while the page loads
-                PosterCard(item.name, item.logo, { nav.detail(item.sourceId, item.stableKey) }, subtitle = item.year, width = null)
+                PosterCard(item.name, item.logo, item.sourceId, { nav.detail(item.sourceId, item.stableKey) }, subtitle = item.year, width = null)
             }
         }
     }

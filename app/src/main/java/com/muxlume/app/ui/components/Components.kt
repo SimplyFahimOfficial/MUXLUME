@@ -35,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -55,7 +56,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
+import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
+import coil3.request.ImageRequest
+import kotlinx.coroutines.flow.MutableStateFlow
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
+import com.muxlume.app.MuxlumeApp
 import com.muxlume.app.R
+import com.muxlume.app.core.net.ALLOW_HTTP_HEADER
 import com.muxlume.app.ui.theme.Motion
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
@@ -110,14 +119,24 @@ fun Modifier.pressable(
 }
 
 /**
- * Provider artwork, or an abstract placeholder built from the title (never stock posters).
- * Loading and failure show the same placeholder so the layout never jumps.
+ * The image request for [url]: over plain HTTP only if [allowHttp], the setting of the source the artwork belongs to. Anything else
+ * (https, a cached image) is unaffected, and a request whose owner is unknown passes false.
+ */
+fun artworkRequest(context: Context, url: String?, allowHttp: Boolean): ImageRequest =
+    ImageRequest.Builder(context).data(url).apply { if (allowHttp) httpHeaders(NetworkHeaders.Builder().set(ALLOW_HTTP_HEADER, "1").build()) }.build()
+
+/**
+ * Provider artwork of the source [sourceId] (null: no known owner, so HTTPS only), or an abstract placeholder built from the title
+ * (never stock posters). Loading and failure show the same placeholder so the layout never jumps.
  */
 @Composable
-fun Artwork(url: String?, title: String, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Crop, monogramSize: Int = 28) {
+fun Artwork(url: String?, title: String, sourceId: Long?, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Crop, monogramSize: Int = 28) {
+    val context = LocalContext.current
+    val owners = remember(context) { (context.applicationContext as? MuxlumeApp)?.container?.httpSources ?: MutableStateFlow<Set<Long>?>(null) }
+    val allowHttp = sourceId != null && owners.collectAsState().value?.contains(sourceId) == true
     Box(modifier.background(MuxTheme.Raised)) {
         SubcomposeAsyncImage(
-            model = url,
+            model = remember(url, allowHttp) { artworkRequest(context, url, allowHttp) },
             contentDescription = null,
             contentScale = contentScale,
             modifier = Modifier.fillMaxSize(),
@@ -222,9 +241,9 @@ fun EmptyState(title: String, body: String, modifier: Modifier = Modifier, actio
 
 /** 2:3 poster with title below. */
 @Composable
-fun PosterCard(title: String, artwork: String?, onClick: () -> Unit, modifier: Modifier = Modifier, subtitle: String? = null, width: Dp? = 132.dp) {
+fun PosterCard(title: String, artwork: String?, sourceId: Long?, onClick: () -> Unit, modifier: Modifier = Modifier, subtitle: String? = null, width: Dp? = 132.dp) {
     Column(modifier.then(if (width != null) Modifier.width(width) else Modifier).pressable(onClick, label = title).semantics(mergeDescendants = true) {}) {
-        Artwork(artwork, title, Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(Mux.CardShape))
+        Artwork(artwork, title, sourceId, Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(Mux.CardShape))
         Spacer(Modifier.height(8.dp))
         Text(title, style = MaterialTheme.typography.titleSmall, color = MuxTheme.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
         if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary, maxLines = 1)
@@ -233,10 +252,10 @@ fun PosterCard(title: String, artwork: String?, onClick: () -> Unit, modifier: M
 
 /** 16:9 card with optional progress, for Continue watching and channels. */
 @Composable
-fun WideCard(title: String, subtitle: String?, artwork: String?, onClick: () -> Unit, modifier: Modifier = Modifier, progress: Float? = null, fit: Boolean = false) {
+fun WideCard(title: String, subtitle: String?, artwork: String?, sourceId: Long?, onClick: () -> Unit, modifier: Modifier = Modifier, progress: Float? = null, fit: Boolean = false) {
     Column(modifier.width(240.dp).pressable(onClick, label = title).semantics(mergeDescendants = true) {}) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(Mux.CardShape)) {
-            Artwork(artwork, title, Modifier.fillMaxSize(), contentScale = if (fit) ContentScale.Fit else ContentScale.Crop)
+            Artwork(artwork, title, sourceId, Modifier.fillMaxSize(), contentScale = if (fit) ContentScale.Fit else ContentScale.Crop)
             if (progress != null) {
                 Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(MuxTheme.Scrim)) {
                     Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(4.dp).background(MuxTheme.Accent))

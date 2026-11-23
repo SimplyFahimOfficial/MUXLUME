@@ -103,6 +103,17 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - The Support screen is more compact.
 
 ### Fixed
+- Plain HTTP is allowed per playlist for everything that playlist owns. A playlist's logos and posters, and the notification artwork of its
+  channels, used HTTP whenever any playlist allowed it; now only the playlist they belong to does (an image already cached is still shown).
+  Allowing HTTP is withdrawn from a stream that is playing as soon as you turn it off for its playlist.
+- An https playlist (a link) can now allow its http:// channels: Add or edit shows the "allow unencrypted HTTP" choice for every playlist link,
+  off by default, and saving a playlist keeps it. Before, only an http:// link could be allowed, and saving a restored playlist with a new name
+  turned its choice off.
+- A playlist's Referer header no longer goes whole to other servers: a redirect target or an HLS segment on another origin gets only its origin
+  (scheme and host), so a path, token or login in it is not passed to a CDN. Same-origin streams and the User-Agent are unchanged; a CDN that
+  checks the Referer's path or query will refuse such requests.
+- SECURITY.md and PRIVACY.md said the playlists' data was encrypted: only the playlist link, guide link and Xtream login are. An M3U playlist's channel
+  stream links and headers are plain text in the app's private database; both documents now say so.
 - TV guide: a refresh from the screen and the background update no longer mix their downloads into one guide, turning the guide off
   (or off and on) while it downloads leaves it empty, and a guide downloaded from a feed you have since changed is not shown. Refreshes
   of one source take turns; other sources are not held up; cancelling a refresh stops its download at once, and a refresh that gave up

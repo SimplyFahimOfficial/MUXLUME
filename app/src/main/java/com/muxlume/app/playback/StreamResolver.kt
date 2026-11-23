@@ -28,7 +28,8 @@ class StreamResolver(private val db: MuxlumeDatabase, private val sources: Sourc
         val (url, headers) = (if (episode != null) episodeStream(source, episode, parentKey, unlocked) else itemStream(source, key, unlocked)) ?: return null
         // RTSP bypasses the HTTP client, so treat it like plain HTTP: only for sources the user allowed.
         if ((url.startsWith("rtsp", ignoreCase = true) && !source.allowHttp) || !Urls.isPlayable(url)) return null
-        return ResolvedStream(url, headers, HttpPolicy.of(source.allowHttp))
+        val policy = HttpPolicy.of(source.allowHttp)
+        return ResolvedStream(url, headers, Urls.parseHttp(url)?.let(policy::scopedTo) ?: policy)
     }
 
     private suspend fun episodeStream(source: SourceEntity, episode: Pair<String, String>, parentKey: String?, unlocked: Boolean): Pair<String, Map<String, String>>? {
