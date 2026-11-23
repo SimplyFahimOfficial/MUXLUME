@@ -1,5 +1,6 @@
 package com.muxlume.app.ui.components
 
+import android.content.Context
 import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -42,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -61,8 +63,6 @@ import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import kotlinx.coroutines.flow.MutableStateFlow
-import android.content.Context
-import androidx.compose.ui.platform.LocalContext
 import com.muxlume.app.MuxlumeApp
 import com.muxlume.app.R
 import com.muxlume.app.core.net.ALLOW_HTTP_HEADER

@@ -35,6 +35,7 @@ import javax.imageio.ImageIO
 class ArtworkLoaderTest {
     private val server = MockWebServer()
     private lateinit var loader: ArtworkLoader
+    private val allowed = mutableSetOf<Long>() // the sources that allow plain HTTP, as the app knows them
 
     private val png: ByteArray = ByteArrayOutputStream().also { ImageIO.write(BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), "png", it) }.toByteArray()
 
@@ -42,14 +43,14 @@ class ArtworkLoaderTest {
     fun setUp() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         server.start()
-        loader = ArtworkLoader(Http.client()) { DataSourceBitmapLoader.Builder(context).setDataSourceFactory(it).build() }
+        loader = ArtworkLoader(Http.client(), { it in allowed }) { DataSourceBitmapLoader.Builder(context).setDataSourceFactory(it).build() }
     }
 
     @After fun tearDown() = server.close()
 
-    private fun item(allowHttp: Boolean?): MediaMetadata {
+    private fun item(source: Long?): MediaMetadata {
         val base = MediaItem.Builder().setMediaId("1|k").setMediaMetadata(MediaMetadata.Builder().setArtworkUri(Uri.parse(server.url("/logo.png").toString())).setExtras(Bundle()).build()).build()
-        return (allowHttp?.let { base.withArtworkPolicy(it) } ?: base).mediaMetadata
+        return (source?.let { base.withArtworkSource(it) } ?: base).mediaMetadata
     }
 
     private fun load(metadata: MediaMetadata) = loader.loadBitmapFromMetadata(metadata)!!.get(10, TimeUnit.SECONDS)
@@ -57,14 +58,16 @@ class ArtworkLoaderTest {
     @Test
     fun `artwork of an item whose source allows HTTP is loaded`() {
         server.enqueue(MockResponse.Builder().body(Buffer().write(png)).build())
-        assertThat(load(item(allowHttp = true))).isNotNull()
+        allowed += 7
+        assertThat(load(item(source = 7))).isNotNull()
         assertThat(server.requestCount).isEqualTo(1)
     }
 
     @Test
     fun `artwork of an item whose source does not allow HTTP, or of an unmarked one, sends no request`() {
         server.enqueue(MockResponse.Builder().body(Buffer().write(png)).build()) // never asked for
-        for (metadata in listOf(item(allowHttp = false), item(allowHttp = null))) {
+        allowed += 7 // another source allows it
+        for (metadata in listOf(item(source = 8), item(source = null))) {
             val e = assertThrows(ExecutionException::class.java) { load(metadata) }
             assertThat(generateSequence<Throwable>(e) { it.cause }.any { it is CleartextBlockedException }).isTrue()
         }
@@ -73,11 +76,22 @@ class ArtworkLoaderTest {
     }
 
     @Test
+    fun `allowing HTTP is withdrawn from the next artwork when the source stops allowing it, and given when it starts`() {
+        server.enqueue(MockResponse.Builder().body(Buffer().write(png)).build())
+        allowed += 7
+        assertThat(load(item(source = 7))).isNotNull()
+        allowed -= 7 // the user turned it off for that playlist
+        val e = assertThrows(ExecutionException::class.java) { load(item(source = 7)) }
+        assertThat(generateSequence<Throwable>(e) { it.cause }.any { it is CleartextBlockedException }).isTrue()
+        assertThat(server.requestCount).isEqualTo(1)
+    }
+
+    @Test
     fun `the item's own mark is what counts, and what a controller sent is replaced`() {
         val request = MediaIds.request("1|k", "K", null, server.url("/logo.png").toString(), ItemKind.LIVE)
-        val forged = request.withArtworkPolicy(true) // a controller's claim
-        assertThat(forged.withArtworkPolicy(false).mediaMetadata.extras!!.getBoolean(MediaIds.EXTRA_ARTWORK_HTTP, true)).isFalse() // the service's answer wins
-        assertThat(request.mediaMetadata.extras!!.containsKey(MediaIds.EXTRA_ARTWORK_HTTP)).isFalse()
+        val forged = request.withArtworkSource(1) // a controller's claim
+        assertThat(forged.withArtworkSource(9).mediaMetadata.extras!!.getLong(MediaIds.EXTRA_ARTWORK_SOURCE)).isEqualTo(9) // the service's answer wins
+        assertThat(request.mediaMetadata.extras!!.containsKey(MediaIds.EXTRA_ARTWORK_SOURCE)).isFalse()
         assertThat(request.mediaMetadata.extras!!.getString(MediaIds.EXTRA_KIND)).isEqualTo("LIVE") // the rest of the extras stay
     }
 }

@@ -25,6 +25,7 @@ import mockwebserver3.MockWebServer
 import mockwebserver3.RecordedRequest
 import okio.Buffer
 import org.junit.After
+import org.junit.Assert.assertThrows
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -94,6 +95,13 @@ class ArtworkRequestTest {
         assertThat(result).isInstanceOf(ErrorResult::class.java)
         assertThat(server.requestCount).isEqualTo(before)
         assertThat(seen.map { it.url.encodedPath }).doesNotContain("/b-only.png")
+    }
+
+    @Test
+    fun `the marker never overrides the setting a request already carries`() {
+        val strict = okhttp3.Request.Builder().url(server.url("/strict.png")).header(ALLOW_HTTP_HEADER, "1").tag(com.muxlume.app.core.net.HttpPolicy::class.java, com.muxlume.app.core.net.HttpPolicy.HTTPS_ONLY).build()
+        assertThrows(com.muxlume.app.core.net.CleartextBlockedException::class.java) { Http.client().newCall(strict).execute() }
+        assertThat(server.requestCount).isEqualTo(0)
     }
 
     @Test

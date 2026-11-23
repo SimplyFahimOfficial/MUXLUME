@@ -18,7 +18,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.util.concurrent.TimeUnit
 
-/** Thrown when a plain-HTTP request is made but the user hasn't allowed HTTP for any source. */
+/** Thrown when a plain-HTTP request is made but the source it belongs to hasn't allowed HTTP (or it belongs to none). */
 class CleartextBlockedException(host: String) : IOException("Unencrypted HTTP to $host is not allowed")
 
 /** A server answered with a non-2xx status. The URL is deliberately not part of the message. */
@@ -70,18 +70,19 @@ const val ALLOW_HTTP_HEADER = "X-Muxlume-Allow-Http"
 
 private val artworkPolicy = Interceptor { chain ->
     val request = chain.request()
-    chain.proceed(
-        if (request.header(ALLOW_HTTP_HEADER) == null) request
-        else request.newBuilder().removeHeader(ALLOW_HTTP_HEADER).tag(HttpPolicy::class.java, HttpPolicy.ALLOW_HTTP).build(),
-    )
+    if (request.header(ALLOW_HTTP_HEADER) == null) return@Interceptor chain.proceed(request)
+    val stripped = request.newBuilder().removeHeader(ALLOW_HTTP_HEADER)
+    // Only a request with no setting of its own is given one: the marker never overrides a source's tag.
+    if (request.tag(HttpPolicy::class.java) == null) stripped.tag(HttpPolicy::class.java, HttpPolicy.ALLOW_HTTP)
+    chain.proceed(stripped.build())
 }
 
 private fun HttpUrl.sameOrigin(other: HttpUrl) = scheme == other.scheme && host == other.host && port == other.port
 
 /**
  * A playlist's Referer is meant for its stream's own server. Every hop of a request (each redirect, and each playlist and segment the
- * request's [HttpPolicy.origin] points to) that goes to another origin gets only the origin of that Referer, as a browser sends across
- * origins, so a path or token in it is not handed to a CDN. The same origin keeps it whole; a Referer that is no URL is not sent.
+ * request's [HttpPolicy.origin] points to) that goes to another origin gets only the origin of that Referer, as a browser's cross-origin
+ * rule does (without its omission on an https to http hop), so a path or token in it is not handed to a CDN. The same origin keeps it whole; a Referer that is no URL is not sent.
  * Unscoped requests count the call's first URL as their own origin.
  */
 internal fun narrowReferer(request: Request, firstUrl: HttpUrl): Request {

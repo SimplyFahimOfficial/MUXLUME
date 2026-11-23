@@ -38,8 +38,8 @@ Playlist downloads, provider API calls, stream/segment requests and artwork carr
 a request tag, so one source's opt-in never covers another. A request without a tag belongs to no
 source and is HTTPS only. Artwork of a source that allows HTTP is requested with the setting of the source
 that owns the image (Coil: a marker header turned into the tag inside the client; notifications: the
-playback service marks each item from the database); a cached image is shown whatever its owner's
-setting. A stream that is playing loses the setting when the source stops allowing it. The choice can
+playback service marks each item with its source, and the setting is read when the image loads); a cached image is shown whatever its owner's
+setting. A stream that is playing, and the next artwork loaded for it, lose the setting when the source stops allowing it. The choice can
 be made for an https playlist or account too (Library → edit), because its channels or artwork may be http://. RTSP (which
 bypasses OkHttp) is only played for sources with the opt-in. Redirects between https and http are
 never followed (`followSslRedirects(false)`, tested against a local TLS server).

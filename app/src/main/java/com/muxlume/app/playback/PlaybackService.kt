@@ -89,7 +89,9 @@ class PlaybackService : MediaSessionService() {
         session = MediaSession.Builder(this, player)
             .setCallback(Callback())
             // Notification artwork goes through the gated client with the HTTP setting of the item's source.
-            .setBitmapLoader(ArtworkLoader(container.http) { DataSourceBitmapLoader.Builder(this).setDataSourceFactory(it).build() })
+            .setBitmapLoader(
+                ArtworkLoader(container.http, { id -> container.httpSources.value?.contains(id) == true }) { DataSourceBitmapLoader.Builder(this).setDataSourceFactory(it).build() },
+            )
             .setSessionActivity(
                 PendingIntent.getActivity(
                     this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
@@ -170,7 +172,7 @@ class PlaybackService : MediaSessionService() {
             .setUri(stream.url.toUri())
             .setMimeType(if (path.endsWith(".m3u8")) MimeTypes.APPLICATION_M3U8 else if (path.endsWith(".mpd")) MimeTypes.APPLICATION_MPD else null)
             .build()
-            .withArtworkPolicy(stream.policy.allowHttp)
+            .withArtworkSource(sourceId)
     }
 
     /** A finished recording plays from its file in the folder the user chose (no network, no headers). */
@@ -179,8 +181,7 @@ class PlaybackService : MediaSessionService() {
         val recording = container.db.recordings().playable(id, container.lock.unlockedNow()) ?: return null
         headersByMediaId[request.mediaId] = emptyMap()
         policyByMediaId[request.mediaId] = HttpPolicy.HTTPS_ONLY
-        val allowHttp = container.db.sources().get(recording.sourceId)?.allowHttp == true // for the channel's logo
-        return request.buildUpon().setUri(recording.fileUri!!.toUri()).setMimeType(MimeTypes.VIDEO_MP2T).build().withArtworkPolicy(allowHttp)
+        return request.buildUpon().setUri(recording.fileUri!!.toUri()).setMimeType(MimeTypes.VIDEO_MP2T).build().withArtworkSource(recording.sourceId) // the channel's logo
     }
 
     /**
@@ -202,7 +203,7 @@ class PlaybackService : MediaSessionService() {
         val sourceId = MediaIds.parse(mediaId)?.first
         // The setting is read again for each request: allowing HTTP is withdrawn from a stream that is playing when the user turns it off.
         // Unknown yet (null): the setting resolved for the item stands.
-        streamRequests.use(headersByMediaId[mediaId].orEmpty(), policyByMediaId[mediaId] ?: HttpPolicy.HTTPS_ONLY) { container.httpSources.value?.contains(sourceId) ?: true }
+        streamRequests.use(headersByMediaId[mediaId].orEmpty(), policyByMediaId[mediaId] ?: HttpPolicy.HTTPS_ONLY) { sourceId == null || (container.httpSources.value?.contains(sourceId) ?: true) }
     }
 
     /**

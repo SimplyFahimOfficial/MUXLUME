@@ -14,10 +14,15 @@ import okhttp3.OkHttpClient
 
 /**
  * Notification and lock-screen artwork, loaded with the HTTP setting of the source the playing item belongs to
- * ([MediaIds.EXTRA_ARTWORK_HTTP], set by the service). A request without that mark, and one made for a bare URI, is HTTPS only.
+ * ([MediaIds.EXTRA_ARTWORK_SOURCE], set by the service), asked [allowsHttp] when the image is loaded so a change applies to the next one.
+ * A request without that mark, and one made for a bare URI, is HTTPS only.
  */
 @UnstableApi
-internal class ArtworkLoader(private val client: OkHttpClient, private val newLoader: (OkHttpDataSource.Factory) -> BitmapLoader) : BitmapLoader {
+internal class ArtworkLoader(
+    private val client: OkHttpClient,
+    private val allowsHttp: (sourceId: Long) -> Boolean,
+    private val newLoader: (OkHttpDataSource.Factory) -> BitmapLoader,
+) : BitmapLoader {
     private fun loader(policy: HttpPolicy) =
         newLoader(OkHttpDataSource.Factory(Call.Factory { req -> client.newCall(req.newBuilder().tag(HttpPolicy::class.java, policy).build()) }))
 
@@ -27,6 +32,12 @@ internal class ArtworkLoader(private val client: OkHttpClient, private val newLo
     override fun supportsMimeType(mimeType: String) = https.supportsMimeType(mimeType)
     override fun decodeBitmap(data: ByteArray): ListenableFuture<Bitmap> = https.decodeBitmap(data)
     override fun loadBitmap(uri: Uri): ListenableFuture<Bitmap> = https.loadBitmap(uri)
-    override fun loadBitmapFromMetadata(metadata: MediaMetadata): ListenableFuture<Bitmap>? =
-        (if (metadata.extras?.getBoolean(MediaIds.EXTRA_ARTWORK_HTTP) == true) http else https).loadBitmapFromMetadata(metadata)
+    override fun loadBitmapFromMetadata(metadata: MediaMetadata): ListenableFuture<Bitmap>? {
+        val source = metadata.extras?.getLong(MediaIds.EXTRA_ARTWORK_SOURCE, NO_SOURCE) ?: NO_SOURCE
+        return (if (source != NO_SOURCE && allowsHttp(source)) http else https).loadBitmapFromMetadata(metadata)
+    }
+
+    private companion object {
+        const val NO_SOURCE = -1L
+    }
 }

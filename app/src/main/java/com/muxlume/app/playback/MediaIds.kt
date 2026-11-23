@@ -21,10 +21,10 @@ object MediaIds {
     const val EXTRA_PRIMARY = "muxlume.primary"
 
     /**
-     * Whether the source an item belongs to allows plain HTTP, so its notification artwork may use it. Set by the playback service from
-     * the database, never taken from a controller; absent means HTTPS only.
+     * The source an item's artwork belongs to, whose HTTP setting decides how the notification image is fetched. Set by the playback
+     * service from the database, never taken from a controller; absent means HTTPS only.
      */
-    const val EXTRA_ARTWORK_HTTP = "muxlume.artwork_http"
+    const val EXTRA_ARTWORK_SOURCE = "muxlume.artwork_source"
     private const val RECORDING_PREFIX = "rec|"
 
     fun of(sourceId: Long, stableKey: String) = "$sourceId|$stableKey"
@@ -83,9 +83,9 @@ object MediaIds {
         item.mediaMetadata.extras?.getString(EXTRA_KIND)?.let { runCatching { ItemKind.valueOf(it) }.getOrNull() } ?: ItemKind.LIVE
 }
 
-/** [item] with the artwork setting of its source: what the notification artwork may use. */
-fun MediaItem.withArtworkPolicy(allowHttp: Boolean): MediaItem = buildUpon().setMediaMetadata(
-    mediaMetadata.buildUpon().setExtras(Bundle(mediaMetadata.extras ?: Bundle()).apply { putBoolean(MediaIds.EXTRA_ARTWORK_HTTP, allowHttp) }).build(),
+/** This item with the source its notification artwork belongs to. */
+fun MediaItem.withArtworkSource(sourceId: Long): MediaItem = buildUpon().setMediaMetadata(
+    mediaMetadata.buildUpon().setExtras(Bundle(mediaMetadata.extras ?: Bundle()).apply { putLong(MediaIds.EXTRA_ARTWORK_SOURCE, sourceId) }).build(),
 ).build()
 
 /** The id of the channel the user chose: the item's own unless it is another server of one. */
