@@ -40,7 +40,6 @@ internal class ArtworkLoader(
     override fun loadBitmap(uri: Uri): ListenableFuture<Bitmap> = https.loadBitmap(uri)
     override fun loadBitmapFromMetadata(metadata: MediaMetadata): ListenableFuture<Bitmap>? {
         if (metadata.artworkData == null && metadata.artworkUri == null) return null // nothing to load: the contract's answer, not a failure
-        if (metadata.artworkData == null && metadata.artworkUri == null) return null // nothing to load: the contract's answer, not a failure
         val source = metadata.extras?.getLong(MediaIds.EXTRA_ARTWORK_SOURCE, NO_SOURCE) ?: NO_SOURCE
         if (source == NO_SOURCE) return https.loadBitmapFromMetadata(metadata)
         return scope.future { (if (allowsHttp(source)) http else https).loadBitmapFromMetadata(metadata)?.await() ?: throw IOException("No artwork") }
