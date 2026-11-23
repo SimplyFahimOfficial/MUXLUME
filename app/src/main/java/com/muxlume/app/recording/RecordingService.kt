@@ -42,7 +42,6 @@ import java.util.concurrent.ConcurrentHashMap
 class RecordingService : Service() {
     private val container get() = (application as MuxlumeApp).container
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val jobs = ConcurrentHashMap<Long, Job>()
     @Volatile private var timedOut = false
     @Volatile private var lastStartId = 0
 
@@ -60,10 +59,8 @@ class RecordingService : Service() {
                 jobs[id] = job
                 job.invokeOnCompletion {
                     jobs.remove(id)
-                    publishBusy()
                     if (jobs.isEmpty()) stopSelf(lastStartId)
                 }
-                publishBusy()
                 job.start()
             }
             ACTION_STOP -> (if (id > 0) listOfNotNull(jobs[id]) else jobs.values.toList()).forEach { it.cancel() }
@@ -83,7 +80,6 @@ class RecordingService : Service() {
 
     override fun onDestroy() {
         scope.cancel()
-        busy = false
         super.onDestroy()
     }
 
@@ -117,14 +113,8 @@ class RecordingService : Service() {
             record(id)
         } finally {
             jobs.remove(id)
-            publishBusy()
             if (jobs.isEmpty()) stopSelf(lastStartId) else refreshNotification()
         }
-    }
-
-    /** Tells the rest of the app whether a recording is being prepared, written or closed, from the moment it was asked to start. */
-    private fun publishBusy() {
-        busy = jobs.isNotEmpty()
     }
 
     /** Everything a recording needs before it starts; [prepare] throws [RecordingException] when something is missing. */
@@ -183,8 +173,10 @@ class RecordingService : Service() {
          * True while a recording job exists in this process, also before its row says RECORDING (the stream is resolved and the file
          * created first) and until its file is closed: Delete all data waits on it, because the database cannot say.
          */
-        @Volatile var busy = false
-            private set
+        val busy: Boolean get() = jobs.isNotEmpty()
+
+        // Read directly, never a cached copy: a finishing job and a starting one would overwrite each other's answer.
+        private val jobs = ConcurrentHashMap<Long, Job>()
 
         const val ACTION_START = "com.muxlume.app.RECORDING_START"
         const val ACTION_STOP = "com.muxlume.app.RECORDING_STOP"
