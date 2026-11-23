@@ -73,6 +73,7 @@ class EpgRepositoryTest {
         val id = sources.save(SourceInput.M3uUrl("S", server.url("/list.m3u").toString(), allowHttp = true, guideUrl = guideUrl))
         serve(playlist("#EXTINF:-1 tvg-id=\"BBC1.UK\",BBC One", "#EXTINF:-1,News 24 FHD", "#EXTINF:-1,Local Cable"))
         sources.refresh(id)
+        epg.setEnabled(id, true) // a guide is only downloaded while it is on
         return id
     }
 

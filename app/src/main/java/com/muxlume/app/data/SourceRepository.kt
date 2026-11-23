@@ -79,6 +79,7 @@ class SourceRepository(
     private val resolver: ContentResolver,
     private val res: Resources,
     private val linker: EpgLinker,
+    private val maxM3uEntries: Int = M3uParser.DEFAULT_MAX_ENTRIES,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     val sources: Flow<List<SourceEntity>> = db.sources().all()
@@ -245,7 +246,7 @@ class SourceRepository(
     }
 
     private suspend fun importM3u(source: SourceEntity, onProgress: (Int) -> Unit): ImportResult = open(source).use { stream ->
-        val parser = M3uParser(stream.bufferedReader(Charsets.UTF_8))
+        val parser = M3uParser(stream.bufferedReader(Charsets.UTF_8), maxEntries = maxM3uEntries)
         val seen = HashSet<String>()
         var live = 0
         var movies = 0
@@ -269,6 +270,9 @@ class SourceRepository(
                 onProgress(position)
             }
         }
+        // Before the last batch is staged: a playlist cut at the cap must not be published as if it were all of it. The catch in import()
+        // drops what was staged and records the error; the previous channels and last success stay.
+        if (parser.overflowed) throw IOException("The playlist has more than $maxM3uEntries entries")
         db.items().insertAll(batch)
         onProgress(position)
         if (position > 0) reuseKeys(source)

@@ -20,13 +20,14 @@ data class M3uEntry(
  *
  * It never holds the whole playlist in memory: entries are produced one at a time as the reader is
  * consumed. Lines longer than [maxLineLength] are skipped instead of buffered, at most [maxEntries]
- * entries are produced, and stream URLs with non-network schemes (file:, content:, javascript:, ...)
+ * entries are produced (a further playable entry sets [overflowed]: the playlist is bigger than the cap, which is not the end of the
+ * file), and stream URLs with non-network schemes (file:, content:, javascript:, ...)
  * are dropped so a playlist cannot point the player at local data.
  */
 class M3uParser(
     reader: Reader,
     private val maxLineLength: Int = 64 * 1024,
-    private val maxEntries: Int = 500_000,
+    private val maxEntries: Int = DEFAULT_MAX_ENTRIES,
 ) : Iterator<M3uEntry> {
 
     private val lines = BoundedLineReader(reader, maxLineLength)
@@ -42,6 +43,10 @@ class M3uParser(
     var skipped = 0
         private set
     var produced = 0
+        private set
+
+    /** True when another playable entry followed the [maxEntries]th: the playlist is bigger than the cap, so what was produced is not all of it. */
+    var overflowed = false
         private set
 
     private var next: M3uEntry? = null
@@ -63,7 +68,7 @@ class M3uParser(
     }
 
     private fun advance(): M3uEntry? {
-        while (produced < maxEntries) {
+        while (!overflowed) {
             val raw = lines.readLine() ?: break
             if (raw === BoundedLineReader.TOO_LONG) {
                 skipped++
@@ -126,6 +131,10 @@ class M3uParser(
             skipped++
             return null
         }
+        if (produced >= maxEntries) {
+            overflowed = true // reading on past the cap is how a playlist that fits exactly differs from one that was cut off
+            return null
+        }
         val name = inf?.title?.takeIf { it.isNotBlank() } ?: inf?.attrs?.get("tvg-name") ?: fallbackName(url)
         val group = inf?.attrs?.get("group-title")?.takeIf { it.isNotBlank() } ?: grp ?: ""
         produced++
@@ -158,6 +167,7 @@ class M3uParser(
     }
 
     companion object {
+        const val DEFAULT_MAX_ENTRIES = 500_000
         private const val MAX_TEXT = 512
         private const val MAX_HEADER = 512
         private val VOD_EXTENSIONS = setOf("mp4", "mkv", "avi", "mov", "webm", "m4v")
