@@ -42,6 +42,7 @@ import java.util.concurrent.ConcurrentHashMap
 class RecordingService : Service() {
     private val container get() = (application as MuxlumeApp).container
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val jobs = ConcurrentHashMap<Long, Job>() // this instance's: it decides when this instance stops
     @Volatile private var timedOut = false
     @Volatile private var lastStartId = 0
 
@@ -57,7 +58,9 @@ class RecordingService : Service() {
                 // Lazy: registered before it can finish, and a Stop that comes before it starts still ends it (and the service).
                 val job = scope.launch(start = CoroutineStart.LAZY) { runRecording(id) }
                 jobs[id] = job
+                live += job
                 job.invokeOnCompletion {
+                    live -= job // only once the job, its file close included, has ended
                     jobs.remove(id)
                     if (jobs.isEmpty()) stopSelf(lastStartId)
                 }
@@ -173,10 +176,10 @@ class RecordingService : Service() {
          * True while a recording job exists in this process, also before its row says RECORDING (the stream is resolved and the file
          * created first) and until its file is closed: Delete all data waits on it, because the database cannot say.
          */
-        val busy: Boolean get() = jobs.isNotEmpty()
+        val busy: Boolean get() = live.isNotEmpty()
 
-        // Read directly, never a cached copy: a finishing job and a starting one would overwrite each other's answer.
-        private val jobs = ConcurrentHashMap<Long, Job>()
+        // A set read live, never a cached flag: a finishing job and a starting one would overwrite each other's answer.
+        private val live = ConcurrentHashMap.newKeySet<Job>()
 
         const val ACTION_START = "com.muxlume.app.RECORDING_START"
         const val ACTION_STOP = "com.muxlume.app.RECORDING_STOP"
