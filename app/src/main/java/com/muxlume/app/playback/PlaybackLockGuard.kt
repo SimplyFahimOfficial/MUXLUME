@@ -52,7 +52,7 @@ internal class PlaybackLockGuard(
     suspend fun stopIfRestricted(player: Player) {
         while (true) {
             val item = player.currentMediaItem ?: return
-            val restricted = isRestricted(item)
+            val restricted = isRestricted(item) && isRestricted(item) // the lock may have reopened while the database was read: ask again before stopping
             val now = player.currentMediaItem
             if (now == null || now.mediaId != item.mediaId || now.primaryId != item.primaryId) continue // changed while checking: judge the new one
             if (!restricted) return
