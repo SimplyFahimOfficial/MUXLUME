@@ -23,7 +23,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
-import org.robolectric.shadows.ShadowLooper
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
@@ -55,9 +54,9 @@ class ArtworkComposeTest {
         val c = container
         val id = runBlocking { c.db.sources().insert(SourceEntity(name = "S", type = SourceType.M3U_URL, secret = "x", label = "l", allowHttp = true, createdAt = 0)) }
         val other = runBlocking { c.db.sources().insert(SourceEntity(name = "O", type = SourceType.M3U_URL, secret = "x", label = "l", allowHttp = false, createdAt = 0)) }
-        assertThat(c.allowsHttp(id)).isTrue() // the playback service's notification artwork asks like this, possibly before any screen did
-        assertThat(c.allowsHttp(other)).isFalse()
-        assertThat(c.allowsHttp(999)).isFalse()
+        assertThat(runBlocking { c.allowsHttp(id) }).isTrue() // the playback service's notification artwork asks like this, possibly before any screen did
+        assertThat(runBlocking { c.allowsHttp(other) }).isFalse()
+        assertThat(runBlocking { c.allowsHttp(999) }).isFalse()
     }
 
     @Test
@@ -70,10 +69,7 @@ class ArtworkComposeTest {
         assertThat(server.requestCount).isEqualTo(0) // the source does not allow HTTP: nothing is sent
 
         runBlocking { c.db.sources().update(source.copy(id = id, allowHttp = true)) } // the user allows it in Edit
-        compose.waitUntil(20_000) {
-            ShadowLooper.idleMainLooper()
-            server.requestCount == 1
-        }
+        compose.waitUntil(20_000) { server.requestCount == 1 }
         assertThat(server.takeRequest().url.encodedPath).isEqualTo("/logo.png")
     }
 }

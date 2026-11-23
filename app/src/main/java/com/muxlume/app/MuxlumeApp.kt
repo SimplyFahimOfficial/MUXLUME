@@ -48,7 +48,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -68,8 +67,8 @@ class AppContainer(context: Context) {
     val sources by lazy { SourceRepository(db, http, SecretBox(), app.contentResolver, app.resources, linker) }
     /** Sources that allow plain HTTP (null until the database has answered): the artwork of those sources may use it, and a stream that is playing loses it when its source is no longer in here. */
     val httpSources: StateFlow<Set<Long>?> by lazy { db.sources().httpIds().map<List<Long>, Set<Long>?> { it.toSet() }.stateIn(appScope, SharingStarted.Eagerly, null) }
-    /** Whether [sourceId] allows plain HTTP right now, from the database while [httpSources] has not been filled yet. For code off the main thread. */
-    fun allowsHttp(sourceId: Long): Boolean = httpSources.value?.contains(sourceId) ?: runBlocking { db.sources().get(sourceId)?.allowHttp == true }
+    /** Whether [sourceId] allows plain HTTP right now: [httpSources], or the database while that has not been filled yet. */
+    suspend fun allowsHttp(sourceId: Long): Boolean = httpSources.value?.contains(sourceId) ?: (db.sources().get(sourceId)?.allowHttp == true)
     val playlistRefresher by lazy { PlaylistRefresher(sources) }
     val backup by lazy { BackupRepository(db, sources, settings, epg) }
     val streams by lazy { StreamResolver(db, sources) }

@@ -90,7 +90,7 @@ class PlaybackService : MediaSessionService() {
             .setCallback(Callback())
             // Notification artwork goes through the gated client with the HTTP setting of the item's source.
             .setBitmapLoader(
-                ArtworkLoader(container.http, container::allowsHttp) { DataSourceBitmapLoader.Builder(this).setDataSourceFactory(it).build() },
+                ArtworkLoader(container.http, scope, container::allowsHttp) { DataSourceBitmapLoader.Builder(this).setDataSourceFactory(it).build() },
             )
             .setSessionActivity(
                 PendingIntent.getActivity(

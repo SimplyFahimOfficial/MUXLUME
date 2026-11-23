@@ -9,18 +9,24 @@ import androidx.media3.datasource.DataSourceBitmapLoader
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import com.google.common.util.concurrent.ListenableFuture
 import com.muxlume.app.core.net.HttpPolicy
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.guava.await
+import kotlinx.coroutines.guava.future
 import okhttp3.Call
 import okhttp3.OkHttpClient
+import java.io.IOException
 
 /**
  * Notification and lock-screen artwork, loaded with the HTTP setting of the source the playing item belongs to
- * ([MediaIds.EXTRA_ARTWORK_SOURCE], set by the service), asked [allowsHttp] when the image is loaded so a change applies to the next one.
- * A request without that mark, and one made for a bare URI, is HTTPS only.
+ * ([MediaIds.EXTRA_ARTWORK_SOURCE], set by the service). [allowsHttp] is asked when the image is loaded, so a change applies to the next
+ * one, and it may take a moment (the settings are read from the database at a cold start): the image is requested once it has answered,
+ * on the caller's thread nothing waits. A request without that mark, and one made for a bare URI, is HTTPS only.
  */
 @UnstableApi
 internal class ArtworkLoader(
     private val client: OkHttpClient,
-    private val allowsHttp: (sourceId: Long) -> Boolean,
+    private val scope: CoroutineScope,
+    private val allowsHttp: suspend (sourceId: Long) -> Boolean,
     private val newLoader: (OkHttpDataSource.Factory) -> BitmapLoader,
 ) : BitmapLoader {
     private fun loader(policy: HttpPolicy) =
@@ -34,7 +40,8 @@ internal class ArtworkLoader(
     override fun loadBitmap(uri: Uri): ListenableFuture<Bitmap> = https.loadBitmap(uri)
     override fun loadBitmapFromMetadata(metadata: MediaMetadata): ListenableFuture<Bitmap>? {
         val source = metadata.extras?.getLong(MediaIds.EXTRA_ARTWORK_SOURCE, NO_SOURCE) ?: NO_SOURCE
-        return (if (source != NO_SOURCE && allowsHttp(source)) http else https).loadBitmapFromMetadata(metadata)
+        if (source == NO_SOURCE) return https.loadBitmapFromMetadata(metadata)
+        return scope.future { (if (allowsHttp(source)) http else https).loadBitmapFromMetadata(metadata)?.await() ?: throw IOException("No artwork") }
     }
 
     private companion object {

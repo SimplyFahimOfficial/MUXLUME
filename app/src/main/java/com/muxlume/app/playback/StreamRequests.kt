@@ -8,8 +8,9 @@ import okhttp3.OkHttpClient
 
 /**
  * How the player's requests are made: through the app's gated client, with the headers and the HTTP setting of the source that is
- * playing. Stream, playlist and segment requests run on loader threads and read the current values when the call is made, so one
- * source's opt-in and headers never apply to the streams of another source once the player has moved on.
+ * playing. Stream, playlist and segment requests run on loader threads and read the current values when the call is made, as one value:
+ * a request never mixes two items' headers and setting. A request made after a switch takes the new item's values; the player
+ * releases the old item, which bounds that window.
  */
 @UnstableApi
 internal class StreamRequests(private val client: OkHttpClient) {
