@@ -197,6 +197,7 @@ class EpgRefreshCoordinationTest {
         worker.await()
         manual.await()
 
+        assertThat(requested.count { it == "/guide.xml" }).isEqualTo(1) // the manual refresh used the worker's guide
         val tag = titles(id).first().substringBefore(' ')
         assertWholeGuide(id, tag, BIG)
         assertThat(sources.get(id)!!.epgPrograms).isEqualTo(BIG)
@@ -402,9 +403,9 @@ class EpgRefreshCoordinationTest {
     }
 
     private companion object {
-        const val SIZE = 3_000
+        const val SIZE = 4_000
         const val BIG = 15_000
-        const val STAGED_BY = 2_100 // above the 2,000 rows of a staging batch
+        const val STAGED_BY = 2_600 // well above the 2,000 rows of a staging batch: the readers in front of the parser hold some bytes unparsed
         const val STEP = 10L
         const val POLL_MS = 20L
         const val GATE_SECONDS = 20L

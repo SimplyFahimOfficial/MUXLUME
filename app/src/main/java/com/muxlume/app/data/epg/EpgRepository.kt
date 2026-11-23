@@ -110,9 +110,9 @@ class EpgRepository(
 
     private suspend fun refreshAndPublish(lane: Lane, epoch: Long, source: SourceEntity, url: HttpUrl): Int {
         val sourceId = source.id
-        lane.feed = url
-        dao.discardPending(sourceId) // left over if the app was killed during an earlier refresh; nobody else stages while this one has its turn
         try {
+            lane.feed = url
+            dao.discardPending(sourceId) // left over if the app was killed during an earlier refresh; nobody else stages while this one has its turn
             return download(lane, epoch, sourceId, url, request(url, HttpPolicy.of(source.allowHttp)))
         } catch (e: CancellationException) {
             withContext(NonCancellable) { dao.discardPending(sourceId) }

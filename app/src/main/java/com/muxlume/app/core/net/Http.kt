@@ -62,14 +62,17 @@ object CleartextGate {
 /** A request for [url] that may only use plain HTTP if [policy] allows it. */
 fun request(url: HttpUrl, policy: HttpPolicy): Request = Request.Builder().url(url).tag(HttpPolicy::class.java, policy).build()
 
-/** Runs [block], cancelling the blocked [Call] if the coroutine is cancelled (OkHttp's blocking calls ignore coroutine cancellation). */
+/**
+ * Runs [block], cancelling the blocked [Call] if the coroutine is cancelled (OkHttp's blocking calls ignore coroutine cancellation).
+ * Call it from a dispatcher with a spare thread (`Dispatchers.IO`): the watcher that cancels the call runs while [block] is blocked.
+ */
 suspend fun <T> Call.cancelWithCoroutine(block: suspend () -> T): T = coroutineScope {
     // Undispatched, so it is waiting for the cancellation before the blocking call starts; and a scope that is already cancelled never starts one.
     val watcher = launch(start = CoroutineStart.UNDISPATCHED) {
         try {
             awaitCancellation()
         } catch (e: CancellationException) {
-            cancel() // harmless once the call is done
+            this@cancelWithCoroutine.cancel() // the call, not the scope; harmless once the call is done
             throw e
         }
     }
