@@ -86,6 +86,7 @@ fun SettingsScreen(nav: Nav) {
     val settings by c.settings.settings.collectAsStateWithLifecycle(AppSettings())
     val scope = rememberCoroutineScope()
     var confirm by remember { mutableStateOf<String?>(null) }
+    val resetting by c.dataReset.running.collectAsStateWithLifecycle()
 
     Column(Modifier.fillMaxSize().background(MuxTheme.Background)) {
         TopHeader(stringResource(R.string.settings_settings), onSearch = null, onBack = { nav.back() })
@@ -140,7 +141,11 @@ fun SettingsScreen(nav: Nav) {
                 style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary, modifier = Modifier.padding(horizontal = Mux.ScreenPadding, vertical = 8.dp),
             )
             LinkRow(Icons.Rounded.History, stringResource(R.string.settings_clear_watch_history), stringResource(R.string.settings_resume_positions_and_recently_watched), { confirm = "history" })
-            LinkRow(Icons.Rounded.DeleteForever, stringResource(R.string.settings_delete_all_data), stringResource(R.string.settings_playlists_credentials_favorites_history_and), { confirm = "all" })
+            LinkRow(
+                Icons.Rounded.DeleteForever, stringResource(R.string.settings_delete_all_data),
+                stringResource(if (resetting) R.string.settings_deleting else R.string.settings_playlists_credentials_favorites_history_and),
+                { if (!resetting) confirm = "all" }, // a second reset would only run behind the first
+            )
         }
     }
 
@@ -152,23 +157,21 @@ fun SettingsScreen(nav: Nav) {
             confirmButton = {
                 TextButton({
                     confirm = null
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            if (what == "all") {
-                                c.db.clearAllTables()
-                                c.crashLog.clear()
-                                c.lock.clear() // the PIN goes with everything else; this is how a forgotten PIN is reset
-                                c.settings.setRecordingFolder(null) // the folder permission is released just below; the files stay where they are
-                                context.cacheDir.resolve("images").deleteRecursively()
-                                context.contentResolver.persistedUriPermissions.forEach {
-                                    context.contentResolver.releasePersistableUriPermission(it.uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                            } else {
-                                c.db.history().clear()
+                    if (what == "all") {
+                        if (c.dataReset.running.value) return@TextButton
+                        // In the app's scope: leaving this screen must not stop a reset half way. Success is reported once everything is gone.
+                        c.appScope.launch {
+                            val done = runCatching { c.dataReset.run() }.isSuccess
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, res.getString(if (done) R.string.settings_all_data_deleted else R.string.settings_delete_failed), Toast.LENGTH_SHORT).show()
+                                if (done) nav.home()
                             }
                         }
-                        Toast.makeText(context, res.getString(if (what == "all") R.string.settings_all_data_deleted else R.string.settings_watch_history_cleared), Toast.LENGTH_SHORT).show()
-                        if (what == "all") nav.home()
+                    } else {
+                        scope.launch {
+                            withContext(Dispatchers.IO) { c.db.history().clear() }
+                            Toast.makeText(context, res.getString(R.string.settings_watch_history_cleared), Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }) { Text(stringResource(if (what == "all") R.string.settings_delete else R.string.settings_clear), color = MuxTheme.Error) }
             },

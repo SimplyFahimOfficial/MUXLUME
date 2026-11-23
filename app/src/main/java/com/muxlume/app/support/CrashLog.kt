@@ -34,8 +34,9 @@ class CrashLog(private val file: File, private val header: () -> String) {
 
     fun read(): String? = if (exists()) runCatching { file.readText() }.getOrNull() else null
 
+    /** Throws if the report is still there afterwards. */
     fun clear() {
-        file.delete()
+        check(file.delete() || !file.exists()) { "The crash report could not be deleted" }
     }
 
     companion object {

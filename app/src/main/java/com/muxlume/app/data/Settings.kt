@@ -134,6 +134,11 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
     suspend fun setRecordTrailMinutes(minutes: Int) = store.edit { it[Keys.recordTrail] = minutes }
     suspend fun setRecordingFolder(uri: String?) = store.edit { if (uri == null) it.remove(Keys.recordingFolder) else it[Keys.recordingFolder] = uri }
 
+    /** Back to the first-run defaults: every setting, and the parental PIN that shares this file. */
+    suspend fun resetAll() {
+        store.edit { it.clear() }
+    }
+
     private fun themeOf(name: String) = runCatching { ThemeMode.valueOf(name) }.getOrDefault(ThemeMode.DARK)
     private fun accentOf(name: String) = runCatching { Accent.valueOf(name) }.getOrDefault(Accent.ORANGE)
 }

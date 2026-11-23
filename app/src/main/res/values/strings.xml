@@ -121,12 +121,14 @@
     <string name="settings_clear_watch_history">Clear watch history</string>
     <string name="settings_resume_positions_and_recently_watched">Resume positions and recently watched</string>
     <string name="settings_delete_all_data">Delete all data</string>
-    <string name="settings_playlists_credentials_favorites_history_and">Playlists, credentials, favorites, history and cached images</string>
+    <string name="settings_playlists_credentials_favorites_history_and">Playlists, credentials, favorites, history, settings and cached images</string>
     <string name="settings_delete_all_data_2">Delete all data?</string>
     <string name="settings_clear_watch_history_2">Clear watch history?</string>
-    <string name="settings_everything_muxlume_stored_on_this">Everything MUXLUME stored on this device is removed. This can\'t be undone.</string>
+    <string name="settings_everything_muxlume_stored_on_this">Everything MUXLUME stored on this device is removed: playlists and logins, favorites, history, your recordings list, settings, your PIN and its access to your recordings folder. Recording files in that folder and backup files you saved are yours and stay; delete them yourself. This can\'t be undone.</string>
     <string name="settings_resume_positions_and_the_recently">Resume positions and the recently watched list are removed.</string>
     <string name="settings_all_data_deleted">All data deleted</string>
+    <string name="settings_deleting">Deleting…</string>
+    <string name="settings_delete_failed">Couldn\'t delete everything. Try again.</string>
     <string name="settings_watch_history_cleared">Watch history cleared</string>
     <string name="settings_delete">Delete</string>
     <string name="settings_clear">Clear</string>

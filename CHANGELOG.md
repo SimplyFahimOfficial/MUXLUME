@@ -103,6 +103,13 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - The Support screen is more compact.
 
 ### Fixed
+- Parental lock: when the app relocks, a protected recording you were playing now stops too (it kept playing),
+  a channel that failed over to another server stops if the channel you chose is locked, and a channel change
+  made while the lock was being checked is no longer stopped by the answer for the previous channel.
+- Settings → Delete all data now also resets every setting (the next launch shows the welcome screen, as on a new install), releases
+  the write access to your recordings folder (only read access was released), stops playback and a running
+  recording first, can be repeated if it was interrupted, and reports success only when it is finished. Your recording
+  files and saved backups are not deleted; the confirmation and the privacy policy now say so.
 - Links to HLS streams without ".m3u8" now play (retried as HLS once).
 - Back gesture: the screen no longer shrinks and snaps at the end, and screens no longer show through each other
   while moving between screens (the TV guide screen also got its missing background).

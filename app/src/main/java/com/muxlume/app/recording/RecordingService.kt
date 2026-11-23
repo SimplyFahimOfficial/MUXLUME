@@ -20,6 +20,7 @@ import com.muxlume.app.data.db.RecordingState
 import com.muxlume.app.playback.ResolvedStream
 import com.muxlume.app.reminders.Notifications
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -41,7 +42,7 @@ import java.util.concurrent.ConcurrentHashMap
 class RecordingService : Service() {
     private val container get() = (application as MuxlumeApp).container
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val jobs = ConcurrentHashMap<Long, Job>()
+    private val jobs = ConcurrentHashMap<Long, Job>() // this instance's: it decides when this instance stops
     @Volatile private var timedOut = false
     @Volatile private var lastStartId = 0
 
@@ -53,7 +54,18 @@ class RecordingService : Service() {
         promote()
         val id = intent?.getLongExtra(EXTRA_ID, -1) ?: -1
         when (intent?.action) {
-            ACTION_START -> if (id > 0 && jobs[id] == null) jobs[id] = scope.launch { runRecording(id) }
+            ACTION_START -> if (id > 0 && jobs[id] == null) {
+                // Lazy: registered before it can finish, and a Stop that comes before it starts still ends it (and the service).
+                val job = scope.launch(start = CoroutineStart.LAZY) { runRecording(id) }
+                jobs[id] = job
+                live += job
+                job.invokeOnCompletion {
+                    live -= job // only once the job, its file close included, has ended
+                    jobs.remove(id)
+                    if (jobs.isEmpty()) stopSelf(lastStartId)
+                }
+                job.start()
+            }
             ACTION_STOP -> (if (id > 0) listOfNotNull(jobs[id]) else jobs.values.toList()).forEach { it.cancel() }
         }
         if (jobs.isEmpty()) stopSelf(startId)
@@ -160,6 +172,15 @@ class RecordingService : Service() {
     }
 
     companion object {
+        /**
+         * True while a recording job exists in this process, also before its row says RECORDING (the stream is resolved and the file
+         * created first) and until its file is closed: Delete all data waits on it, because the database cannot say.
+         */
+        val busy: Boolean get() = live.isNotEmpty()
+
+        // A set read live, never a cached flag: a finishing job and a starting one would overwrite each other's answer.
+        private val live = ConcurrentHashMap.newKeySet<Job>()
+
         const val ACTION_START = "com.muxlume.app.RECORDING_START"
         const val ACTION_STOP = "com.muxlume.app.RECORDING_STOP"
         const val EXTRA_ID = "recording_id"

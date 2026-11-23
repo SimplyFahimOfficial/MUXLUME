@@ -109,19 +109,7 @@ class PlaybackService : MediaSessionService() {
             )
             .build()
         scope.launch { savePositionsWhilePlaying(player) }
-        scope.launch { container.lock.unlocked.collect { if (!it) stopIfLocked(player) } }
-    }
-
-    /** The lock closed (timeout or "Lock now") while something from a locked group is playing: stop it and clear the notification. */
-    private suspend fun stopIfLocked(player: Player) {
-        val item = player.currentMediaItem ?: return
-        val (sourceId, key) = MediaIds.parse(item.mediaId) ?: return
-        val series = item.mediaMetadata.extras?.getString(MediaIds.EXTRA_PARENT)
-        if (container.db.items().isLockedKey(sourceId, series ?: key)) {
-            saveHistory(player)
-            player.stop()
-            player.clearMediaItems()
-        }
+        PlaybackLockGuard(container.db, container.lock::unlockedNow, ::saveHistoryLater).watch(scope, container.lock.unlocked, player)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
