@@ -101,6 +101,14 @@ class ArtworkLoaderTest {
     }
 
     @Test
+    fun `an item without artwork is answered with null, as the contract says, not with a failure`() {
+        allowed += 7
+        val none = MediaItem.Builder().setMediaId("7|k").setMediaMetadata(MediaMetadata.Builder().setTitle("No logo").setExtras(Bundle()).build()).build().withArtworkSource(7)
+        assertThat(loader.loadBitmapFromMetadata(none.mediaMetadata)).isNull()
+        assertThat(server.requestCount).isEqualTo(0)
+    }
+
+    @Test
     fun `an item's image waits for the source's setting when it is not known yet, and is then loaded as the setting says`() {
         server.enqueue(MockResponse.Builder().body(Buffer().write(png)).build())
         val known = CompletableDeferred<Boolean>() // a cold start: the settings are still being read from the database
