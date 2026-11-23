@@ -102,7 +102,10 @@ class AddSourceHttpTest {
         val xtream = FormState(Mode.XTREAM, "X", server = "http://p.example:8080", username = "u", password = "p")
         assertThat(xtream.canSubmit).isFalse()
         assertThat((xtream.copy(httpAcknowledged = true).toInput() as SourceInput.Xtream).allowHttp).isTrue()
-        assertThat((xtream.copy(server = "https://p.example", httpAcknowledged = true).toInput() as SourceInput.Xtream).allowHttp).isFalse() // an https account has no such choice
+        val secure = xtream.copy(server = "https://p.example")
+        assertThat(secure.canSubmit).isTrue() // an https account can still allow http artwork, off until ticked
+        assertThat((secure.toInput() as SourceInput.Xtream).allowHttp).isFalse()
+        assertThat((secure.copy(httpAcknowledged = true).toInput() as SourceInput.Xtream).allowHttp).isTrue()
     }
 
     @Test

@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -135,14 +136,17 @@ fun Artwork(url: String?, title: String, sourceId: Long?, modifier: Modifier = M
     val owners = remember(context) { (context.applicationContext as? MuxlumeApp)?.container?.httpSources ?: MutableStateFlow<Set<Long>?>(null) }
     val allowHttp = sourceId != null && owners.collectAsState().value?.contains(sourceId) == true
     Box(modifier.background(MuxTheme.Raised)) {
-        SubcomposeAsyncImage(
-            model = remember(url, allowHttp) { artworkRequest(context, url, allowHttp) },
-            contentDescription = null,
-            contentScale = contentScale,
-            modifier = Modifier.fillMaxSize(),
-            loading = { Placeholder(title, monogramSize) },
-            error = { Placeholder(title, monogramSize) },
-        )
+        // Keyed on allowHttp: Coil's default model comparison ignores request headers, so the painter would not restart when the source's setting arrives or changes.
+        key(allowHttp) {
+            SubcomposeAsyncImage(
+                model = remember(url) { artworkRequest(context, url, allowHttp) },
+                contentDescription = null,
+                contentScale = contentScale,
+                modifier = Modifier.fillMaxSize(),
+                loading = { Placeholder(title, monogramSize) },
+                error = { Placeholder(title, monogramSize) },
+            )
+        }
     }
 }
 

@@ -106,8 +106,8 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - Plain HTTP is allowed per playlist for everything that playlist owns. A playlist's logos and posters, and the notification artwork of its
   channels, used HTTP whenever any playlist allowed it; now only the playlist they belong to does (an image already cached is still shown).
   Allowing HTTP is withdrawn from a stream that is playing as soon as you turn it off for its playlist.
-- An https playlist (a link) can now allow its http:// channels: Add or edit shows the "allow unencrypted HTTP" choice for every playlist link,
-  off by default, and saving a playlist keeps it. Before, only an http:// link could be allowed, and saving a restored playlist with a new name
+- An https playlist (a link) can now allow its http:// channels: Add or edit shows the "allow unencrypted HTTP" choice for every playlist and account,
+  off by default, and saving keeps it. Before, only an http:// link could be allowed, and saving a restored playlist with a new name
   turned its choice off.
 - A playlist's Referer header no longer goes whole to other servers: a redirect target or an HLS segment on another origin gets only its origin
   (scheme and host), so a path, token or login in it is not passed to a CDN. Same-origin streams and the User-Agent are unchanged; a CDN that

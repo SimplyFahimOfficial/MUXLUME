@@ -40,7 +40,7 @@ source and is HTTPS only. Artwork of a source that allows HTTP is requested with
 that owns the image (Coil: a marker header turned into the tag inside the client; notifications: the
 playback service marks each item from the database); a cached image is shown whatever its owner's
 setting. A stream that is playing loses the setting when the source stops allowing it. The choice can
-be made for an https playlist too (Library → edit), because its channels may be http://. RTSP (which
+be made for an https playlist or account too (Library → edit), because its channels or artwork may be http://. RTSP (which
 bypasses OkHttp) is only played for sources with the opt-in. Redirects between https and http are
 never followed (`followSslRedirects(false)`, tested against a local TLS server).
 

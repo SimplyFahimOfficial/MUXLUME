@@ -165,14 +165,13 @@ data class FormState(
     }
 
     /**
-     * What is saved. A playlist (link or file) saves the HTTP choice as shown: its channels may be http:// even when its own address
-     * is https, so the choice is the user's, off until ticked. It is required (see [canSubmit]) when the address typed is http.
-     * An Xtream account has no control for it with an https address, so only an http address saves it.
+     * What is saved. The HTTP choice is saved as shown: a playlist's channels, and an account's artwork, may be http:// even when its
+     * own address is https, so the choice is the user's, off until ticked. It is required (see [canSubmit]) when the address typed is http.
      */
     fun toInput(): SourceInput = when (mode) {
         Mode.LINK -> SourceInput.M3uUrl(name, url, httpAcknowledged, guideUrl)
         Mode.FILE -> SourceInput.M3uFile(name, fileUri!!, fileName, httpAcknowledged, guideUrl)
-        Mode.XTREAM -> SourceInput.Xtream(name, server, username, password, usesHttp && httpAcknowledged)
+        Mode.XTREAM -> SourceInput.Xtream(name, server, username, password, httpAcknowledged)
     }
 
     /** Where the list comes from; only a change here needs a new download. */
@@ -352,8 +351,8 @@ private fun Form(s: FormState, vm: AddSourceViewModel, onPickFile: () -> Unit) {
             if (s.mode != Mode.XTREAM) {
                 Field(stringResource(R.string.add_source_guide_link), s.guideUrl, { v -> vm.edit { it.copy(guideUrl = v) } }, keyboard = KeyboardType.Uri, placeholder = "https://…/guide.xml")
             }
-            // A playlist (a file, or a link that is https itself) can list plain-HTTP streams; that is opt-in here instead of required up front.
-            if (s.usesHttp || s.mode != Mode.XTREAM) HttpWarning(s.httpAcknowledged, optional = !s.usesHttp) { on -> vm.edit { it.copy(httpAcknowledged = on) } }
+            // A playlist or account whose own address is https can still list plain-HTTP streams or artwork; that is opt-in here instead of required up front.
+            HttpWarning(s.httpAcknowledged, optional = !s.usesHttp, listsStreams = s.mode != Mode.XTREAM) { on -> vm.edit { it.copy(httpAcknowledged = on) } }
             s.accountInfo?.let { info ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.CheckCircle, null, tint = MuxTheme.Accent, modifier = Modifier.size(20.dp))
@@ -382,7 +381,7 @@ private fun Form(s: FormState, vm: AddSourceViewModel, onPickFile: () -> Unit) {
 }
 
 @Composable
-private fun HttpWarning(acknowledged: Boolean, optional: Boolean, onChange: (Boolean) -> Unit) {
+private fun HttpWarning(acknowledged: Boolean, optional: Boolean, listsStreams: Boolean, onChange: (Boolean) -> Unit) {
     Column(Modifier.fillMaxWidth().clip(Mux.CardShape).background(MuxTheme.Surface).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Warning, null, tint = MuxTheme.Accent)
@@ -395,7 +394,7 @@ private fun HttpWarning(acknowledged: Boolean, optional: Boolean, onChange: (Boo
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            (if (optional) stringResource(R.string.add_source_many_playlist_files_list_http) else "") +
+            (if (optional && listsStreams) stringResource(R.string.add_source_many_playlist_files_list_http) else "") +
                 stringResource(R.string.add_source_with_plain_http_anyone_on),
             style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
         )
