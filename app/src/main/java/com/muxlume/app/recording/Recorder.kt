@@ -3,13 +3,11 @@ package com.muxlume.app.recording
 import com.muxlume.app.core.net.HttpPolicy
 import com.muxlume.app.core.net.LimitedInputStream
 import com.muxlume.app.core.net.Urls
+import com.muxlume.app.core.net.cancelWithCoroutine
 import com.muxlume.app.core.net.request
 import com.muxlume.app.recording.RecordingException.Reason
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
@@ -242,19 +240,6 @@ class Recorder(
                 false
             }
         }
-    }
-
-    /** Runs [block], cancelling the blocked [Call] if the coroutine is cancelled (OkHttp's blocking calls ignore coroutine cancellation). */
-    private suspend fun <T> Call.cancelWithCoroutine(block: suspend () -> T): T = coroutineScope {
-        val watcher = launch {
-            try {
-                awaitCancellation()
-            } catch (e: CancellationException) {
-                cancel() // harmless once the call is done
-                throw e
-            }
-        }
-        try { block() } finally { watcher.cancel() }
     }
 
     private suspend fun Call.run(): Response = try {

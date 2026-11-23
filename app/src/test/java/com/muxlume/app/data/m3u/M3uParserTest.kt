@@ -137,6 +137,28 @@ class M3uParserTest {
         assertThat(parse(text, maxEntries = 10).first).hasSize(10)
     }
 
+    private fun entries(n: Int) = buildString { repeat(n) { append("#EXTINF:-1,C$it\nhttps://a.example/$it\n") } }
+
+    @Test
+    fun `exactly the limit is not an overflow, even with comments, blank lines and unplayable lines after the last entry`() {
+        val tail = "\n# trailing comment\n\n   \n#EXTVLCOPT:http-referrer=x\n#EXTINF:-1,Dangling\nfile:///not-playable\n#EXTINF:-1,Cut off\n"
+        val (list, parser) = parse("#EXTM3U\n" + entries(10) + tail, maxEntries = 10)
+        assertThat(list).hasSize(10)
+        assertThat(parser.overflowed).isFalse()
+        assertThat(parser.skipped).isEqualTo(2) // the unplayable URL and the #EXTINF that ended the file
+    }
+
+    @Test
+    fun `one playable entry over the limit is an overflow, and is not returned`() {
+        val (list, parser) = parse("#EXTM3U\n" + entries(11), maxEntries = 10)
+        assertThat(list).hasSize(10)
+        assertThat(parser.overflowed).isTrue()
+        assertThat(parser.produced).isEqualTo(10)
+        // Noise first, then the extra entry far down the file.
+        val (_, late) = parse("#EXTM3U\n" + entries(10) + "# c\n".repeat(50) + "\n\n" + entries(1), maxEntries = 10)
+        assertThat(late.overflowed).isTrue()
+    }
+
     @Test
     fun `large playlist streams quickly`() {
         val n = 200_000

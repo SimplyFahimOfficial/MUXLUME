@@ -40,6 +40,9 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
+/** Above one staging batch (1000 rows), so an overflow has staged rows to discard. */
+private const val LIMIT = 1_500
+
 @RunWith(AndroidJUnit4::class)
 // Plain Application: MuxlumeApp would start its own database and observers during the test.
 @Config(sdk = [35], application = android.app.Application::class)
@@ -373,6 +376,84 @@ class SourceRepositoryTest {
         first.await()
         second.await()
         assertThat(gate.requested).containsExactly("/list.m3u")
+    }
+
+    /** A repository with a small M3U entry cap. */
+    private fun capped(limit: Int): SourceRepository {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        return SourceRepository(db, Http.client(), PlainBox(), context.contentResolver, context.resources, EpgLinker(db), maxM3uEntries = limit)
+    }
+
+    private fun channels(n: Int, prefix: String = "c") = Array(n) { entry("$prefix$it", "https://cdn.example/$prefix$it.m3u8") }
+
+    @Test
+    fun `a playlist with exactly the entry limit imports, even with comments and blank lines after the last entry`(): Unit = runBlocking {
+        val small = capped(LIMIT)
+        val id = addM3u()
+        serve(m3u(*channels(LIMIT)) + "\n# trailing\n\n   \n#EXTINF:-1,Dangling\nfile:///not-playable\n")
+        val result = small.refresh(id)
+
+        assertThat(result.live).isEqualTo(LIMIT)
+        assertThat(names(id)).hasSize(LIMIT)
+        val source = repo.get(id)!!
+        assertThat(source.lastError).isNull()
+        assertThat(source.liveCount).isEqualTo(LIMIT)
+    }
+
+    @Test
+    fun `one entry over the limit fails, drops the staged rows and keeps the channels, favorites and last success`(): Unit = runBlocking {
+        val small = capped(LIMIT)
+        val id = addM3u()
+        serve(m3u(*channels(3, "old")))
+        small.refresh(id)
+        val oldKey = key(id, "old0")
+        db.favorites().add(FavoriteEntity(id, oldKey, 1))
+        val before = repo.get(id)!!
+
+        serve(m3u(*channels(LIMIT + 1, "new")))
+        val e = assertThrows(IOException::class.java) { runBlocking { small.refresh(id) } }
+
+        assertThat(e.message).contains("$LIMIT") // says what the limit is
+        assertThat(names(id)).containsExactly("old0", "old1", "old2").inOrder()
+        assertThat(db.items().favorites(ItemKind.LIVE, id, true).first().map { it.stableKey }).containsExactly(oldKey)
+        val after = repo.get(id)!!
+        assertThat(after.refreshedAt).isEqualTo(before.refreshedAt)
+        assertThat(after.liveCount).isEqualTo(3)
+        assertThat(after.lastError).contains("$LIMIT")
+        val staged = db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM items WHERE pending = 1").use { it.moveToFirst(); it.getInt(0) }
+        assertThat(staged).isEqualTo(0)
+
+        // The next refresh within the limit works and clears the error.
+        serve(m3u(*channels(2, "ok")))
+        small.refresh(id)
+        assertThat(names(id)).containsExactly("ok0", "ok1").inOrder()
+        assertThat(repo.get(id)!!.lastError).isNull()
+    }
+
+    @Test
+    fun `the limit counts playlist entries, so a duplicate counts, and duplicates are still merged`(): Unit = runBlocking {
+        val small = capped(LIMIT)
+        val id = addM3u()
+        serve(m3u(*channels(LIMIT - 1), entry("c0 again", "https://cdn.example/c0.m3u8"))) // LIMIT entries, one duplicate
+        val result = small.refresh(id)
+        assertThat(result.duplicates).isEqualTo(1)
+        assertThat(names(id)).hasSize(LIMIT - 1)
+
+        serve(m3u(*channels(LIMIT), entry("c0 again", "https://cdn.example/c0.m3u8"))) // LIMIT + 1 entries
+        assertThrows(IOException::class.java) { runBlocking { small.refresh(id) } }
+        assertThat(names(id)).hasSize(LIMIT - 1)
+    }
+
+    @Test
+    fun `a valid playlist emptied on purpose is still applied with a small limit`(): Unit = runBlocking {
+        val small = capped(LIMIT)
+        val id = addM3u()
+        serve(m3u(*channels(3)))
+        small.refresh(id)
+        serve(m3u())
+        small.refresh(id)
+        assertThat(names(id)).isEmpty()
+        assertThat(repo.get(id)!!.lastError).isNull()
     }
 
     private val one = "https://cdn.example/1.m3u8"

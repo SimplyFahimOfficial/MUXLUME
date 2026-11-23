@@ -1,5 +1,10 @@
 package com.muxlume.app.core.net
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import okhttp3.Call
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
@@ -54,6 +59,19 @@ object CleartextGate {
 
 /** A request for [url] that may only use plain HTTP if [policy] allows it. */
 fun request(url: HttpUrl, policy: HttpPolicy): Request = Request.Builder().url(url).tag(HttpPolicy::class.java, policy).build()
+
+/** Runs [block], cancelling the blocked [Call] if the coroutine is cancelled (OkHttp's blocking calls ignore coroutine cancellation). */
+suspend fun <T> Call.cancelWithCoroutine(block: suspend () -> T): T = coroutineScope {
+    val watcher = launch {
+        try {
+            awaitCancellation()
+        } catch (e: CancellationException) {
+            cancel() // harmless once the call is done
+            throw e
+        }
+    }
+    try { block() } finally { watcher.cancel() }
+}
 
 object Http {
     const val USER_AGENT = "MUXLUME/1.0 (Android)"

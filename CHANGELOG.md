@@ -103,6 +103,13 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - The Support screen is more compact.
 
 ### Fixed
+- TV guide: a refresh from the screen and the background update no longer mix their downloads into one guide, turning the guide off
+  (or off and on) while it downloads leaves it empty, and a guide downloaded from a feed you have since changed is not shown. Refreshes
+  of one source take turns; other sources are not held up; cancelling a refresh stops its download at once, and a refresh that gave up
+  no longer records an error.
+- Playlists over the limit of 500,000 entries failed silently: the first 500,000 were published as if they were the whole playlist.
+  The refresh now fails with an error and keeps the previous channels, favorites and last-success time. A playlist with exactly that many
+  entries still imports.
 - Parental lock: when the app relocks, a protected recording you were playing now stops too (it kept playing),
   a channel that failed over to another server stops if the channel you chose is locked, and a channel change
   made while the lock was being checked is no longer stopped by the answer for the previous channel.
