@@ -83,7 +83,8 @@ class GuideSettingsViewModel(private val c: AppContainer) : ViewModel() {
     fun setEnabled(id: Long, on: Boolean) {
         c.appScope.launch {
             c.epg.setEnabled(id, on)
-            // Turned off and on again: the refresh that was running ends on its own (the repository releases it); this one starts after it.
+            // Turned off and on again: the repository releases the refresh that was running. refresh() returns early while this id is in
+            // `refreshing`, so wait for that one to leave the set; otherwise this one is swallowed and the guide stays empty until the worker runs.
             if (on) {
                 refreshing.first { id !in it }
                 refresh(id)

@@ -134,6 +134,9 @@ class EpgRefreshCoordinationTest {
 
         fun nextOpen(): CountDownLatch = CountDownLatch(1).also { next.set(it) }
 
+        /** Whether the hook of [atOpen] has run: a test whose hook never fired (the count drifted) did not test what it says. */
+        fun hookFired() = hook == null
+
         fun atOpen(n: Int, action: () -> Unit) {
             opens.set(0)
             hook = n to action
@@ -310,6 +313,7 @@ class EpgRefreshCoordinationTest {
         box.atOpen(2) { runBlocking(Dispatchers.IO) { epg.setEnabled(id, false) } } // after the refresh read the source as on, before its call exists
         epg.refresh(id)
 
+        assertThat(box.hookFired()).isTrue()
         assertThat(requested).doesNotContain("/guide.xml")
         assertThat(titles(id)).isEmpty()
         assertThat(staged(id)).isEqualTo(0)
@@ -323,6 +327,7 @@ class EpgRefreshCoordinationTest {
         // The user saves the new feed after the refresh read the source, before it has a call that could be cancelled.
         box.atOpen(2) { runBlocking(Dispatchers.IO) { sources.save(SourceInput.M3uUrl("s", server.url("/s.m3u").toString(), allowHttp = true, guideUrl = server.url("/b.xml").toString()), id) } }
         epg.refresh(id)
+        assertThat(box.hookFired()).isTrue()
         assertThat(requested).doesNotContain("/a.xml")
         assertThat(titles(id)).isEmpty()
 
@@ -343,6 +348,7 @@ class EpgRefreshCoordinationTest {
             }
         }
         epg.refresh(id)
+        assertThat(box.hookFired()).isTrue()
         assertWholeGuide(id, "B")
     }
 
