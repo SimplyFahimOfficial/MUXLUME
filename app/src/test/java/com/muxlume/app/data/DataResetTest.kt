@@ -2,11 +2,13 @@ package com.muxlume.app.data
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
+import com.muxlume.app.AppContainer
 import com.muxlume.app.PlainBox
 import com.muxlume.app.core.net.Http
 import com.muxlume.app.data.db.FavoriteEntity
@@ -80,15 +82,34 @@ class DataResetTest {
         val grants = FakeGrants()
         var playbackStops = 0
         var recordingStops = 0
+        val order = mutableListOf<String>()
 
-        fun reset(recordingFinishes: Boolean = true, waitMs: Long = 2_000) = DataReset(
-            db, settings, lock,
-            ResetTargets(CrashLog(crashFile) { "header" }, imageCache, grants, { playbackStops++ }) {
-                recordingStops++
-                if (recordingFinishes) db.openHelper.writableDatabase.execSQL("UPDATE recordings SET state = 'DONE' WHERE state = 'RECORDING'")
-            },
-            recordingWaitMs = waitMs,
-        )
+        /** A recording job the service has but whose row is not RECORDING yet (it is resolving the stream and creating the file). */
+        var preparing = false
+        var finishes = true
+
+        private fun rowRunning() = db.openHelper.readableDatabase.query("SELECT 1 FROM recordings WHERE state = 'RECORDING'").use { it.moveToFirst() }
+
+        fun reset(recordingFinishes: Boolean = true, waitMs: Long = 2_000): DataReset {
+            finishes = recordingFinishes
+            return DataReset(
+                db, settings, lock,
+                ResetTargets(
+                    CrashLog(crashFile) { "header" }, { imageCache.deleteRecursively() }, grants,
+                    { order += "playback"; playbackStops++ },
+                    {
+                        order += "recordings"
+                        recordingStops++
+                        if (finishes) {
+                            preparing = false
+                            db.openHelper.writableDatabase.execSQL("UPDATE recordings SET state = 'DONE' WHERE state = 'RECORDING'")
+                        }
+                    },
+                    { preparing || rowRunning() },
+                ),
+                recordingWaitMs = waitMs,
+            )
+        }
 
         fun close() {
             scope.cancel()
@@ -201,13 +222,100 @@ class DataResetTest {
     }
 
     @Test
-    fun `a recording that never finishes does not hang the reset`(): Unit = runBlocking {
+    fun `a recording that is still being prepared is stopped too, and playback is stopped after it`(): Unit = runBlocking {
+        val app = app()
+        val source = app.fill()
+        app.db.recordings().insert(RecordingEntity(sourceId = source, stableKey = "k", channelName = "K", title = "T", startAt = 1, endAt = 2, state = RecordingState.SCHEDULED))
+        app.preparing = true // the service has the job; the row is not RECORDING yet
+
+        app.reset().run()
+
+        assertThat(app.recordingStops).isEqualTo(1)
+        assertThat(app.order).containsExactly("recordings", "playback").inOrder()
+        assertThat(app.db.sources().allNow()).isEmpty()
+    }
+
+    @Test
+    fun `a recording that does not stop in time fails the reset and changes nothing, and a retry after it stopped succeeds`(): Unit = runBlocking {
         val app = app()
         val source = app.fill()
         app.db.recordings().insert(RecordingEntity(sourceId = source, stableKey = "k", channelName = "K", title = "T", startAt = 1, endAt = 2, state = RecordingState.RECORDING))
-        app.reset(recordingFinishes = false, waitMs = 300).run()
+
+        assertThrows(IOException::class.java) { runBlocking { app.reset(recordingFinishes = false, waitMs = 300).run() } }
+        assertThat(app.db.sources().allNow()).hasSize(1)
+        assertThat(app.settings.current().onboardingDone).isTrue()
+        assertThat(app.lock.hasPin.value).isTrue()
+        assertThat(app.grants.held).isNotEmpty()
+        assertThat(app.playbackStops).isEqualTo(0)
+
+        app.reset().run()
         assertThat(app.db.sources().allNow()).isEmpty()
         assertThat(app.settings.current()).isEqualTo(AppSettings())
+    }
+
+    @Test
+    fun `a failure before the end leaves the PIN, which goes with the settings file`(): Unit = runBlocking {
+        val app = app()
+        app.fill()
+        app.grants.failures = 1
+        assertThrows(IOException::class.java) { runBlocking { app.reset().run() } }
+        assertThat(app.lock.hasPin.value).isTrue()
+        app.reset().run()
+        assertThat(app.lock.hasPin.value).isFalse()
+        assertThat(app.lock.unlocked.value).isTrue()
+    }
+
+    @Test
+    fun `a second reset while one runs waits, and the running flag shows it`(): Unit = runBlocking {
+        val app = app()
+        app.fill()
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val reset = DataReset(
+            app.db, app.settings, app.lock,
+            ResetTargets(CrashLog(app.crashFile) { "h" }, { }, app.grants, { entered.complete(Unit); release.await() }, { }, { false }),
+        )
+        val first = async(Dispatchers.IO) { reset.run() }
+        entered.await()
+        assertThat(reset.running.value).isTrue()
+        val second = async(Dispatchers.IO) { reset.run() } // would clear twice at once without the lock
+        release.complete(Unit)
+        first.await()
+        second.await()
+        assertThat(reset.running.value).isFalse()
+        assertThat(app.settings.current()).isEqualTo(AppSettings())
+    }
+
+    @Test
+    fun `a grant the app no longer holds does not stop the reset`() {
+        val released = mutableListOf<Pair<String, Int>>()
+        val read = ResolverGrants.Held(Uri.parse("content://doc/list.m3u"), read = true, write = false)
+        val folder = ResolverGrants.Held(Uri.parse("content://tree/recordings"), read = true, write = true)
+        val stale = ResolverGrants.Held(Uri.parse("content://doc/gone"), read = true, write = false)
+        val none = ResolverGrants.Held(Uri.parse("content://doc/none"), read = false, write = false)
+        ResolverGrants({ listOf(stale, folder, none, read) }, { uri, flags ->
+            if (uri == stale.uri) throw SecurityException("No persistable permission grants found")
+            released += uri.toString() to flags
+        }).releaseAll()
+        val both = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        assertThat(released).containsExactly("content://tree/recordings" to both, "content://doc/list.m3u" to Intent.FLAG_GRANT_READ_URI_PERMISSION).inOrder()
+    }
+
+    @Test
+    fun `stopping playback with no controller connected starts nothing`(): Unit = runBlocking {
+        val container = AppContainer(context)
+        // It switches to the main thread, which this test occupies: let the main looper run while it waits.
+        val stopping = async(Dispatchers.Default) { container.stopPlayback() }
+        kotlinx.coroutines.withTimeout(10_000) {
+            while (!stopping.isCompleted) {
+                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+                kotlinx.coroutines.delay(20)
+            }
+        }
+        stopping.await()
+        val shadow = org.robolectric.Shadows.shadowOf(context as android.app.Application)
+        assertThat(shadow.nextStartedService).isNull()
+        assertThat(shadow.boundServiceConnections).isEmpty()
     }
 
     @Test

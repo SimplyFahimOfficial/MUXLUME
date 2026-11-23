@@ -70,8 +70,8 @@ class AppContainer(context: Context) {
     val dataReset by lazy {
         DataReset(
             db, settings, lock,
-            ResetTargets(crashLog, app.cacheDir.resolve("images"), ResolverGrants(app.contentResolver), ::stopPlayback) {
-                app.startService(RecordingService.stopIntent(app, -1))
+            ResetTargets(crashLog, ::clearImages, ResolverGrants(app.contentResolver), ::stopPlayback, { app.startService(RecordingService.stopIntent(app, -1)) }) {
+                RecordingService.busy
             },
         )
     }
@@ -86,6 +86,14 @@ class AppContainer(context: Context) {
 
     private val controllerLock = Mutex()
     private var controller: MediaController? = null
+
+    /** Empties the artwork cache (disk and memory) through the image loader that has it open. */
+    private fun clearImages() {
+        SingletonImageLoader.get(app).run {
+            diskCache?.clear()
+            memoryCache?.clear()
+        }
+    }
 
     /**
      * Stops what plays and empties the queue. Only a controller this process already connected can be playing: nothing else starts

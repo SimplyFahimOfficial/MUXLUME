@@ -232,4 +232,54 @@ class PlaybackLockGuardTest {
         assertThat(player.currentMediaItem).isNotNull()
         watcher.cancel()
     }
+
+    private suspend fun untilStopped() = withTimeout(10_000) {
+        while (!stopped) {
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle() // player events are delivered on the main looper
+            delay(20)
+        }
+    }
+
+    @Test
+    fun `protected content that is installed after the lock closed is stopped when it starts`(): Unit = runBlocking {
+        lock.lock()
+        play(media(id(a, "a-news")))
+        val watcher = guide().watch(this, lock.unlocked, player)
+        delay(200)
+        assertThat(player.currentMediaItem).isNotNull()
+
+        // A server change that was resolved while unlocked and installed after the check: no lock event follows it.
+        play(media(id(b, "b-adult")))
+        untilStopped()
+        assertThat(stopped).isTrue()
+        watcher.cancel()
+    }
+
+    @Test
+    fun `playback of a playlist that was deleted stops, also what is installed after the deletion`(): Unit = runBlocking {
+        play(media(id(a, "a-news")))
+        val watcher = guide().watch(this, lock.unlocked, player)
+        delay(200)
+        assertThat(player.currentMediaItem).isNotNull()
+
+        db.clearAllTables() // Delete all data
+        untilStopped()
+        assertThat(stopped).isTrue()
+
+        play(media(id(a, "a-news"), primary = id(b, "b-news"))) // a failover that had resolved its stream before the reset
+        untilStopped()
+        assertThat(stopped).isTrue()
+        watcher.cancel()
+    }
+
+    @Test
+    fun `a recording whose row is gone stops, one that is there keeps playing`(): Unit = runBlocking {
+        val rec = recording(a, "a-news")
+        play(media(MediaIds.ofRecording(rec)))
+        guide().stopIfRestricted(player)
+        assertThat(player.currentMediaItem).isNotNull()
+        db.recordings().delete(rec)
+        guide().stopIfRestricted(player)
+        assertThat(stopped).isTrue()
+    }
 }

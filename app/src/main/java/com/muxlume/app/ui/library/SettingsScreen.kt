@@ -86,6 +86,7 @@ fun SettingsScreen(nav: Nav) {
     val settings by c.settings.settings.collectAsStateWithLifecycle(AppSettings())
     val scope = rememberCoroutineScope()
     var confirm by remember { mutableStateOf<String?>(null) }
+    val resetting by c.dataReset.running.collectAsStateWithLifecycle()
 
     Column(Modifier.fillMaxSize().background(MuxTheme.Background)) {
         TopHeader(stringResource(R.string.settings_settings), onSearch = null, onBack = { nav.back() })
@@ -140,7 +141,11 @@ fun SettingsScreen(nav: Nav) {
                 style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary, modifier = Modifier.padding(horizontal = Mux.ScreenPadding, vertical = 8.dp),
             )
             LinkRow(Icons.Rounded.History, stringResource(R.string.settings_clear_watch_history), stringResource(R.string.settings_resume_positions_and_recently_watched), { confirm = "history" })
-            LinkRow(Icons.Rounded.DeleteForever, stringResource(R.string.settings_delete_all_data), stringResource(R.string.settings_playlists_credentials_favorites_history_and), { confirm = "all" })
+            LinkRow(
+                Icons.Rounded.DeleteForever, stringResource(R.string.settings_delete_all_data),
+                stringResource(if (resetting) R.string.settings_deleting else R.string.settings_playlists_credentials_favorites_history_and),
+                { if (!resetting) confirm = "all" }, // a second reset would only run behind the first
+            )
         }
     }
 
@@ -153,6 +158,7 @@ fun SettingsScreen(nav: Nav) {
                 TextButton({
                     confirm = null
                     if (what == "all") {
+                        if (c.dataReset.running.value) return@TextButton
                         // In the app's scope: leaving this screen must not stop a reset half way. Success is reported once everything is gone.
                         c.appScope.launch {
                             val done = runCatching { c.dataReset.run() }.isSuccess

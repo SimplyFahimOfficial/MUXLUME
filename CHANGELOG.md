@@ -106,7 +106,7 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - Parental lock: when the app relocks, a protected recording you were playing now stops too (it kept playing),
   a channel that failed over to another server stops if the channel you chose is locked, and a channel change
   made while the lock was being checked is no longer stopped by the answer for the previous channel.
-- Settings → Delete all data now also resets every setting (the app starts as new, with the welcome screen), releases
+- Settings → Delete all data now also resets every setting (the next launch shows the welcome screen, as on a new install), releases
   the write access to your recordings folder (only read access was released), stops playback and a running
   recording first, can be repeated if it was interrupted, and reports success only when it is finished. Your recording
   files and saved backups are not deleted; the confirmation and the privacy policy now say so.
