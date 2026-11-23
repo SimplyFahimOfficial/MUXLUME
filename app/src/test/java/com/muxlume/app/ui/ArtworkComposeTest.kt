@@ -51,6 +51,16 @@ class ArtworkComposeTest {
     }
 
     @Test
+    fun `an opted-in source is known to allow HTTP the first time it is asked, before the cache of such sources is filled`() {
+        val c = container
+        val id = runBlocking { c.db.sources().insert(SourceEntity(name = "S", type = SourceType.M3U_URL, secret = "x", label = "l", allowHttp = true, createdAt = 0)) }
+        val other = runBlocking { c.db.sources().insert(SourceEntity(name = "O", type = SourceType.M3U_URL, secret = "x", label = "l", allowHttp = false, createdAt = 0)) }
+        assertThat(c.allowsHttp(id)).isTrue() // the playback service's notification artwork asks like this, possibly before any screen did
+        assertThat(c.allowsHttp(other)).isFalse()
+        assertThat(c.allowsHttp(999)).isFalse()
+    }
+
+    @Test
     fun `an artwork cell blocked at first loads once its source allows HTTP`() {
         val c = container
         val source = SourceEntity(name = "S", type = SourceType.M3U_URL, secret = "x", label = "l", allowHttp = false, createdAt = 0)

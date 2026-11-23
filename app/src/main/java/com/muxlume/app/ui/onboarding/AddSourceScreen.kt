@@ -352,7 +352,7 @@ private fun Form(s: FormState, vm: AddSourceViewModel, onPickFile: () -> Unit) {
                 Field(stringResource(R.string.add_source_guide_link), s.guideUrl, { v -> vm.edit { it.copy(guideUrl = v) } }, keyboard = KeyboardType.Uri, placeholder = "https://…/guide.xml")
             }
             // A playlist or account whose own address is https can still list plain-HTTP streams or artwork; that is opt-in here instead of required up front.
-            HttpWarning(s.httpAcknowledged, optional = !s.usesHttp, listsStreams = s.mode != Mode.XTREAM) { on -> vm.edit { it.copy(httpAcknowledged = on) } }
+            HttpWarning(s.httpAcknowledged, required = s.usesHttp, forArtwork = s.mode == Mode.XTREAM) { on -> vm.edit { it.copy(httpAcknowledged = on) } }
             s.accountInfo?.let { info ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.CheckCircle, null, tint = MuxTheme.Accent, modifier = Modifier.size(20.dp))
@@ -380,24 +380,26 @@ private fun Form(s: FormState, vm: AddSourceViewModel, onPickFile: () -> Unit) {
     }
 }
 
+/**
+ * The HTTP choice. [required]: the address typed is http, so it must be acknowledged. Otherwise it is optional, and says what it is for:
+ * the streams a playlist lists, or an account's logos and posters (the account's own address is https).
+ */
 @Composable
-private fun HttpWarning(acknowledged: Boolean, optional: Boolean, listsStreams: Boolean, onChange: (Boolean) -> Unit) {
+private fun HttpWarning(acknowledged: Boolean, required: Boolean, forArtwork: Boolean, onChange: (Boolean) -> Unit) {
+    val common = stringResource(R.string.add_source_with_plain_http_anyone_on)
+    val (title, body) = when {
+        required -> R.string.add_source_this_server_doesn_t_use to common
+        forArtwork -> R.string.add_source_logos_over_plain_http to stringResource(R.string.add_source_logos_over_plain_http_body)
+        else -> R.string.add_source_streams_over_plain_http to stringResource(R.string.add_source_many_playlist_files_list_http) + common
+    }
     Column(Modifier.fillMaxWidth().clip(Mux.CardShape).background(MuxTheme.Surface).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Warning, null, tint = MuxTheme.Accent)
             Spacer(Modifier.width(10.dp))
-            Text(
-                stringResource(if (optional) R.string.add_source_streams_over_plain_http else R.string.add_source_this_server_doesn_t_use),
-                style = MaterialTheme.typography.titleMedium,
-                color = MuxTheme.TextPrimary,
-            )
+            Text(stringResource(title), style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary)
         }
         Spacer(Modifier.height(8.dp))
-        Text(
-            (if (optional && listsStreams) stringResource(R.string.add_source_many_playlist_files_list_http) else "") +
-                stringResource(R.string.add_source_with_plain_http_anyone_on),
-            style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
-        )
+        Text(body, style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary)
         Row(
             Modifier.fillMaxWidth().padding(top = 8.dp).toggleable(acknowledged, role = Role.Checkbox, onValueChange = onChange),
             verticalAlignment = Alignment.CenterVertically,

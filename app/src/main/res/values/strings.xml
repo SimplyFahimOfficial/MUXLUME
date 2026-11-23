@@ -211,6 +211,8 @@
     <string name="add_source_this_server_doesn_t_use">This server doesn\'t use encryption</string>
     <string name="add_source_many_playlist_files_list_http">Many playlists list http:// streams, which are blocked unless you allow them. </string>
     <string name="add_source_with_plain_http_anyone_on">With plain HTTP, anyone on your network path (public Wi-Fi, your ISP) can see what you watch and read any username, password or token sent to the server. Use an https:// address if your provider offers one.</string>
+    <string name="add_source_logos_over_plain_http">Logos and posters over plain HTTP</string>
+    <string name="add_source_logos_over_plain_http_body">Some providers list logos and posters as http:// links even on an https server. They are not shown unless you allow them here. Anyone on your network path can see which of them you load; your login is only ever sent to the server address you entered.</string>
     <string name="add_source_i_understand_allow_unencrypted_http">I understand, allow unencrypted HTTP</string>
     <string name="add_source_importing">Importing</string>
     <string name="add_source_connecting">Connecting…</string>

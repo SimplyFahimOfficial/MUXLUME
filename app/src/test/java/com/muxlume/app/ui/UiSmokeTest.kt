@@ -71,6 +71,8 @@ class UiSmokeTest {
         compose.onNodeWithText("Username").performTextInput("me")
         compose.onNodeWithText("Password").performTextInput("secret")
         compose.onNodeWithText("Test connection").assertIsEnabled()
+        compose.onNodeWithText("Logos and posters over plain HTTP").assertExists() // an https account's optional choice says what it is for
+        compose.onNodeWithText("Streams over plain HTTP").assertDoesNotExist()
         compose.onNodeWithText("••••••").assertIsDisplayed() // shown masked
     }
 }
