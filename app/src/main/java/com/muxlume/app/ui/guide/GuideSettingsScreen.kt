@@ -51,6 +51,7 @@ import com.muxlume.app.ui.components.Toggle
 import com.muxlume.app.ui.main.TopHeader
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CancellationException
@@ -82,7 +83,11 @@ class GuideSettingsViewModel(private val c: AppContainer) : ViewModel() {
     fun setEnabled(id: Long, on: Boolean) {
         c.appScope.launch {
             c.epg.setEnabled(id, on)
-            if (on) refresh(id)
+            // Turned off and on again: the refresh that was running ends on its own (the repository releases it); this one starts after it.
+            if (on) {
+                refreshing.first { id !in it }
+                refresh(id)
+            }
         }
     }
 

@@ -1,8 +1,10 @@
 package com.muxlume.app.core.net
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import okhttp3.Call
 import okhttp3.HttpUrl
@@ -62,7 +64,8 @@ fun request(url: HttpUrl, policy: HttpPolicy): Request = Request.Builder().url(u
 
 /** Runs [block], cancelling the blocked [Call] if the coroutine is cancelled (OkHttp's blocking calls ignore coroutine cancellation). */
 suspend fun <T> Call.cancelWithCoroutine(block: suspend () -> T): T = coroutineScope {
-    val watcher = launch {
+    // Undispatched, so it is waiting for the cancellation before the blocking call starts; and a scope that is already cancelled never starts one.
+    val watcher = launch(start = CoroutineStart.UNDISPATCHED) {
         try {
             awaitCancellation()
         } catch (e: CancellationException) {
@@ -70,7 +73,12 @@ suspend fun <T> Call.cancelWithCoroutine(block: suspend () -> T): T = coroutineS
             throw e
         }
     }
-    try { block() } finally { watcher.cancel() }
+    try {
+        ensureActive()
+        block()
+    } finally {
+        watcher.cancel()
+    }
 }
 
 object Http {

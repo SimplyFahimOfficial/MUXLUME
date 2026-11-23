@@ -76,9 +76,10 @@ class EpgRepository(
 
     /** Turns the guide on (and downloads it in the caller's scope via [refresh]) or off (and deletes it, also from a download that is running). */
     suspend fun setEnabled(sourceId: Long, enabled: Boolean) {
-        if (!enabled) lane(sourceId).supersede() // before the flag changes: a download that ends meanwhile must not bring the guide back
         db.guide().setGuideEnabled(sourceId, enabled)
         if (!enabled) {
+            // After the flag: a refresh that takes its turn now reads it off; one that read it on has an older epoch than this bump gives.
+            lane(sourceId).supersede()
             dao.clear(sourceId)
             db.guide().resetGuide(sourceId)
         }
@@ -97,8 +98,9 @@ class EpgRepository(
         lane.turn.withLock {
             val epoch = lane.epoch.get()
             val source = db.sources().get(sourceId) ?: throw IOException("Source not found")
-            // Another refresh finished while this one waited for its turn: its guide is fresh enough.
-            if (source.epgRefreshedAt != null && source.epgRefreshedAt != before.epgRefreshedAt) return@withLock source.epgPrograms
+            // Another refresh finished while this one waited for its turn: its guide is fresh enough, if the feed is still the one asked for.
+            val finished = source.epgRefreshedAt != null && source.epgRefreshedAt != before.epgRefreshedAt
+            if (finished && runCatching { sources.guideUrl(source) }.getOrNull() == wanted) return@withLock source.epgPrograms
             // Turned off while it waited (or never on): nothing to download. The worker lists the sources it refreshes before it gets to them.
             if (!source.guideEnabled) return@withLock source.epgPrograms
             val url = sources.guideUrl(source) ?: throw IOException(res.getString(R.string.error_no_guide_link))
@@ -146,6 +148,8 @@ class EpgRepository(
         val batch = ArrayList<ProgramEntity>(BATCH)
         val call = http.newCall(request)
         lane.call = call
+        // Asked to stop between choosing the feed and having a call to cancel: do not start it. From here on a stop cancels the call.
+        if (!applies(lane, epoch, sourceId, url)) return db.sources().get(sourceId)?.epgPrograms ?: 0
         // Blocking reads ignore coroutine cancellation; this lets a cancelled refresh, or a superseded one, let go of a stalled download.
         call.cancelWithCoroutine {
             call.execute().requireSuccess().use { response ->

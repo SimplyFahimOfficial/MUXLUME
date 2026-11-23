@@ -39,6 +39,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -113,16 +114,30 @@ class EpgRefreshCoordinationTest {
         response.newBuilder().body(held.buffer().asResponseBody(body.contentType(), body.contentLength())).build()
     }
 
-    /** Opens source secrets like a plain box, and lets a test wait for the next time one is opened (a refresh looking up its guide link). */
+    /**
+     * Opens source secrets like a plain box. A refresh opens its source's secret to find the guide link, so a test can wait for that
+     * ([nextOpen]) or run something at an exact point of a refresh ([atOpen]: the 1st open is before the refresh takes its turn,
+     * the 2nd after it took its turn and read the source, before it starts the download).
+     */
     private class ArrivalBox : SecretBox() {
         private val next = AtomicReference<CountDownLatch?>(null)
+        private val opens = AtomicInteger()
+        @Volatile private var hook: Pair<Int, () -> Unit>? = null
+
         override fun seal(plain: String): String = Base64.getEncoder().encodeToString(plain.toByteArray())
         override fun open(sealed: String): String {
             next.getAndSet(null)?.countDown()
+            val n = opens.incrementAndGet()
+            hook?.takeIf { it.first == n }?.let { hook = null; it.second() }
             return String(Base64.getDecoder().decode(sealed))
         }
 
         fun nextOpen(): CountDownLatch = CountDownLatch(1).also { next.set(it) }
+
+        fun atOpen(n: Int, action: () -> Unit) {
+            opens.set(0)
+            hook = n to action
+        }
     }
 
     private suspend fun await(latch: CountDownLatch) = withContext(Dispatchers.IO) { assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue() }
@@ -285,6 +300,49 @@ class EpgRefreshCoordinationTest {
         val s = sources.get(id)!!
         assertThat(s.epgRefreshedAt).isNull()
         assertThat(s.epgError).isNull()
+    }
+
+    @Test
+    fun `a guide turned off just after a refresh took its turn downloads nothing`(): Unit = runBlocking {
+        val id = source("s", "/guide.xml")
+        routes["/guide.xml"] = mutableListOf(guide("A"))
+        box.atOpen(2) { runBlocking(Dispatchers.IO) { epg.setEnabled(id, false) } } // after the refresh read the source as on, before its call exists
+        epg.refresh(id)
+
+        assertThat(requested).doesNotContain("/guide.xml")
+        assertThat(titles(id)).isEmpty()
+        assertThat(staged(id)).isEqualTo(0)
+    }
+
+    @Test
+    fun `a feed saved just after a refresh took its turn downloads nothing from the old feed`(): Unit = runBlocking {
+        val id = source("s", "/a.xml")
+        routes["/a.xml"] = mutableListOf(guide("A"))
+        routes["/b.xml"] = mutableListOf(guide("B"))
+        // The user saves the new feed after the refresh read the source, before it has a call that could be cancelled.
+        box.atOpen(2) { runBlocking(Dispatchers.IO) { sources.save(SourceInput.M3uUrl("s", server.url("/s.m3u").toString(), allowHttp = true, guideUrl = server.url("/b.xml").toString()), id) } }
+        epg.refresh(id)
+        assertThat(requested).doesNotContain("/a.xml")
+        assertThat(titles(id)).isEmpty()
+
+        epg.refresh(id)
+        assertWholeGuide(id, "B")
+    }
+
+    @Test
+    fun `a refresh that waited is not taken for the one the new feed needs`(): Unit = runBlocking {
+        val id = source("s", "/a.xml")
+        routes["/a.xml"] = mutableListOf(guide("A"))
+        routes["/b.xml"] = mutableListOf(guide("B"))
+        // Asked for while the feed is A. Before it takes its turn another refresh publishes A and the feed becomes B.
+        box.atOpen(1) {
+            runBlocking(Dispatchers.IO) {
+                epg.refresh(id)
+                sources.save(SourceInput.M3uUrl("s", server.url("/s.m3u").toString(), allowHttp = true, guideUrl = server.url("/b.xml").toString()), id)
+            }
+        }
+        epg.refresh(id)
+        assertWholeGuide(id, "B")
     }
 
     @Test
