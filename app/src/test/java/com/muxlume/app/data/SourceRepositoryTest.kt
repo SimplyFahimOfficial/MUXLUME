@@ -10,6 +10,7 @@ import com.muxlume.app.core.net.Http
 import com.muxlume.app.core.net.HttpStatusException
 import com.muxlume.app.PlainBox
 import com.muxlume.app.data.epg.EpgLinker
+import com.muxlume.app.playback.AlternativeFinder
 import com.muxlume.app.data.db.FavoriteEntity
 import com.muxlume.app.data.db.ItemDao
 import com.muxlume.app.data.db.ItemEntity
@@ -463,7 +464,7 @@ class SourceRepositoryTest {
         serve(list)
         repo.refresh(id)
 
-        assertThat(names(id)).containsExactly("Channel 1", "Channel 2", "Provider Name").inOrder()
+        assertThat(names(id)).containsExactly("#1", "#2", "Provider Name").inOrder()
         val key1 = SourceRepository.stableKey("G\n$login") // the key is still made of the group and the address, not of the name
         val key2 = SourceRepository.stableKey("\nhttps://synth-host.invalid/SYNTH-PASS-7731")
         assertThat(keys(id)).containsExactly(key1, key2, SourceRepository.stableKey("G\nhttps://synth-host.invalid/named")).inOrder()
@@ -472,11 +473,20 @@ class SourceRepositoryTest {
             assertThat(db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM items_fts WHERE items_fts MATCH ?", arrayOf<Any>("\"$marker\"")).use { it.moveToFirst(); it.getInt(0) }).isEqualTo(0)
         }
 
+        // Two playlists' unnamed entries are not the same channel because they stand at the same place: failover finds no alternative for them.
+        val other = repo.save(SourceInput.M3uUrl("Other", server.url("/other.m3u").toString(), true))
+        serve("#EXTM3U\n#EXTINF:-1 group-title=\"G\",\nhttps://other.example/1.ts\n#EXTINF:-1 group-title=\"G\",\nhttps://other.example/2.ts\n")
+        repo.refresh(other)
+        assertThat(names(other)).containsExactly("#1", "#2").inOrder()
+        val unnamed = db.items().byKey(id, key1, true)!!
+        assertThat(AlternativeFinder(db).find(unnamed, unlocked = true)).isEmpty()
+        assertThat(AlternativeFinder(db).find(db.items().byKey(other, keys(other)[0], true)!!, unlocked = true)).isEmpty()
+
         db.favorites().add(FavoriteEntity(id, key1, 1))
         serve(list)
         repo.refresh(id)
         assertThat(keys(id)[0]).isEqualTo(key1) // unchanged by a refresh
-        assertThat(db.items().favorites(ItemKind.LIVE, id, true).first().map { it.name }).containsExactly("Channel 1")
+        assertThat(db.items().favorites(ItemKind.LIVE, id, true).first().map { it.name }).containsExactly("#1")
     }
 
     private fun keys(id: Long): List<String> =

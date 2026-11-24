@@ -320,7 +320,7 @@
     <string name="error_too_large">The playlist is too large to import.</string>
     <string name="error_unknown_host">The server address can\'t be found. Check it and your connection.</string>
     <string name="error_tls">A secure connection couldn\'t be established. The server\'s certificate may be invalid.</string>
-    <string name="import_unnamed_channel">Channel %1$d</string>
+    <string name="import_unnamed_channel">#%1$d</string>
     <string name="error_timeout">The server took too long to answer.</string>
     <string name="error_file">The file can\'t be read anymore. Pick it again.</string>
     <string name="error_network">A network error occurred.</string>

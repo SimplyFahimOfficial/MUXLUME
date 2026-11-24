@@ -106,7 +106,7 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - Cancelling a playlist import (the Cancel button, or leaving while it runs) now ends the download at once, also while the provider is slow to
   send; it used to wait for the connection to time out, hold the playlist's turn meanwhile, and then show the cancellation as a provider error. What
   was downloaded so far is discarded, and the playlist keeps its channels, favorites and last update time.
-- A channel the playlist gives no name (a bare address, or an empty title) is called "Channel N" instead of the last part of its address, which
+- A channel the playlist gives no name (a bare address, or an empty title) is called "#N" (its place in the playlist) instead of the last part of its address, which
   can be a token or a login and was shown in lists, search, history and the notification. Names the playlist gives are unchanged, and so are
   channel keys, so favorites stay.
 - Playback requests now belong to the channel they were made for: after a quick switch to another channel, or a failover to another playlist,

@@ -105,10 +105,11 @@ class ImportCancellationTest {
         assertThat(after.lastError).isNull() // giving up is not a failure of the provider
         assertThat(db.favorites().all().map { it.stableKey }).containsExactly(key)
 
-        // The source is free again, and so is another one.
-        withTimeout(10_000) { plain.refresh(b) }
+        // The source is free again, in the repository that was cancelled (its turn is released), and so is another one.
+        held.open.countDown() // the next download of A is not held
+        withTimeout(10_000) { repo.refresh(b) }
         assertThat(names(b)).containsExactly("b0", "b1")
-        withTimeout(10_000) { plain.refresh(a) }
+        withTimeout(10_000) { repo.refresh(a) }
         assertThat(names(a)).hasSize(3_000)
         assertThat(plain.get(a)!!.lastError).isNull()
     }
@@ -144,7 +145,8 @@ class ImportCancellationTest {
         assertThat(names(x)).containsExactly("old")
         assertThat(plain.get(x)!!.refreshedAt).isEqualTo(before.refreshedAt)
         assertThat(plain.get(x)!!.lastError).isNull()
-        withTimeout(10_000) { plain.refresh(x) }
+        held.open.countDown() // the next download is not held; the cancelled repository's own turn on the source is free
+        withTimeout(10_000) { repo.refresh(x) }
         assertThat(names(x)).hasSize(4_000)
     }
 }
