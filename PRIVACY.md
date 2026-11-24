@@ -14,7 +14,7 @@ MUXLUME is a local media player. It has no user accounts and the developer runs 
   that storage, and Delete all data removes it.
 - Favorites, watch history and resume positions.
 - Which channels you hid, renamed or pinned.
-- After a crash, a short report (the kind of error and where in the app it happened, app version, phone model; never the error's message, which could quote an address) until you share or delete it.
+- After a crash, a short report (the kind of error and where in the app it happened, app version, phone model; never the error's message, which could quote an address) until you share or delete it. A report written by an earlier version is removed when the app starts, because older reports include the error's message.
 - If you record a programme: the file, in the folder you picked, and a list of your recordings (title, channel, time, size). Nothing is uploaded.
 - If you set a parental PIN: a salted hash of it (never the PIN) and the groups it covers.
 - If you turn the TV guide on for a playlist: its programme data and your reminders, stored only on

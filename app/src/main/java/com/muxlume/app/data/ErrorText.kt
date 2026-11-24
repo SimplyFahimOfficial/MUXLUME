@@ -28,7 +28,7 @@ object ErrorText {
         is XtreamAuthException -> when (e.reason) {
             XtreamAuthException.Reason.INVALID_CREDENTIALS -> res.getString(R.string.error_xtream_credentials)
             XtreamAuthException.Reason.EXPIRED -> res.getString(R.string.error_xtream_expired)
-            XtreamAuthException.Reason.INACTIVE -> res.getString(R.string.error_xtream_inactive, shown(e.status))
+            XtreamAuthException.Reason.INACTIVE -> res.getString(R.string.error_xtream_inactive, shown(res, e.status))
         }
         is XtreamFormatException -> res.getString(R.string.error_xtream_format)
         is HttpStatusException -> when (e.code) {
@@ -57,8 +57,9 @@ object ErrorText {
         else -> res.getString(R.string.error_other)
     }
 
-    /** The account status a provider sent, for display: one of the usual words, in lower case, or "unknown". Nothing else a provider wrote. */
-    fun shown(status: String?): String = status?.trim()?.lowercase(java.util.Locale.ROOT)?.takeIf { it in KNOWN_STATUSES } ?: "unknown"
+    /** The account status a provider sent, for display: one of the usual words, in lower case, or the app's word for "unknown". Nothing else a provider wrote. */
+    fun shown(res: Resources, status: String?): String =
+        status?.trim()?.lowercase(java.util.Locale.ROOT)?.takeIf { it in KNOWN_STATUSES } ?: res.getString(R.string.error_status_unknown)
 
     private val KNOWN_STATUSES = setOf("disabled", "banned", "inactive", "suspended", "blocked", "paused", "pending", "trial")
 }
