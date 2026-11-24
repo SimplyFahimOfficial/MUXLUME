@@ -46,7 +46,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -62,14 +64,15 @@ import coil3.compose.SubcomposeAsyncImage
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
+import coil3.request.crossfade
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.muxlume.app.MuxlumeApp
 import com.muxlume.app.R
 import com.muxlume.app.core.net.ALLOW_HTTP_HEADER
-import com.muxlume.app.ui.theme.Motion
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
 import com.muxlume.app.ui.theme.SectionLabel
+import com.muxlume.app.ui.theme.Speed
 
 /** The brand mark (screen, play triangle, underline) from the supplied logo artwork. */
 @Composable
@@ -103,8 +106,8 @@ fun Modifier.pressable(
 ): Modifier {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    val reduced = MuxTheme.reducedMotion
-    val scale by animateFloatAsState(if (pressed && !reduced) 0.97f else 1f, Motion.spec(Motion.SHORT, reduced), label = "press")
+    val motion = MuxTheme.motion
+    val scale by animateFloatAsState(if (pressed && !motion.reduced) 0.97f else 1f, motion.spatial(Speed.FAST), label = "press")
     return this
         .graphicsLayer { scaleX = scale; scaleY = scale }
         .then(
@@ -123,8 +126,11 @@ fun Modifier.pressable(
  * The image request for [url]: over plain HTTP only if [allowHttp], the setting of the source the artwork belongs to. Anything else
  * (https, a cached image) is unaffected, and a request whose owner is unknown passes false.
  */
-fun artworkRequest(context: Context, url: String?, allowHttp: Boolean): ImageRequest =
-    ImageRequest.Builder(context).data(url).apply { if (allowHttp) httpHeaders(NetworkHeaders.Builder().set(ALLOW_HTTP_HEADER, "1").build()) }.build()
+fun artworkRequest(context: Context, url: String?, allowHttp: Boolean, reducedMotion: Boolean = false): ImageRequest =
+    ImageRequest.Builder(context).data(url).apply {
+        if (allowHttp) httpHeaders(NetworkHeaders.Builder().set(ALLOW_HTTP_HEADER, "1").build())
+        if (reducedMotion) crossfade(false) // the loader fades images in; reduced motion shows them at once
+    }.build()
 
 /**
  * Provider artwork of the source [sourceId] (null: no known owner, so HTTPS only), or an abstract placeholder built from the title
@@ -135,11 +141,12 @@ fun Artwork(url: String?, title: String, sourceId: Long?, modifier: Modifier = M
     val context = LocalContext.current
     val owners = remember(context) { (context.applicationContext as? MuxlumeApp)?.container?.httpSources ?: MutableStateFlow<Set<Long>?>(null) }
     val allowHttp = sourceId != null && owners.collectAsState().value?.contains(sourceId) == true
+    val reduced = MuxTheme.reducedMotion
     Box(modifier.background(MuxTheme.Raised)) {
         // Keyed on allowHttp: Coil's default model comparison ignores request headers, so the painter would not restart when the source's setting arrives or changes.
         key(allowHttp) {
             SubcomposeAsyncImage(
-                model = remember(url) { artworkRequest(context, url, allowHttp) },
+                model = remember(url) { artworkRequest(context, url, allowHttp, reduced) }, // `reduced` applies to requests made after it changes
                 contentDescription = null,
                 contentScale = contentScale,
                 modifier = Modifier.fillMaxSize(),
@@ -161,9 +168,9 @@ private fun Placeholder(title: String, size: Int) {
 
 @Composable
 fun Pill(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val reduced = MuxTheme.reducedMotion
-    val bg by animateColorAsState(if (selected) MuxTheme.Primary else MuxTheme.Raised, Motion.spec(Motion.SHORT, reduced), label = "pill")
-    val fg by animateColorAsState(if (selected) MuxTheme.OnPrimary else MuxTheme.TextPrimary, Motion.spec(Motion.SHORT, reduced), label = "pillText")
+    val motion = MuxTheme.motion
+    val bg by animateColorAsState(if (selected) MuxTheme.Primary else MuxTheme.Raised, motion.effects(Speed.FAST), label = "pill")
+    val fg by animateColorAsState(if (selected) MuxTheme.OnPrimary else MuxTheme.TextPrimary, motion.effects(Speed.FAST), label = "pillText")
     Box(
         modifier
             .heightIn(min = 40.dp)
@@ -191,15 +198,15 @@ fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
 }
 
 @Composable
-fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null, enabled: Boolean = true) {
-    ButtonBase(text, onClick, modifier.border(1.dp, MuxTheme.Outline, Mux.PillShape), icon, enabled, MuxTheme.Raised, MuxTheme.TextPrimary)
+fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null, enabled: Boolean = true, iconPainter: Painter? = null) {
+    ButtonBase(text, onClick, modifier.border(1.dp, MuxTheme.Outline, Mux.PillShape), icon, enabled, MuxTheme.Raised, MuxTheme.TextPrimary, iconPainter)
 }
 
 @Composable
-private fun ButtonBase(text: String, onClick: () -> Unit, modifier: Modifier, icon: ImageVector?, enabled: Boolean, bg: Color, fg: Color) {
+private fun ButtonBase(text: String, onClick: () -> Unit, modifier: Modifier, icon: ImageVector?, enabled: Boolean, bg: Color, fg: Color, iconPainter: Painter? = null) {
     Row(
         modifier
-            .heightIn(min = 52.dp)
+            .heightIn(min = Mux.ButtonMinHeight)
             .clip(Mux.PillShape)
             .background(if (enabled) bg else MuxTheme.Surface)
             .pressable(onClick, enabled = enabled) // disabled buttons stay announced as buttons
@@ -207,8 +214,9 @@ private fun ButtonBase(text: String, onClick: () -> Unit, modifier: Modifier, ic
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
-        if (icon != null) {
-            Icon(icon, null, tint = fg, modifier = Modifier.size(20.dp))
+        val painter = iconPainter ?: icon?.let { rememberVectorPainter(it) }
+        if (painter != null) {
+            Icon(painter, null, tint = fg, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
         }
         Text(text, color = if (enabled) fg else MuxTheme.TextSecondary, style = MaterialTheme.typography.labelLarge, fontSize = 16.sp)
@@ -245,9 +253,12 @@ fun EmptyState(title: String, body: String, modifier: Modifier = Modifier, actio
 
 /** 2:3 poster with title below. */
 @Composable
-fun PosterCard(title: String, artwork: String?, sourceId: Long?, onClick: () -> Unit, modifier: Modifier = Modifier, subtitle: String? = null, width: Dp? = 132.dp) {
+fun PosterCard(
+    title: String, artwork: String?, sourceId: Long?, onClick: () -> Unit, modifier: Modifier = Modifier, subtitle: String? = null, width: Dp? = 132.dp,
+    artworkModifier: Modifier = Modifier,
+) {
     Column(modifier.then(if (width != null) Modifier.width(width) else Modifier).pressable(onClick, label = title).semantics(mergeDescendants = true) {}) {
-        Artwork(artwork, title, sourceId, Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(Mux.CardShape))
+        Artwork(artwork, title, sourceId, artworkModifier.fillMaxWidth().aspectRatio(2f / 3f).clip(Mux.CardShape))
         Spacer(Modifier.height(8.dp))
         Text(title, style = MaterialTheme.typography.titleSmall, color = MuxTheme.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
         if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MuxTheme.TextSecondary, maxLines = 1)

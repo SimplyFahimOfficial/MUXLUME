@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,9 +26,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,6 +42,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -65,6 +65,8 @@ import com.muxlume.app.ui.components.PillRow
 import com.muxlume.app.ui.components.PrimaryButton
 import com.muxlume.app.ui.components.SecondaryButton
 import com.muxlume.app.ui.components.pressable
+import com.muxlume.app.ui.components.sharedPoster
+import com.muxlume.app.ui.components.watchlistPainter
 import com.muxlume.app.ui.play
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
@@ -93,7 +95,8 @@ data class Extra(
 @OptIn(ExperimentalCoroutinesApi::class)
 class DetailViewModel(private val c: AppContainer, private val res: Resources, private val sourceId: Long, private val key: String) : ViewModel() {
     val item: StateFlow<ItemEntity?> = c.lock.unlocked.flatMapLatest { c.db.items().observe(sourceId, key, it) }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
-    val favorite = c.db.favorites().isFavorite(sourceId, key).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    /** Null until the database has answered. */
+    val favorite: StateFlow<Boolean?> = c.db.favorites().isFavorite(sourceId, key).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val extra = MutableStateFlow(Extra(loading = true))
     val season = MutableStateFlow<Int?>(null)
 
@@ -150,7 +153,7 @@ class DetailViewModel(private val c: AppContainer, private val res: Resources, p
     }
 
     fun toggleFavorite() = viewModelScope.launch {
-        if (favorite.value) c.db.favorites().remove(sourceId, key) else c.db.favorites().add(FavoriteEntity(sourceId, key, System.currentTimeMillis()))
+        if (favorite.value == true) c.db.favorites().remove(sourceId, key) else c.db.favorites().add(FavoriteEntity(sourceId, key, System.currentTimeMillis()))
     }
 
     fun episodeRequest(series: ItemEntity, ep: XtreamEpisode) = MediaIds.request(
@@ -160,7 +163,7 @@ class DetailViewModel(private val c: AppContainer, private val res: Resources, p
 }
 
 @Composable
-fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
+fun DetailScreen(sourceId: Long, key: String, nav: Nav, fromPoster: Boolean = false) {
     val context = LocalContext.current
     val res = LocalResources.current
     val vm: DetailViewModel = viewModel(key = "$sourceId|$key") { DetailViewModel(context.container, context.applicationContext.resources, sourceId, key) }
@@ -181,7 +184,7 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
             val episodes = extra.episodes.filter { e -> e.season == season }
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
                 item {
-                    Box(Modifier.fillMaxWidth().aspectRatio(0.8f)) {
+                    Box(Modifier.sharedPoster(it.sourceId, it.stableKey, detail = true, fromPoster = fromPoster).testTag("detail-hero").fillMaxWidth().aspectRatio(0.8f)) {
                         Artwork(extra.backdrop ?: it.logo, it.name, it.sourceId, Modifier.fillMaxSize(), monogramSize = 72)
                         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to MuxTheme.Background)))
                     }
@@ -195,7 +198,7 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
                             Text(extra.meta.joinToString("  ·  "), style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary)
                         }
                         Spacer(Modifier.height(18.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(Modifier.heightIn(min = Mux.ButtonMinHeight), horizontalArrangement = Arrangement.spacedBy(10.dp)) { // before the watchlist button is known
                             if (it.kind == ItemKind.MOVIE) {
                                 val h = history[MediaIds.of(it.sourceId, it.stableKey)]
                                 val resume = h != null && h.positionMs > 30_000 && (h.durationMs <= 0 || h.positionMs < h.durationMs * 0.95)
@@ -214,11 +217,14 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
                                     }
                                 }, icon = Icons.Rounded.PlayArrow)
                             }
-                            SecondaryButton(
-                                stringResource(if (favorite) R.string.detail_in_watchlist else R.string.detail_watchlist),
-                                vm::toggleFavorite,
-                                icon = if (favorite) Icons.Rounded.Check else Icons.Rounded.Add,
-                            )
+                            // Drawn once the database has answered, so it appears in its real state instead of animating into it.
+                            favorite?.let { added ->
+                                SecondaryButton(
+                                    stringResource(if (added) R.string.detail_in_watchlist else R.string.detail_watchlist),
+                                    vm::toggleFavorite,
+                                    iconPainter = watchlistPainter(added),
+                                )
+                            }
                         }
                         extra.plot?.let { plot ->
                             Spacer(Modifier.height(18.dp))

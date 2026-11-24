@@ -102,8 +102,15 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - All UI text is in string resources, ready for translation.
 - The Support screen is more compact.
 - Opening a stream (first play, channel up/down, failover) no longer decrypts an Xtream login on the main thread.
+- Motion follows the Material 3 spring scheme, so a change of mind mid-animation (a quick second tab tap) carries on from where
+  the first one was. Reduced motion, and the system animator scale at 0 (also when changed while the app is open), now also
+  cover the About answers and artwork fades. (Touch ripples and loading spinners are not changed: they are feedback and progress, not decoration.)
+- In Movies and Series a tapped poster grows into the detail page and back (not with reduced motion).
+- The watchlist button's plus turns into a tick when a title is added, and back.
 
 ### Fixed
+- Live TV, Movies and Series keep their scroll position when you return from a page or another tab, instead of jumping back to the top.
+- Tapping a poster twice quickly opens one detail page, not two.
 - Cancelling a playlist import (the Cancel button, or leaving while it runs) now ends the download at once, also while the provider is slow to
   send; it used to wait for the connection to time out, hold the playlist's turn meanwhile, and then show the cancellation as a provider error. What
   was downloaded so far is discarded, and the playlist keeps its channels, favorites and last update time.

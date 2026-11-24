@@ -1,0 +1,23 @@
+<!-- Both states in one drawing for avd_watchlist: the plus is shown, the tick is trimmed away. Original artwork for Muxlume, under the app's GPL-3.0-or-later. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group
+        android:name="plus"
+        android:pivotX="12"
+        android:pivotY="12">
+        <path
+            android:pathData="M12,5V19M5,12H19"
+            android:strokeColor="#FF000000"
+            android:strokeWidth="2" />
+    </group>
+    <path
+        android:name="check"
+        android:pathData="M5,12.5L10,17.5L19,7"
+        android:strokeColor="#FF000000"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2"
+        android:trimPathEnd="0" />
+</vector>

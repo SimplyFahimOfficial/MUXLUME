@@ -35,10 +35,19 @@ Primary actions are cream pills with black text (≈ 19:1). Orange is an accent,
 
 ## Motion
 
-- One easing curve (`0.2, 0, 0, 1`), 180 ms for small state changes, 260 ms for navigation.
-- Card press: scale to 97%. Bottom bar: one sliding indicator. Player controls fade in 180 ms, out
-  260 ms, auto-hide after 3.5 s. Buffering spinner only after 400 ms.
-- Reduced motion (app setting or system "remove animations") turns all of it into instant changes.
+- Springs from the Material 3 Standard motion scheme (`Motion` in `Theme.kt`): *spatial* springs for things that move
+  or resize (a little give, they keep their velocity when the target changes), *effects* springs for colour and
+  opacity (no overshoot). Fast, default and slow speeds. Material3 1.4.0 keeps `MotionScheme` internal, so the six
+  springs are copied from its `StandardMotionTokens`; use `MaterialTheme.motionScheme` once the BOM carries 1.5.
+- Card press: scale to 97%. Bottom bar: one sliding indicator, positioned while drawing. Player controls fade in
+  fast and out at the default speed, auto-hide after 3.5 s. Buffering spinner only after 400 ms.
+- A tapped poster in Movies or Series grows into the detail page's header and back (shared bounds). Anything
+  else that opens a page (Home, Search, Library) uses the plain slide and fade, as does a poster that has
+  scrolled out of the grid.
+- The watchlist icon draws its plus into a tick (animated vector, original artwork in `res/drawable`).
+- Reduced motion (app setting, or the system animator scale at 0, followed live) turns all of it into
+  instant changes: springs become snaps, no shared element, the icon is a plain drawing, artwork appears
+  without a fade. Touch ripples and loading spinners stay: they are feedback and progress, not decoration.
 
 ## Artwork
 

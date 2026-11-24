@@ -115,7 +115,7 @@ private fun Expandable(question: String, answer: String) {
     var open by rememberSaveable { mutableStateOf(false) }
     val state = stringResource(if (open) R.string.about_expanded else R.string.about_collapsed)
     Column(
-        Modifier.fillMaxWidth().animateContentSize().pressable({ open = !open }, role = Role.Button)
+        Modifier.fillMaxWidth().animateContentSize(MuxTheme.motion.spatial()).pressable({ open = !open }, role = Role.Button)
             .semantics { stateDescription = state }
             .padding(horizontal = Mux.ScreenPadding, vertical = 12.dp),
     ) {

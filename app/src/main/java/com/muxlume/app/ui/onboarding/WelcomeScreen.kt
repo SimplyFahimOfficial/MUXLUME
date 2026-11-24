@@ -47,9 +47,9 @@ import com.muxlume.app.container
 import com.muxlume.app.ui.components.MuxLogo
 import com.muxlume.app.ui.components.PrimaryButton
 import com.muxlume.app.ui.components.SecondaryButton
-import com.muxlume.app.ui.theme.Motion
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
+import com.muxlume.app.ui.theme.Speed
 import kotlinx.coroutines.launch
 
 /** First launch: brand, what the app is (and isn't), and two ways forward. No account needed. */
@@ -57,8 +57,8 @@ import kotlinx.coroutines.launch
 fun WelcomeScreen(onAdd: () -> Unit, onExplore: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val reduced = MuxTheme.reducedMotion
-    var shown by remember { mutableStateOf(reduced) }
+    val motion = MuxTheme.motion
+    var shown by remember { mutableStateOf(motion.reduced) }
     LaunchedEffect(Unit) { shown = true }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(MuxTheme.Background).windowInsetsPadding(WindowInsets.safeDrawing)) {
@@ -67,7 +67,7 @@ fun WelcomeScreen(onAdd: () -> Unit, onExplore: () -> Unit) {
             Modifier.verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(horizontal = 28.dp, vertical = 24.dp).widthIn(max = 560.dp),
             verticalArrangement = Arrangement.Bottom,
         ) {
-            AnimatedVisibility(shown, enter = fadeIn(Motion.spec(Motion.MEDIUM * 2, reduced)) + slideInVertically(Motion.spec(Motion.MEDIUM * 2, reduced)) { it / 8 }) {
+            AnimatedVisibility(shown, enter = fadeIn(motion.effects(Speed.SLOW)) + slideInVertically(motion.spatial(Speed.SLOW)) { it / 8 }) {
                 Column {
                     MuxLogo(size = 96.dp)
                     Spacer(Modifier.height(28.dp))

@@ -121,10 +121,10 @@ import com.muxlume.app.ui.components.LiveBadge
 import com.muxlume.app.ui.components.PrimaryButton
 import com.muxlume.app.ui.components.SecondaryButton
 import com.muxlume.app.ui.theme.OnMedia
-import com.muxlume.app.ui.theme.Motion
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
 import com.muxlume.app.ui.theme.SectionLabel
+import com.muxlume.app.ui.theme.Speed
 import com.muxlume.app.playback.ChannelList
 import com.muxlume.app.ui.playChannel
 import com.muxlume.app.recording.RecordingService
@@ -210,7 +210,7 @@ fun PlayerScreen(onBack: () -> Unit) {
     val number = remember { NumberEntry() }
     var current by remember { mutableStateOf<String?>(null) }
     var previous by remember { mutableStateOf<String?>(null) }
-    val reduced = MuxTheme.reducedMotion
+    val motion = MuxTheme.motion
     val view = LocalView.current
     val focus = remember { FocusRequester() }
 
@@ -385,8 +385,8 @@ fun PlayerScreen(onBack: () -> Unit) {
             }
             AnimatedVisibility(
                 visible = controls && !inPip && ui.error == null,
-                enter = fadeIn(Motion.spec(Motion.SHORT, reduced)),
-                exit = fadeOut(Motion.spec(Motion.MEDIUM, reduced)),
+                enter = fadeIn(motion.effects(Speed.FAST)),
+                exit = fadeOut(motion.effects()),
             ) {
                 Controls(
                     ui, p,

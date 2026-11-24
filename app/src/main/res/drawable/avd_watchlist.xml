@@ -1,0 +1,10 @@
+<!-- Plus into tick when an item joins the watchlist, and back. Original artwork for Muxlume, under the app's GPL-3.0-or-later. -->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_watchlist_motion">
+    <target
+        android:name="plus"
+        android:animation="@animator/watchlist_plus_out" />
+    <target
+        android:name="check"
+        android:animation="@animator/watchlist_check_in" />
+</animated-vector>
