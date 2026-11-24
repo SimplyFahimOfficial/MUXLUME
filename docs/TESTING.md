@@ -49,6 +49,8 @@ contacted.
 | `BackupCryptoTest`, `BackupRepositoryTest` | Round trip, no plaintext in the file, wrong passphrase, tampered header or body, non-backup files, restore on a second database (sources, favorites, history keys remapped, channel preferences, settings), channel preferences validated (blank or over-long keys, over-long names, unknown playlists), locked groups kept and the PIN never saved, no duplicates on a second restore, newer history kept, file playlists left out |
 | `UpdatesTest`, `GithubUpdatesTest` (github flavor), `PlayUpdatesTest` (play flavor) | Version comparison; newer, up-to-date and foreign-link release responses; which Google Play states offer an update. The Play flow itself needs a build installed from Play and is by hand |
 | `SupportUiTest` | Highlighted entries, QR dialog with payee and UPI ID, personal links gone |
+| `MotionRouteTest` (Robolectric Compose, the real routes) | A poster opens its page and back returns to the same scroll position; a double tap opens one page; the back gesture cancelled then committed; reduced motion leaves nothing of the grid behind; a page whose item is gone still closes; rapid tab changes settle on the last tab; the system animator setting is followed while the app is open |
+| `WatchlistIconTest`, `MotionTest` | The animated plus/tick: initial, final and reversed-half-way states, immediate with reduced motion; the motion springs and the snaps |
 | `UiSmokeTest` (Robolectric Compose) | First launch shows the disclaimer, HTTP acknowledgement gate, Xtream form validation, masked password |
 
 CI also launches the minified release APK on an emulator (`scripts/ci/emulator-smoke.sh`) to catch

@@ -1,14 +1,17 @@
 package com.muxlume.app.ui.theme
 
 import android.app.Activity
+import android.content.ContentResolver
 import android.content.Context
 import android.content.ContextWrapper
+import android.database.ContentObserver
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -20,8 +23,13 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -143,6 +151,7 @@ val LocalReducedMotion = staticCompositionLocalOf { false }
 /** Themed colour roles and the reduced-motion flag, read from composition. */
 object MuxTheme {
     val reducedMotion: Boolean @Composable @ReadOnlyComposable get() = LocalReducedMotion.current
+    val motion: Motion @Composable get() = LocalReducedMotion.current.let { remember(it) { Motion(it) } }
     val isLight: Boolean @Composable @ReadOnlyComposable get() = LocalMux.current.isLight
     val Background: Color @Composable @ReadOnlyComposable get() = LocalMux.current.background
     val Surface: Color @Composable @ReadOnlyComposable get() = LocalMux.current.surface
@@ -164,14 +173,36 @@ fun OnMedia(content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalMux provides LocalMux.current.onMedia(), content = content)
 }
 
-/** Motion tokens: short, one easing curve, and no motion at all when the user asked for less. */
-object Motion {
-    val Emphasized = CubicBezierEasing(0.2f, 0f, 0f, 1f)
-    const val SHORT = 180
-    const val MEDIUM = 260
+/** The three speeds of the Material 3 motion scheme. */
+enum class Speed { FAST, DEFAULT, SLOW }
 
-    fun <T> spec(durationMs: Int, reduced: Boolean): FiniteAnimationSpec<T> =
-        if (reduced) snap() else tween(durationMs, easing = Emphasized)
+/**
+ * The springs of the Material 3 Standard motion scheme, or a snap when the user asked for less. [spatial] specs move or resize things
+ * and keep their velocity when the target changes mid-flight; [effects] specs change colour or opacity and settle without overshoot.
+ *
+ * Material3 1.4.0 (the pinned BOM) keeps `MotionScheme` internal, so the numbers are copied from its `StandardMotionTokens`. Where
+ * the BOM carries material3 1.5, replace the six springs with `MaterialTheme.motionScheme`.
+ */
+@Suppress("MagicNumber") // the scheme's numbers
+@Immutable
+class Motion(val reduced: Boolean) {
+    fun <T> spatial(speed: Speed = Speed.DEFAULT): FiniteAnimationSpec<T> = when {
+        reduced -> snap()
+        speed == Speed.FAST -> spring(SPATIAL_DAMPING, 1400f)
+        speed == Speed.SLOW -> spring(SPATIAL_DAMPING, 300f)
+        else -> spring(SPATIAL_DAMPING, 700f)
+    }
+
+    fun <T> effects(speed: Speed = Speed.DEFAULT): FiniteAnimationSpec<T> = when {
+        reduced -> snap()
+        speed == Speed.FAST -> spring(stiffness = 3800f)
+        speed == Speed.SLOW -> spring(stiffness = 800f)
+        else -> spring(stiffness = 1600f)
+    }
+
+    private companion object {
+        const val SPATIAL_DAMPING = 0.9f
+    }
 }
 
 /** Uppercase section label above rows. */
@@ -222,6 +253,24 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
+private fun ContentResolver.animatorsOff() = Settings.Global.getFloat(this, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+
+/** True while the system animator scale is 0 (Developer options, "Remove animations"), also when it changes while the app is open. */
+@Composable
+private fun animatorsOff(): Boolean {
+    val resolver = LocalContext.current.contentResolver
+    var off by remember { mutableStateOf(resolver.animatorsOff()) }
+    DisposableEffect(resolver) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) { off = resolver.animatorsOff() }
+        }
+        resolver.registerContentObserver(Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, observer)
+        off = resolver.animatorsOff()
+        onDispose { resolver.unregisterContentObserver(observer) }
+    }
+    return off
+}
+
 @Composable
 fun MuxlumeTheme(
     theme: ThemeMode = ThemeMode.DARK,
@@ -249,7 +298,7 @@ fun MuxlumeTheme(
         }
     }
 
-    val systemOff = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+    val systemOff = animatorsOff()
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {

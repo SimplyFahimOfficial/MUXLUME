@@ -25,9 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -65,6 +63,8 @@ import com.muxlume.app.ui.components.PillRow
 import com.muxlume.app.ui.components.PrimaryButton
 import com.muxlume.app.ui.components.SecondaryButton
 import com.muxlume.app.ui.components.pressable
+import com.muxlume.app.ui.components.sharedPoster
+import com.muxlume.app.ui.components.watchlistPainter
 import com.muxlume.app.ui.play
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
@@ -181,7 +181,7 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
             val episodes = extra.episodes.filter { e -> e.season == season }
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
                 item {
-                    Box(Modifier.fillMaxWidth().aspectRatio(0.8f)) {
+                    Box(Modifier.sharedPoster(it.sourceId, it.stableKey, detail = true).fillMaxWidth().aspectRatio(0.8f)) {
                         Artwork(extra.backdrop ?: it.logo, it.name, it.sourceId, Modifier.fillMaxSize(), monogramSize = 72)
                         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to MuxTheme.Background)))
                     }
@@ -217,7 +217,7 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
                             SecondaryButton(
                                 stringResource(if (favorite) R.string.detail_in_watchlist else R.string.detail_watchlist),
                                 vm::toggleFavorite,
-                                icon = if (favorite) Icons.Rounded.Check else Icons.Rounded.Add,
+                                iconPainter = watchlistPainter(favorite),
                             )
                         }
                         extra.plot?.let { plot ->

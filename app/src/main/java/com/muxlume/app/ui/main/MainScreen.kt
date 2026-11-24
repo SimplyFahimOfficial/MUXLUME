@@ -6,7 +6,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -45,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -55,9 +55,9 @@ import com.muxlume.app.ui.components.MuxLogo
 import com.muxlume.app.ui.home.HomeScreen
 import com.muxlume.app.ui.library.LibraryScreen
 import com.muxlume.app.ui.live.LiveScreen
-import com.muxlume.app.ui.theme.Motion
 import com.muxlume.app.ui.theme.Mux
 import com.muxlume.app.ui.theme.MuxTheme
+import com.muxlume.app.ui.theme.Speed
 import com.muxlume.app.ui.vod.VodScreen
 import com.muxlume.app.data.db.ItemKind
 
@@ -76,7 +76,7 @@ fun MainScreen(nav: Nav) {
     val holder = rememberSaveableStateHolder()
     BackHandler(enabled = tab != 0) { tab = 0 }
     val content: @Composable (Modifier) -> Unit = { modifier ->
-        Crossfade(tab, modifier, animationSpec = Motion.spec(Motion.SHORT, MuxTheme.reducedMotion), label = "tab") { t ->
+        Crossfade(tab, modifier, animationSpec = MuxTheme.motion.effects(Speed.FAST), label = "tab") { t ->
             holder.SaveableStateProvider(t) {
                 when (Tab.entries[t]) {
                     Tab.HOME -> HomeScreen(nav, openTab = { tab = it.ordinal })
@@ -106,7 +106,7 @@ val BottomBarSpace = 96.dp
 
 @Composable
 private fun BottomBar(selected: Int, modifier: Modifier, onSelect: (Int) -> Unit) {
-    val reduced = MuxTheme.reducedMotion
+    val motion = MuxTheme.motion
     BoxWithConstraints(
         modifier
             .windowInsetsPadding(WindowInsets.navigationBars)
@@ -118,12 +118,13 @@ private fun BottomBar(selected: Int, modifier: Modifier, onSelect: (Int) -> Unit
             .border(1.dp, MuxTheme.Outline, Mux.PillShape),
     ) {
         val itemWidth = maxWidth / Tab.entries.size
-        // One indicator that slides between tabs instead of five that fade.
-        val x by animateDpAsState(itemWidth * selected, Motion.spec(Motion.MEDIUM, reduced), label = "indicator")
-        Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(x.roundToPx(), 0) }.width(itemWidth).fillMaxHeight().padding(6.dp).clip(Mux.PillShape).background(MuxTheme.Primary))
+        // One indicator that slides between tabs instead of five that fade. A spring keeps its velocity when the tab changes mid-slide,
+        // and the position is read while drawing, so a slide does not re-layout the bar.
+        val position by animateFloatAsState(selected.toFloat(), motion.spatial(), label = "indicator")
+        Box(Modifier.graphicsLayer { translationX = position * itemWidth.toPx() }.width(itemWidth).fillMaxHeight().padding(6.dp).clip(Mux.PillShape).background(MuxTheme.Primary))
         Row(Modifier.fillMaxSize().selectableGroup()) {
             Tab.entries.forEachIndexed { i, t ->
-                val color by animateColorAsState(if (i == selected) MuxTheme.OnPrimary else MuxTheme.TextSecondary, Motion.spec(Motion.SHORT, reduced), label = "tabColor")
+                val color by animateColorAsState(if (i == selected) MuxTheme.OnPrimary else MuxTheme.TextSecondary, motion.effects(Speed.FAST), label = "tabColor")
                 Column(
                     Modifier.weight(1f).fillMaxHeight().clip(Mux.PillShape).selectable(i == selected, role = Role.Tab) { onSelect(i) },
                     horizontalAlignment = Alignment.CenterHorizontally,

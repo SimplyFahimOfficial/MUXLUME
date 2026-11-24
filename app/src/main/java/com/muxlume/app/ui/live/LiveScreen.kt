@@ -179,7 +179,9 @@ fun LiveScreen(nav: Nav) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var options by remember { mutableStateOf<ItemEntity?>(null) }
-    LaunchedEffect(browse, sourceId) { listState.scrollToItem(0) }
+    // Back to the top when the filter changes, not when the screen returns (another tab, a closed page) to the position it saved.
+    var arrived by remember { mutableStateOf(false) }
+    LaunchedEffect(browse, sourceId) { if (arrived) listState.scrollToItem(0) else arrived = true }
 
     Column(Modifier.fillMaxSize()) {
         TopHeader(
