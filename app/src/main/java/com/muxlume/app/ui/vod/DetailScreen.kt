@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -174,7 +175,7 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav, fromPoster: Boolean = fa
     val it = item
 
     Box(Modifier.fillMaxSize().background(MuxTheme.Background)) {
-        if (it == null || favorite == null) { // the watchlist button is drawn in its real state at once, not animated into it
+        if (it == null) {
             CircularProgressIndicator(Modifier.align(Alignment.Center), color = MuxTheme.Accent)
         } else {
             val seasons = extra.episodes.map { e -> e.season }.distinct()
@@ -182,7 +183,7 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav, fromPoster: Boolean = fa
             val episodes = extra.episodes.filter { e -> e.season == season }
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
                 item {
-                    Box(Modifier.sharedPoster(it.sourceId, it.stableKey, detail = true, fromPoster = fromPoster).fillMaxWidth().aspectRatio(0.8f)) {
+                    Box(Modifier.sharedPoster(it.sourceId, it.stableKey, detail = true, fromPoster = fromPoster).testTag("detail-hero").fillMaxWidth().aspectRatio(0.8f)) {
                         Artwork(extra.backdrop ?: it.logo, it.name, it.sourceId, Modifier.fillMaxSize(), monogramSize = 72)
                         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to MuxTheme.Background)))
                     }
@@ -215,11 +216,14 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav, fromPoster: Boolean = fa
                                     }
                                 }, icon = Icons.Rounded.PlayArrow)
                             }
-                            SecondaryButton(
-                                stringResource(if (favorite == true) R.string.detail_in_watchlist else R.string.detail_watchlist),
-                                vm::toggleFavorite,
-                                iconPainter = watchlistPainter(favorite == true),
-                            )
+                            // Drawn once the database has answered, so it appears in its real state instead of animating into it.
+                            favorite?.let { added ->
+                                SecondaryButton(
+                                    stringResource(if (added) R.string.detail_in_watchlist else R.string.detail_watchlist),
+                                    vm::toggleFavorite,
+                                    iconPainter = watchlistPainter(added),
+                                )
+                            }
                         }
                         extra.plot?.let { plot ->
                             Spacer(Modifier.height(18.dp))

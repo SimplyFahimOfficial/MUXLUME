@@ -47,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
@@ -115,6 +116,7 @@ private fun BottomBar(selected: Int, modifier: Modifier, onSelect: (Int) -> Unit
             .padding(horizontal = 12.dp, vertical = 10.dp)
             .fillMaxWidth()
             .height(68.dp)
+            .testTag("bottom-bar")
             .clip(Mux.PillShape)
             .background(MuxTheme.Raised)
             .border(1.dp, MuxTheme.Outline, Mux.PillShape),

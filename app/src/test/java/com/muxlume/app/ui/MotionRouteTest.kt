@@ -13,6 +13,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -101,26 +104,28 @@ class MotionRouteTest {
     fun `the poster grows into the page header while the page comes in`() {
         start()
         val initials = { compose.onAllNodesWithText("ZQ", useUnmergedTree = true) } // the placeholder drawn in the poster, and later in the header
+        val header = { compose.onAllNodes(hasText("ZQ") and hasAnyAncestor(hasTestTag("detail-hero")), useUnmergedTree = true) }
         compose.onNodeWithText("Zed Quantum").performClick()
         compose.mainClock.autoAdvance = false
         var frames = 0
-        while (initials().fetchSemanticsNodes().size < 2 && frames++ < 200) { compose.mainClock.advanceTimeByFrame(); Thread.sleep(10) } // the page's data loads in the background
+        while (header().fetchSemanticsNodes().isEmpty() && frames++ < 200) { compose.mainClock.advanceTimeByFrame(); Thread.sleep(10) } // the page's data loads in the background
         compose.mainClock.advanceTimeByFrame()
-        val header = initials().fetchSemanticsNodes().minBy { it.boundsInRoot.height }.boundsInRoot // the poster's own initials are the larger, scaled up with it
+        val first = header().onFirst().fetchSemanticsNode().boundsInRoot
         compose.mainClock.autoAdvance = true
         compose.waitUntil(5_000) { initials().fetchSemanticsNodes().size == 1 } // the grid screen is gone, the header stays
-        val placed = initials().onFirst().fetchSemanticsNode().boundsInRoot
-        assertThat(header.height).isLessThan(placed.height * 0.8f) // on its first frame the header is a poster-sized thumbnail ...
-        assertThat(header.center.x).isLessThan(placed.center.x - 100) // ... at the poster's place, not yet where the header ends up
+        val placed = header().onFirst().fetchSemanticsNode().boundsInRoot
+        assertThat(first.height).isLessThan(placed.height * 0.8f) // on its first frame the header is a poster-sized thumbnail ...
+        assertThat(first.center.x).isLessThan(placed.center.x - 100) // ... at the poster's place, not yet where the header ends up
     }
 
     @Test
     fun `tapping a poster twice opens one page`() {
         start()
         compose.mainClock.autoAdvance = false
-        compose.onNodeWithText("Movie 00").performClick()
+        val poster = hasText("Movie 00") and hasClickAction() // the page's title says "Movie 00" too, once it has loaded
+        compose.onNode(poster).performClick()
         compose.mainClock.advanceTimeBy(40)
-        compose.onNodeWithText("Movie 00").performClick() // the grid is still there while the page comes in
+        compose.onNode(poster).performClick() // the grid is still there while the page comes in
         compose.mainClock.autoAdvance = true
         waitFor("Watchlist")
         back()

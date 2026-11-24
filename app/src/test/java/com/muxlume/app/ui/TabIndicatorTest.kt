@@ -7,6 +7,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.LayoutDirection
@@ -28,9 +29,12 @@ import org.robolectric.annotation.GraphicsMode
 class TabIndicatorTest {
     @get:Rule val compose = createComposeRule()
 
-    private fun lightAt(xDp: Float): Boolean {
+    /** Whether the bar is light at [fraction] of its width, a little below its top edge (inside the indicator, above the icons). */
+    private fun lightAt(fraction: Float): Boolean {
+        val bounds = compose.onNodeWithTag("bottom-bar").fetchSemanticsNode().boundsInRoot
         val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
-        return android.graphics.Color.red(bitmap.getPixel((xDp * 3).toInt(), (824 * 3))) > 200 // inside the pill, above the icon; the bar itself is dark
+        val pixel = bitmap.getPixel((bounds.left + fraction * bounds.width).toInt(), (bounds.top + 0.15f * bounds.height).toInt())
+        return android.graphics.Color.red(pixel) > 200 // the bar itself is dark
     }
 
     private fun selectLibrary(direction: LayoutDirection) {
@@ -39,8 +43,8 @@ class TabIndicatorTest {
         compose.waitForIdle()
     }
 
-    private val first = 12f + 77.4f / 2 // centre of the first tab from the left edge, in dp
-    private val last = 411f - first
+    private val first = 0.1f // the middle of the first of five tabs, from the left edge of the bar
+    private val last = 0.9f
 
     @Test
     fun `left to right the indicator moves to the last tab on the right`() {
