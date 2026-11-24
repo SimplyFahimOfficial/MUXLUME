@@ -50,6 +50,9 @@ object Mux {
     val PillShape = RoundedCornerShape(50)
 
     val ScreenPadding = 20.dp
+
+    /** Height of a button; a row waiting for its button keeps it. */
+    val ButtonMinHeight = 52.dp
 }
 
 /**

@@ -206,7 +206,7 @@ fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
 private fun ButtonBase(text: String, onClick: () -> Unit, modifier: Modifier, icon: ImageVector?, enabled: Boolean, bg: Color, fg: Color, iconPainter: Painter? = null) {
     Row(
         modifier
-            .heightIn(min = 52.dp)
+            .heightIn(min = Mux.ButtonMinHeight)
             .clip(Mux.PillShape)
             .background(if (enabled) bg else MuxTheme.Surface)
             .pressable(onClick, enabled = enabled) // disabled buttons stay announced as buttons

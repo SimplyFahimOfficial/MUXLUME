@@ -198,7 +198,7 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav, fromPoster: Boolean = fa
                             Text(extra.meta.joinToString("  ·  "), style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary)
                         }
                         Spacer(Modifier.height(18.dp))
-                        Row(Modifier.heightIn(min = 52.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) { // the height of a button, before its state is known
+                        Row(Modifier.heightIn(min = Mux.ButtonMinHeight), horizontalArrangement = Arrangement.spacedBy(10.dp)) { // before the watchlist button is known
                             if (it.kind == ItemKind.MOVIE) {
                                 val h = history[MediaIds.of(it.sourceId, it.stableKey)]
                                 val resume = h != null && h.positionMs > 30_000 && (h.durationMs <= 0 || h.positionMs < h.durationMs * 0.95)
