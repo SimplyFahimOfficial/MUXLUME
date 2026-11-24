@@ -101,6 +101,7 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - Renaming a source no longer re-downloads it.
 - All UI text is in string resources, ready for translation.
 - The Support screen is more compact.
+- Opening a stream (first play, channel up/down, failover) no longer decrypts an Xtream login on the main thread.
 
 ### Fixed
 - Cancelling a playlist import (the Cancel button, or leaving while it runs) now ends the download at once, also while the provider is slow to
