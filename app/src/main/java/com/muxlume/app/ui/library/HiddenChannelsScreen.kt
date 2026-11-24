@@ -106,7 +106,7 @@ fun HiddenChannelsScreen(nav: Nav) {
 @Composable
 private fun HiddenRow(ch: ItemEntity, onShow: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = Mux.ScreenPadding, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Artwork(ch.logo, ch.name, Modifier.size(width = 56.dp, height = 40.dp).clip(Mux.CardShape).padding(4.dp), contentScale = ContentScale.Fit, monogramSize = 14)
+        Artwork(ch.logo, ch.name, ch.sourceId, Modifier.size(width = 56.dp, height = 40.dp).clip(Mux.CardShape).padding(4.dp), contentScale = ContentScale.Fit, monogramSize = 14)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(ch.name, style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -15,7 +15,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.datasource.DataSourceBitmapLoader
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -40,19 +39,18 @@ import kotlinx.coroutines.guava.future
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import okhttp3.Call
 import java.util.Locale
 
 /**
  * Owns the player. The UI talks to it through a MediaController, which also gives system media
  * controls, the media notification, Bluetooth buttons and background audio for free.
  */
-@OptIn(UnstableApi::class) // OkHttpDataSource, DataSourceBitmapLoader and media source wiring
+@OptIn(UnstableApi::class) // DataSourceBitmapLoader and media source wiring
 class PlaybackService : MediaSessionService() {
 
     private val container get() = (application as MuxlumeApp).container
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private lateinit var http: OkHttpDataSource.Factory
+    private lateinit var streamRequests: StreamRequests
     private var session: MediaSession? = null
     private val headersByMediaId = HashMap<String, Map<String, String>>()
     private val policyByMediaId = HashMap<String, HttpPolicy>()
@@ -69,23 +67,14 @@ class PlaybackService : MediaSessionService() {
     private var languages: Pair<String?, String?> = null to null
     private var subtitlesOff = false
 
-    /**
-     * HTTP setting of the source that is playing. Stream and segment requests run on loader threads
-     * and are tagged with it, so one source's HTTP opt-in never applies to another source's streams.
-     * A queue only ever holds one source's items (a series' episodes), so "the current item" is exact.
-     */
-    @Volatile private var currentPolicy = HttpPolicy.HTTPS_ONLY
-
     override fun onCreate() {
         super.onCreate()
-        http = OkHttpDataSource.Factory(
-            Call.Factory { req -> container.http.newCall(req.newBuilder().tag(HttpPolicy::class.java, currentPolicy).build()) },
-        )
+        streamRequests = StreamRequests(container.http)
         // One small read at start-up; the load control cannot change once the player exists.
         val buffer = runBlocking { container.settings.current().buffer }
         val exo = ExoPlayer.Builder(this)
             .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(buffer.minMs, buffer.maxMs, buffer.startMs, buffer.resumeMs).build())
-            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this, http)))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this, streamRequests.factory)))
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
@@ -99,8 +88,10 @@ class PlaybackService : MediaSessionService() {
         val player = ChannelSwitcher(exo)
         session = MediaSession.Builder(this, player)
             .setCallback(Callback())
-            // Notification artwork goes through the gated client untagged, i.e. with the artwork rule.
-            .setBitmapLoader(DataSourceBitmapLoader.Builder(this).setDataSourceFactory(OkHttpDataSource.Factory(container.http)).build())
+            // Notification artwork goes through the gated client with the HTTP setting of the item's source.
+            .setBitmapLoader(
+                ArtworkLoader(container.http, scope, container::allowsHttp) { DataSourceBitmapLoader.Builder(this).setDataSourceFactory(it).build() },
+            )
             .setSessionActivity(
                 PendingIntent.getActivity(
                     this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
@@ -181,6 +172,7 @@ class PlaybackService : MediaSessionService() {
             .setUri(stream.url.toUri())
             .setMimeType(if (path.endsWith(".m3u8")) MimeTypes.APPLICATION_M3U8 else if (path.endsWith(".mpd")) MimeTypes.APPLICATION_MPD else null)
             .build()
+            .withArtworkSource(sourceId)
     }
 
     /** A finished recording plays from its file in the folder the user chose (no network, no headers). */
@@ -189,7 +181,7 @@ class PlaybackService : MediaSessionService() {
         val recording = container.db.recordings().playable(id, container.lock.unlockedNow()) ?: return null
         headersByMediaId[request.mediaId] = emptyMap()
         policyByMediaId[request.mediaId] = HttpPolicy.HTTPS_ONLY
-        return request.buildUpon().setUri(recording.fileUri!!.toUri()).setMimeType(MimeTypes.VIDEO_MP2T).build()
+        return request.buildUpon().setUri(recording.fileUri!!.toUri()).setMimeType(MimeTypes.VIDEO_MP2T).build().withArtworkSource(recording.sourceId) // the channel's logo
     }
 
     /**
@@ -208,8 +200,10 @@ class PlaybackService : MediaSessionService() {
 
     /** Playlist headers (User-Agent, Referer) and the source's HTTP setting apply to every request of the current item. */
     private fun applyFor(mediaId: String) {
-        http.setDefaultRequestProperties(headersByMediaId[mediaId].orEmpty())
-        currentPolicy = policyByMediaId[mediaId] ?: HttpPolicy.HTTPS_ONLY
+        val sourceId = MediaIds.parse(mediaId)?.first
+        // The setting is read again for each request: allowing HTTP is withdrawn from a stream that is playing when the user turns it off.
+        // Unknown yet (null): the setting resolved for the item stands.
+        streamRequests.use(headersByMediaId[mediaId].orEmpty(), policyByMediaId[mediaId] ?: HttpPolicy.HTTPS_ONLY) { sourceId == null || (container.httpSources.value?.contains(sourceId) ?: true) }
     }
 
     /**

@@ -19,6 +19,12 @@ object MediaIds {
 
     /** The channel the user chose, while another server of it plays. Absent when the item is the channel the user chose. */
     const val EXTRA_PRIMARY = "muxlume.primary"
+
+    /**
+     * The source an item's artwork belongs to, whose HTTP setting decides how the notification image is fetched. Set by the playback
+     * service from the database, never taken from a controller; absent means HTTPS only.
+     */
+    const val EXTRA_ARTWORK_SOURCE = "muxlume.artwork_source"
     private const val RECORDING_PREFIX = "rec|"
 
     fun of(sourceId: Long, stableKey: String) = "$sourceId|$stableKey"
@@ -76,6 +82,11 @@ object MediaIds {
     fun kindOf(item: MediaItem): ItemKind =
         item.mediaMetadata.extras?.getString(EXTRA_KIND)?.let { runCatching { ItemKind.valueOf(it) }.getOrNull() } ?: ItemKind.LIVE
 }
+
+/** This item with the source its notification artwork belongs to. */
+fun MediaItem.withArtworkSource(sourceId: Long): MediaItem = buildUpon().setMediaMetadata(
+    mediaMetadata.buildUpon().setExtras(Bundle(mediaMetadata.extras ?: Bundle()).apply { putLong(MediaIds.EXTRA_ARTWORK_SOURCE, sourceId) }).build(),
+).build()
 
 /** The id of the channel the user chose: the item's own unless it is another server of one. */
 val MediaItem.primaryId: String get() = mediaMetadata.extras?.getString(MediaIds.EXTRA_PRIMARY) ?: mediaId

@@ -53,14 +53,12 @@ class HttpTest {
     }
 
     @Test
-    fun `gate uses the request's source policy, artwork rule only for untagged requests`() {
+    fun `gate uses the request's own source policy, and a request that has none is https only`() {
         val url = "http://iptv.example/x".toHttpUrl()
-        CleartextGate.artworkAllowed = true
         assertThat(CleartextGate.permits(request(url, HttpPolicy.HTTPS_ONLY))).isFalse()
         assertThat(CleartextGate.permits(request(url, HttpPolicy.ALLOW_HTTP))).isTrue()
-        assertThat(CleartextGate.permits(Request.Builder().url(url).build())).isTrue()
-        CleartextGate.artworkAllowed = false
         assertThat(CleartextGate.permits(Request.Builder().url(url).build())).isFalse()
         assertThat(CleartextGate.permits(request("https://iptv.example/x".toHttpUrl(), HttpPolicy.HTTPS_ONLY))).isTrue()
+        assertThat(CleartextGate.permits(Request.Builder().url("https://iptv.example/x".toHttpUrl()).build())).isTrue()
     }
 }

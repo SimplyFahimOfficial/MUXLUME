@@ -112,7 +112,7 @@ private fun PickerRow(ch: ItemEntity, playing: Boolean, onClick: () -> Unit) {
         Modifier.fillMaxWidth().pressable(onClick, label = label).padding(horizontal = Mux.ScreenPadding, vertical = 8.dp).semantics(mergeDescendants = true) { contentDescription = label },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Artwork(ch.logo, ch.name, Modifier.size(width = 64.dp, height = 46.dp).clip(Mux.CardShape).padding(4.dp), contentScale = ContentScale.Fit, monogramSize = 14)
+        Artwork(ch.logo, ch.name, ch.sourceId, Modifier.size(width = 64.dp, height = 46.dp).clip(Mux.CardShape).padding(4.dp), contentScale = ContentScale.Fit, monogramSize = 14)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(ch.name, style = MaterialTheme.typography.titleMedium, color = if (playing) MuxTheme.Primary else MuxTheme.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)

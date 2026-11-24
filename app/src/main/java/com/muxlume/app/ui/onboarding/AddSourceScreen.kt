@@ -75,6 +75,8 @@ import com.muxlume.app.core.net.Urls
 import com.muxlume.app.data.ErrorText
 import com.muxlume.app.data.ImportResult
 import com.muxlume.app.data.SourceInput
+import com.muxlume.app.data.SourceSecret
+import com.muxlume.app.data.db.SourceEntity
 import com.muxlume.app.data.db.SourceType
 import com.muxlume.app.data.xtream.XtreamApi
 import com.muxlume.app.ui.components.PillRow
@@ -150,6 +152,28 @@ data class FormState(
 
     val canSubmit: Boolean get() = validationError == null && (!usesHttp || httpAcknowledged) && phase == Phase.Editing
 
+    companion object {
+        /** The source as the user saved it, for the edit screen: its HTTP choice is shown as it is, so saving a new name keeps it. */
+        fun of(s: SourceEntity, secret: SourceSecret?): FormState = when (s.type) {
+            SourceType.M3U_URL ->
+                FormState(Mode.LINK, s.name, url = secret?.url.orEmpty(), guideUrl = secret?.epgUrl.orEmpty(), httpAcknowledged = s.allowHttp)
+            SourceType.M3U_FILE ->
+                FormState(Mode.FILE, s.name, fileUri = secret?.url?.let(Uri::parse), fileName = s.label, guideUrl = secret?.epgUrl.orEmpty(), httpAcknowledged = s.allowHttp)
+            SourceType.XTREAM ->
+                FormState(Mode.XTREAM, s.name, server = secret?.url.orEmpty(), username = secret?.username.orEmpty(), password = secret?.password.orEmpty(), httpAcknowledged = s.allowHttp)
+        }
+    }
+
+    /**
+     * What is saved. The HTTP choice is saved as shown: a playlist's channels, and an account's artwork, may be http:// even when its
+     * own address is https, so the choice is the user's, off until ticked. It is required (see [canSubmit]) when the address typed is http.
+     */
+    fun toInput(): SourceInput = when (mode) {
+        Mode.LINK -> SourceInput.M3uUrl(name, url, httpAcknowledged, guideUrl)
+        Mode.FILE -> SourceInput.M3uFile(name, fileUri!!, fileName, httpAcknowledged, guideUrl)
+        Mode.XTREAM -> SourceInput.Xtream(name, server, username, password, httpAcknowledged)
+    }
+
     /** Where the list comes from; only a change here needs a new download. */
     val location: List<Any?> get() = when (mode) {
         Mode.LINK -> listOf(mode, url.trim())
@@ -172,11 +196,7 @@ class AddSourceViewModel(private val c: AppContainer, private val res: Resources
         if (existingId != null) viewModelScope.launch {
             val s = c.sources.get(existingId) ?: return@launch
             val secret = runCatching { c.sources.secretOf(s) }.getOrNull()
-            state.value = when (s.type) {
-                SourceType.M3U_URL -> FormState(Mode.LINK, s.name, url = secret?.url.orEmpty(), guideUrl = secret?.epgUrl.orEmpty(), httpAcknowledged = s.allowHttp)
-                SourceType.M3U_FILE -> FormState(Mode.FILE, s.name, fileUri = secret?.url?.let(Uri::parse), fileName = s.label, guideUrl = secret?.epgUrl.orEmpty(), httpAcknowledged = s.allowHttp)
-                SourceType.XTREAM -> FormState(Mode.XTREAM, s.name, server = secret?.url.orEmpty(), username = secret?.username.orEmpty(), password = secret?.password.orEmpty(), httpAcknowledged = s.allowHttp)
-            }
+            state.value = FormState.of(s, secret)
             // An item list that never imported (or failed) still needs one, even if nothing changed.
             loadedLocation = if (s.refreshedAt != null && s.lastError == null) state.value.location else null
         }
@@ -186,18 +206,12 @@ class AddSourceViewModel(private val c: AppContainer, private val res: Resources
 
     fun edit(f: (FormState) -> FormState) = state.update { f(it).copy(error = null, accountInfo = if (it.mode == f(it).mode) it.accountInfo else null) }
 
-    private fun input(s: FormState): SourceInput = when (s.mode) {
-        Mode.LINK -> SourceInput.M3uUrl(s.name, s.url, s.usesHttp && s.httpAcknowledged, s.guideUrl)
-        Mode.FILE -> SourceInput.M3uFile(s.name, s.fileUri!!, s.fileName, s.httpAcknowledged, s.guideUrl)
-        Mode.XTREAM -> SourceInput.Xtream(s.name, s.server, s.username, s.password, s.usesHttp && s.httpAcknowledged)
-    }
-
     fun testConnection() {
         val s = state.value
         if (s.mode != Mode.XTREAM || !s.canSubmit) return
         job = viewModelScope.launch {
             state.update { it.copy(phase = Phase.Testing, error = null) }
-            val result = runCatching { c.sources.testXtream(input(s) as SourceInput.Xtream) }
+            val result = runCatching { c.sources.testXtream(s.toInput() as SourceInput.Xtream) }
             state.update {
                 result.fold(
                     { acc ->
@@ -225,11 +239,11 @@ class AddSourceViewModel(private val c: AppContainer, private val res: Resources
             val createdNew = savedId == null
             try {
                 if (!needsImport(s)) {
-                    c.sources.save(input(s), savedId)
+                    c.sources.save(s.toInput(), savedId)
                     state.update { it.copy(phase = Phase.Saved) }
                     return@launch
                 }
-                val id = c.sources.save(input(s), savedId).also { savedId = it }
+                val id = c.sources.save(s.toInput(), savedId).also { savedId = it }
                 val result = c.sources.refresh(id) { n -> state.update { it.copy(phase = Phase.Importing(n)) } }
                 c.settings.setOnboardingDone()
                 state.update { it.copy(phase = Phase.Done(result)) }
@@ -337,8 +351,8 @@ private fun Form(s: FormState, vm: AddSourceViewModel, onPickFile: () -> Unit) {
             if (s.mode != Mode.XTREAM) {
                 Field(stringResource(R.string.add_source_guide_link), s.guideUrl, { v -> vm.edit { it.copy(guideUrl = v) } }, keyboard = KeyboardType.Uri, placeholder = "https://…/guide.xml")
             }
-            // A local file can list plain-HTTP streams; that is opt-in here instead of required up front.
-            if (s.usesHttp || s.mode == Mode.FILE) HttpWarning(s.httpAcknowledged, optional = s.mode == Mode.FILE) { on -> vm.edit { it.copy(httpAcknowledged = on) } }
+            // A playlist or account whose own address is https can still list plain-HTTP streams or artwork; that is opt-in here instead of required up front.
+            HttpWarning(s.httpAcknowledged, required = s.usesHttp, forArtwork = s.mode == Mode.XTREAM) { on -> vm.edit { it.copy(httpAcknowledged = on) } }
             s.accountInfo?.let { info ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.CheckCircle, null, tint = MuxTheme.Accent, modifier = Modifier.size(20.dp))
@@ -366,24 +380,26 @@ private fun Form(s: FormState, vm: AddSourceViewModel, onPickFile: () -> Unit) {
     }
 }
 
+/**
+ * The HTTP choice. [required]: the address typed is http, so it must be acknowledged. Otherwise it is optional, and says what it is for:
+ * the streams a playlist lists, or an account's logos and posters (the account's own address is https).
+ */
 @Composable
-private fun HttpWarning(acknowledged: Boolean, optional: Boolean, onChange: (Boolean) -> Unit) {
+private fun HttpWarning(acknowledged: Boolean, required: Boolean, forArtwork: Boolean, onChange: (Boolean) -> Unit) {
+    val common = stringResource(R.string.add_source_with_plain_http_anyone_on)
+    val (title, body) = when {
+        required -> R.string.add_source_this_server_doesn_t_use to common
+        forArtwork -> R.string.add_source_logos_over_plain_http to stringResource(R.string.add_source_logos_over_plain_http_body)
+        else -> R.string.add_source_streams_over_plain_http to stringResource(R.string.add_source_many_playlist_files_list_http) + common
+    }
     Column(Modifier.fillMaxWidth().clip(Mux.CardShape).background(MuxTheme.Surface).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Warning, null, tint = MuxTheme.Accent)
             Spacer(Modifier.width(10.dp))
-            Text(
-                stringResource(if (optional) R.string.add_source_streams_over_plain_http else R.string.add_source_this_server_doesn_t_use),
-                style = MaterialTheme.typography.titleMedium,
-                color = MuxTheme.TextPrimary,
-            )
+            Text(stringResource(title), style = MaterialTheme.typography.titleMedium, color = MuxTheme.TextPrimary)
         }
         Spacer(Modifier.height(8.dp))
-        Text(
-            (if (optional) stringResource(R.string.add_source_many_playlist_files_list_http) else "") +
-                stringResource(R.string.add_source_with_plain_http_anyone_on),
-            style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary,
-        )
+        Text(body, style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary)
         Row(
             Modifier.fillMaxWidth().padding(top = 8.dp).toggleable(acknowledged, role = Role.Checkbox, onValueChange = onChange),
             verticalAlignment = Alignment.CenterVertically,

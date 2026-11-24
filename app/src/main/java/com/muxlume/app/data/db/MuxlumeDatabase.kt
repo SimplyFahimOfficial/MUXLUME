@@ -26,11 +26,9 @@ interface SourceDao {
     @Query("SELECT * FROM sources WHERE id = :id")
     suspend fun get(id: Long): SourceEntity?
 
-    @Query("SELECT EXISTS(SELECT 1 FROM sources WHERE allowHttp = 1)")
-    fun anyAllowsHttp(): Flow<Boolean>
-
-    @Query("SELECT EXISTS(SELECT 1 FROM sources WHERE allowHttp = 1)")
-    suspend fun anyAllowsHttpNow(): Boolean
+    /** The sources the user allowed plain HTTP for: their artwork may use it, nobody else's. */
+    @Query("SELECT id FROM sources WHERE allowHttp = 1")
+    fun httpIds(): Flow<List<Long>>
 
     @Insert
     suspend fun insert(source: SourceEntity): Long

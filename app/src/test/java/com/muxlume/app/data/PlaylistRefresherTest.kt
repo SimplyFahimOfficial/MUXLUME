@@ -6,7 +6,6 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import com.muxlume.app.PlainBox
-import com.muxlume.app.core.net.CleartextGate
 import com.muxlume.app.core.net.Http
 import com.muxlume.app.data.db.MuxlumeDatabase
 import com.muxlume.app.data.db.SourceEntity
@@ -45,7 +44,6 @@ class PlaylistRefresherTest {
     fun tearDown() {
         db.close()
         server.close()
-        CleartextGate.artworkAllowed = false
     }
 
     private fun playlist(vararg names: String) = names.joinToString("\n", prefix = "#EXTM3U\n") { "#EXTINF:-1 group-title=\"G\",$it\nhttps://cdn.example/$it.m3u8" }

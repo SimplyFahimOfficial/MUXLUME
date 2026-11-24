@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -51,6 +52,17 @@ class UiSmokeTest {
     }
 
     @Test
+    fun `https link offers the plain http choice without requiring it, and ticking it needs no other step`() {
+        compose.setContent { MuxlumeTheme { AddSourceScreen(null, onDone = {}, onBack = {}) } }
+        compose.onNodeWithText("Playlist link").performTextInput("https://iptv.example/list.m3u")
+        compose.onNodeWithText("Streams over plain HTTP").assertIsDisplayed() // the optional wording, as for a playlist file
+        assertThat(compose.onAllNodesWithText("This server doesn't use encryption").fetchSemanticsNodes()).isEmpty() // not the required wording
+        compose.onNodeWithText("Add and import").assertIsEnabled() // off by default, and not needed to add it
+        compose.onNodeWithText("I understand, allow unencrypted HTTP").performScrollTo().performClick()
+        compose.onNodeWithText("Add and import").assertIsEnabled()
+    }
+
+    @Test
     fun `xtream form validates before testing`() {
         compose.setContent { MuxlumeTheme { AddSourceScreen(null, onDone = {}, onBack = {}) } }
         compose.onNodeWithText("Xtream Codes").performClick()
@@ -59,6 +71,8 @@ class UiSmokeTest {
         compose.onNodeWithText("Username").performTextInput("me")
         compose.onNodeWithText("Password").performTextInput("secret")
         compose.onNodeWithText("Test connection").assertIsEnabled()
+        compose.onNodeWithText("Logos and posters over plain HTTP").assertExists() // an https account's optional choice says what it is for
+        compose.onNodeWithText("Streams over plain HTTP").assertDoesNotExist()
         compose.onNodeWithText("••••••").assertIsDisplayed() // shown masked
     }
 }

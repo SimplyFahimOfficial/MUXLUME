@@ -12,7 +12,6 @@ import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
-import com.muxlume.app.core.net.CleartextGate
 import com.muxlume.app.core.net.Http
 import com.muxlume.app.core.security.SecretBox
 import com.muxlume.app.data.DataReset
@@ -42,9 +41,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.guava.await
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -63,6 +65,10 @@ class AppContainer(context: Context) {
     val lock by lazy { ParentalLock(app.settingsDataStore, appScope) }
     private val linker by lazy { EpgLinker(db) }
     val sources by lazy { SourceRepository(db, http, SecretBox(), app.contentResolver, app.resources, linker) }
+    /** Sources that allow plain HTTP (null until the database has answered): the artwork of those sources may use it, and a stream that is playing loses it when its source is no longer in here. */
+    val httpSources: StateFlow<Set<Long>?> by lazy { db.sources().httpIds().map<List<Long>, Set<Long>?> { it.toSet() }.stateIn(appScope, SharingStarted.Eagerly, null) }
+    /** Whether [sourceId] allows plain HTTP right now: [httpSources], or the database while that has not been filled yet. */
+    suspend fun allowsHttp(sourceId: Long): Boolean = httpSources.value?.contains(sourceId) ?: (db.sources().get(sourceId)?.allowHttp == true)
     val playlistRefresher by lazy { PlaylistRefresher(sources) }
     val backup by lazy { BackupRepository(db, sources, settings, epg) }
     val streams by lazy { StreamResolver(db, sources) }
@@ -127,8 +133,6 @@ class MuxlumeApp : Application(), SingletonImageLoader.Factory, Configuration.Pr
         super.onCreate()
         container = AppContainer(this)
         container.crashLog.install()
-        // Artwork isn't tied to a source: allow it over HTTP only while some source allows HTTP.
-        container.appScope.launch { container.db.sources().anyAllowsHttp().collect { CleartextGate.artworkAllowed = it } }
         Notifications.createChannels(this)
         container.appScope.launch { container.recordings.cleanUpAfterCrash() } // rows a dead process left "recording"
         // Background guide refresh runs only while some source has its guide on.
