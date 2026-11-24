@@ -13,6 +13,8 @@ import java.time.Instant
 class CrashLog(private val file: File, private val header: () -> String) {
     /** Takes over as the default handler, calling the one that was there. */
     fun install() {
+        // A report written by an earlier version has every message in it, and so possibly an address or a login: it is not kept.
+        if (exists() && read()?.contains(FORMAT) != true) runCatching { clear() }
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             record(thread, error)
@@ -23,7 +25,7 @@ class CrashLog(private val file: File, private val header: () -> String) {
     /** Never throws: the process is already dying, and a failure here must not hide the crash. */
     fun record(thread: Thread, error: Throwable) {
         runCatching {
-            val text = "${header()}\n${Instant.now()}\nthread: ${thread.name}\n\n${describe(error)}"
+            val text = "${header()}\n$FORMAT\n${Instant.now()}\nthread: ${thread.name}\n\n${describe(error)}"
             file.writeBytes(text.encodeToByteArray().let { if (it.size > MAX_BYTES) it.copyOf(MAX_BYTES) else it })
         }
     }
@@ -39,6 +41,9 @@ class CrashLog(private val file: File, private val header: () -> String) {
 
     companion object {
         const val MAX_BYTES = 64 * 1024
+
+        /** Marks the format of a report: types and frames, no messages. Reports without it are from before, and are removed. */
+        const val FORMAT = "report format: 2 (types and stack frames, no messages)"
 
         /** The type and the stack frames of [error] and of each cause (once each), with no message. */
         fun describe(error: Throwable): String = buildString {

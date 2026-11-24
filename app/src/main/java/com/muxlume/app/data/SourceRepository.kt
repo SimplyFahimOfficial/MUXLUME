@@ -10,6 +10,7 @@ import com.muxlume.app.core.net.Http.requireSuccess
 import com.muxlume.app.core.net.HttpPolicy
 import com.muxlume.app.core.net.request
 import com.muxlume.app.core.net.LimitedInputStream
+import com.muxlume.app.core.net.TooLargeException
 import com.muxlume.app.core.net.Urls
 import com.muxlume.app.core.net.withCancellableCalls
 import com.muxlume.app.core.security.SecretBox
@@ -20,6 +21,7 @@ import com.muxlume.app.data.db.SourceEntity
 import com.muxlume.app.data.db.SourceType
 import com.muxlume.app.data.epg.EpgLinker
 import com.muxlume.app.data.m3u.M3uParser
+import com.muxlume.app.data.m3u.UnnamedChannel
 import com.muxlume.app.data.xtream.XtreamAccount
 import com.muxlume.app.data.xtream.XtreamApi
 import com.muxlume.app.data.xtream.long
@@ -39,6 +41,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.Call
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
+import java.io.IOException
 import java.io.InputStream
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
@@ -187,6 +190,10 @@ class SourceRepository(
         }
     }
 
+    /** A local file's failure is about the file, whatever its provider (a cloud or custom documents provider) wrote in the exception. */
+    private fun fileFailure(e: Exception): Exception =
+        if (e is IOException && e !is UserFacingException && e !is TooLargeException) UserFacingException(res.getString(R.string.error_file)) else e
+
     private fun guideAvailable(source: SourceEntity) = runCatching { guideUrl(source) }.getOrNull() != null
 
     private suspend fun import(source: SourceEntity, onProgress: (Int) -> Unit): ImportResult {
@@ -209,7 +216,7 @@ class SourceRepository(
             val cancelled = !currentCoroutineContext().isActive
             withContext(NonCancellable) {
                 db.items().deletePending(id)
-                if (!cancelled) db.sources().setError(id, ErrorText.of(res, e))
+                if (!cancelled) db.sources().setError(id, ErrorText.of(res, if (source.type == SourceType.M3U_FILE) fileFailure(e) else e))
             }
             currentCoroutineContext().ensureActive()
             throw e
@@ -269,7 +276,7 @@ class SourceRepository(
             val kind = if (e.isVod) ItemKind.MOVIE else ItemKind.LIVE
             if (kind == ItemKind.LIVE) live++ else movies++
             batch += ItemEntity(
-                sourceId = source.id, kind = kind, stableKey = key, name = e.name.ifBlank { res.getString(R.string.import_unnamed_channel, position + 1) }, groupTitle = e.group, logo = e.logo,
+                sourceId = source.id, kind = kind, stableKey = key, name = e.name.ifBlank { UnnamedChannel.name(position + 1) }, groupTitle = e.group, logo = e.logo,
                 url = e.url, tvgId = e.tvgId, number = e.number, position = position++, pending = true,
                 headers = e.headers.entries.joinToString("\n") { "${it.key}\t${it.value}" }.ifEmpty { null },
             )

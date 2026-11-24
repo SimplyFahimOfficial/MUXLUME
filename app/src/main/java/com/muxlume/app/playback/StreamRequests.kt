@@ -41,13 +41,20 @@ internal class StreamRequests(private val client: OkHttpClient) {
  */
 @UnstableApi
 internal class ItemMediaSourceFactory(private val context: Context, private val dataSourceFor: (MediaItem) -> DataSource.Factory) : MediaSource.Factory {
-    // The player sets neither (nothing in this app does); the per-item sources below use their defaults.
-    override fun setDrmSessionManagerProvider(drmSessionManagerProvider: DrmSessionManagerProvider) = this
+    // What the player sets is kept and given to the source of each item.
+    private var drm: DrmSessionManagerProvider? = null
+    private var loadErrorPolicy: LoadErrorHandlingPolicy? = null
 
-    override fun setLoadErrorHandlingPolicy(loadErrorHandlingPolicy: LoadErrorHandlingPolicy) = this
+    override fun setDrmSessionManagerProvider(drmSessionManagerProvider: DrmSessionManagerProvider) = apply { drm = drmSessionManagerProvider }
+
+    override fun setLoadErrorHandlingPolicy(loadErrorHandlingPolicy: LoadErrorHandlingPolicy) = apply { loadErrorPolicy = loadErrorHandlingPolicy }
 
     override fun getSupportedTypes(): IntArray = DefaultMediaSourceFactory(context).supportedTypes
 
-    override fun createMediaSource(mediaItem: MediaItem): MediaSource =
-        DefaultMediaSourceFactory(DefaultDataSource.Factory(context, dataSourceFor(mediaItem))).createMediaSource(mediaItem)
+    override fun createMediaSource(mediaItem: MediaItem): MediaSource {
+        val factory = DefaultMediaSourceFactory(DefaultDataSource.Factory(context, dataSourceFor(mediaItem)))
+        drm?.let(factory::setDrmSessionManagerProvider)
+        loadErrorPolicy?.let(factory::setLoadErrorHandlingPolicy)
+        return factory.createMediaSource(mediaItem)
+    }
 }

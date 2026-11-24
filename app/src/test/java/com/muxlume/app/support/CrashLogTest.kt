@@ -63,6 +63,17 @@ class CrashLogTest {
     }
 
     @Test
+    fun `a report from an earlier version, with messages in it, is removed at start and a current one is kept`() {
+        file.writeText("MUXLUME 0.1.0\n2026-01-01T00:00:00Z\nthread: main\n\njava.io.IOException: Failed to connect to synth-host.invalid/203.0.113.77:8443")
+        log.install()
+        assertThat(log.exists()).isFalse()
+
+        log.record(Thread.currentThread(), IllegalStateException("x"))
+        log.install()
+        assertThat(log.read()).contains(CrashLog.FORMAT)
+    }
+
+    @Test
     fun `a second crash replaces the first, and clear removes the log`() {
         log.record(Thread.currentThread(), IllegalStateException("alpha"))
         log.record(Thread.currentThread(), UnsupportedOperationException("beta"))

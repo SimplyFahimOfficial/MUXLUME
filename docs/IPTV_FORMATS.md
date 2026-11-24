@@ -12,8 +12,8 @@ Supported:
   Only User-Agent and Referer are used; values with control characters are dropped. They are sent to the stream's own server;
   to any other server (a redirect, an HLS segment on a CDN) the Referer goes without its path and query.
 - Bare URL lines without `#EXTINF`, and entries with no title: named "#N" (N is the position in the playlist), never from the address,
-  whose last part can be a token or a login. The name has no letters on purpose: channel matching across playlists (failover) needs words, so two
-  unnamed entries at the same place of two playlists are never taken for one channel. Names the playlist gives are kept; the channel's key does not depend on the name.
+  whose last part can be a token or a login. It is recognised as made up: matching by name (failover to another playlist, guide channels) skips it, so two unnamed
+  entries at the same place of two playlists are never taken for one channel, nor for a guide channel called "5". A tvg-id still matches. Names the playlist gives are kept; the channel's key does not depend on the name.
 - UTF-8 with or without BOM, LF or CRLF.
 
 Entries are classified as movies when the URL path contains `/movie/` or `/series/` or ends in

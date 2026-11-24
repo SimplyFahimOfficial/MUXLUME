@@ -125,9 +125,7 @@ class ChannelNamesTest {
     fun `a name made only of a number sign and digits has no alternatives, so generated names never match across playlists`() {
         // Why: a generated name made of words, like "Channel 1", would be the same channel in every playlist.
         assertThat(ChannelNames.tier(ChannelNames.normalise("Channel 1")!!, ChannelNames.normalise("Channel 1")!!)).isEqualTo(ChannelNames.Tier.SAME)
-        assertThat(ChannelNames.normalise("#1")).isNull()
-        assertThat(ChannelNames.normalise("#42")).isNull()
-        val long = ChannelNames.normalise("#1234")!! // long enough to be kept, but it has no word to search by
-        assertThat(long.tokens.filter { t -> t.none(Char::isDigit) }).isEmpty()
+        listOf("#1", "#42", "#1234", " #12345678 ").forEach { assertThat(ChannelNames.normalise(it)).isNull() }
+        assertThat(ChannelNames.normalise("#1 Hits")).isNotNull() // a provider's own name that merely starts with a number sign stays
     }
 }

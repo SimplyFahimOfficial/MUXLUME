@@ -65,10 +65,11 @@ class ErrorTextTest {
 
     @Test
     fun `an account status a provider sent is shown only if it looks like a status`() {
-        assertThat(text(XtreamAuthException(XtreamAuthException.Reason.INACTIVE, "Disabled"))).contains("Disabled")
-        for (hostile in listOf("https://SYNTH-HOST.invalid/SYNTH-TOKEN-4410", "SYNTH-PASS-7731=1", "x".repeat(500), "<b>SYNTH-USER</b>")) {
+        assertThat(text(XtreamAuthException(XtreamAuthException.Reason.INACTIVE, "Disabled"))).contains("disabled")
+        for (hostile in listOf("https://SYNTH-HOST.invalid/SYNTH-TOKEN-4410", "SYNTH-PASS-7731=1", "x".repeat(500), "<b>SYNTH-USER</b>", "synth user", "hunter two")) {
             val shown = text(XtreamAuthException(XtreamAuthException.Reason.INACTIVE, hostile))
             markers.forEach { assertThat(shown).doesNotContain(it) }
+            assertThat(shown).contains("unknown") // only the usual words are passed on, whatever else a provider calls its status
             assertThat(shown.length).isLessThan(120)
         }
     }

@@ -108,12 +108,13 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
   was downloaded so far is discarded, and the playlist keeps its channels, favorites and last update time.
 - A channel the playlist gives no name (a bare address, or an empty title) is called "#N" (its place in the playlist) instead of the last part of its address, which
   can be a token or a login and was shown in lists, search, history and the notification. Names the playlist gives are unchanged, and so are
-  channel keys, so favorites stay.
+  channel keys, so favorites stay. Channels imported before keep their old name until the playlist is refreshed.
 - Playback requests now belong to the channel they were made for: after a quick switch to another channel, or a failover to another playlist,
   a request that was still to be made (a playlist reload, the next segment) carries its own channel's headers and HTTP setting, not the new one's.
 - Error messages show only text the app wrote or a fixed text for the kind of failure; the wording of a network, system or provider error
   (which can contain an address, a login or what a server sent) is no longer displayed. The crash report keeps the kind of error and the
-  stack but no longer any message.
+  stack but no longer any message; a report saved by an earlier version, which has them, is removed when the app starts. An account status the
+  provider sends is shown only if it is one of the usual words.
 - Plain HTTP is allowed per playlist for everything that playlist owns. A playlist's logos and posters, and the notification artwork of its
   channels, used HTTP whenever any playlist allowed it; now only the playlist they belong to does (an image already cached is still shown).
   Allowing HTTP is withdrawn from a stream that is playing as soon as you turn it off for its playlist.

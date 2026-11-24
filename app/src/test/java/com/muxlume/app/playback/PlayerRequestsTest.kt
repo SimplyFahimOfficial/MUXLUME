@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35], application = android.app.Application::class)
 class PlayerRequestsTest {
-    private class Origin {
+    private class Origin(private val answer: MockResponse? = null) {
         val server = MockWebServer()
         val seen = CopyOnWriteArrayList<RecordedRequest>()
         val first = CountDownLatch(1)
@@ -38,7 +38,7 @@ class PlayerRequestsTest {
                 override fun dispatch(request: RecordedRequest): MockResponse {
                     seen += request
                     first.countDown()
-                    return MockResponse.Builder().addHeader("Content-Type", "video/mp2t").body(Buffer().write(ByteArray(2_000))).build()
+                    return answer ?: MockResponse.Builder().addHeader("Content-Type", "video/mp2t").body(Buffer().write(ByteArray(2_000))).build()
                 }
             }
             server.start()
@@ -70,6 +70,29 @@ class PlayerRequestsTest {
     }
 
     private fun item(id: String, origin: Origin) = MediaItem.Builder().setMediaId(id).setUri(origin.server.url("/live.ts").toString()).build()
+
+    @Test
+    fun `the load error policy the player sets reaches the source of each item`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val asked = CountDownLatch(1)
+        val policy = object : androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy() {
+            override fun getRetryDelayMsFor(loadErrorInfo: androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo): Long {
+                asked.countDown()
+                return androidx.media3.common.C.TIME_UNSET // give up: no retry
+            }
+        }
+        val broken = Origin(MockResponse.Builder().code(500).build())
+        val factory = ItemMediaSourceFactory(context) { StreamRequests(Http.client()).factoryFor(emptyMap(), HttpPolicy.ALLOW_HTTP) }.setLoadErrorHandlingPolicy(policy)
+        val own = ExoPlayer.Builder(context).setMediaSourceFactory(factory).build()
+        try {
+            own.setMediaItem(MediaItem.Builder().setMediaId("3|c").setUri(broken.server.url("/live.ts").toString()).build())
+            own.prepare()
+            assertThat(asked.await(15, TimeUnit.SECONDS)).isTrue()
+        } finally {
+            own.release()
+            broken.server.close()
+        }
+    }
 
     @Test
     fun `switching from one playlist's item to another's, each server sees only its own item's headers`() {

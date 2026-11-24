@@ -57,8 +57,8 @@ object ErrorText {
         else -> res.getString(R.string.error_other)
     }
 
-    /** The account status a provider sent, for display: a short word or two, or nothing. It is the provider's text, not ours. */
-    fun shown(status: String?): String = status?.trim()?.takeIf { it.length <= MAX_STATUS && it.all { c -> c.isLetter() || c == ' ' } } ?: "?"
+    /** The account status a provider sent, for display: one of the usual words, in lower case, or "unknown". Nothing else a provider wrote. */
+    fun shown(status: String?): String = status?.trim()?.lowercase(java.util.Locale.ROOT)?.takeIf { it in KNOWN_STATUSES } ?: "unknown"
 
-    private const val MAX_STATUS = 24
+    private val KNOWN_STATUSES = setOf("disabled", "banned", "inactive", "suspended", "blocked", "paused", "pending", "trial")
 }

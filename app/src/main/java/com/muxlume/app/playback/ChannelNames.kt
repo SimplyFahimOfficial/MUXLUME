@@ -1,5 +1,6 @@
 package com.muxlume.app.playback
 
+import com.muxlume.app.data.m3u.UnnamedChannel
 import java.text.Normalizer
 import java.util.Locale
 import kotlin.math.max
@@ -46,6 +47,7 @@ object ChannelNames {
 
     /** Null if nothing usable is left (empty, or under 3 characters): such a channel has no alternatives. */
     fun normalise(name: String): Normalised? {
+        if (UnnamedChannel.isGenerated(name)) return null // made up by the importer: it says nothing about which channel this is
         var s = Normalizer.normalize(name, Normalizer.Form.NFKD).replace(COMBINING, "").lowercase(Locale.ROOT)
         s = s.replace(BRACKETS, " ")
         PREFIX.find(s)?.takeIf { it.groupValues[1] in COUNTRY_CODES }?.let { s = s.substring(it.range.last + 1) }

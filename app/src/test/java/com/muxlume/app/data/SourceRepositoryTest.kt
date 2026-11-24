@@ -489,6 +489,20 @@ class SourceRepositoryTest {
         assertThat(db.items().favorites(ItemKind.LIVE, id, true).first().map { it.name }).containsExactly("#1")
     }
 
+    @Test
+    fun `a local playlist file that fails to read reports a file problem, not a network one, and not the provider's words`(): Unit = runBlocking {
+        val uri = android.net.Uri.parse("content://muxlume.test/list.m3u")
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        org.robolectric.Shadows.shadowOf(context.contentResolver).registerInputStream(uri, object : java.io.InputStream() {
+            override fun read(): Int = throw IOException("SYNTH-TOKEN-4410 from a cloud documents provider at synth-host.invalid")
+        })
+        val id = repo.save(SourceInput.M3uFile("F", uri, "list.m3u", allowHttp = false))
+        assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+        val error = repo.get(id)!!.lastError!!
+        assertThat(error).isEqualTo(context.resources.getString(com.muxlume.app.R.string.error_file))
+        assertThat(error).doesNotContain("SYNTH")
+    }
+
     private fun keys(id: Long): List<String> =
         db.openHelper.readableDatabase.query("SELECT stableKey FROM items WHERE sourceId = ? AND pending = 0 ORDER BY position", arrayOf<Any>(id))
             .use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
