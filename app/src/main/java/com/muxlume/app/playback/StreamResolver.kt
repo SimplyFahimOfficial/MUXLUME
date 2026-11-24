@@ -7,6 +7,8 @@ import com.muxlume.app.data.db.ItemKind
 import com.muxlume.app.data.db.MuxlumeDatabase
 import com.muxlume.app.data.db.SourceEntity
 import com.muxlume.app.data.db.SourceType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** What it takes to open a stream: the URL (which may carry credentials), the playlist's headers and its HTTP setting. */
 class ResolvedStream(val url: String, val headers: Map<String, String>, val policy: HttpPolicy) {
@@ -20,16 +22,17 @@ class ResolvedStream(val url: String, val headers: Map<String, String>, val poli
 class StreamResolver(private val db: MuxlumeDatabase, private val sources: SourceRepository) {
     /**
      * Null if the source or item is gone, hidden or in a locked group while locked, or the URL is not playable.
-     * An episode (`ep:` key) is as locked as its series, [parentKey].
+     * An episode (`ep:` key) is as locked as its series, [parentKey]. Runs on `Dispatchers.IO` and resumes in the caller's
+     * context: the service calls it on the main thread for every channel switch, and an Xtream login is a synchronous Keystore decryption.
      */
-    suspend fun resolve(sourceId: Long, key: String, parentKey: String?, unlocked: Boolean): ResolvedStream? {
-        val source = db.sources().get(sourceId) ?: return null
+    suspend fun resolve(sourceId: Long, key: String, parentKey: String?, unlocked: Boolean): ResolvedStream? = withContext(Dispatchers.IO) {
+        val source = db.sources().get(sourceId) ?: return@withContext null
         val episode = MediaIds.parseEpisodeKey(key)
-        val (url, headers) = (if (episode != null) episodeStream(source, episode, parentKey, unlocked) else itemStream(source, key, unlocked)) ?: return null
+        val (url, headers) = (if (episode != null) episodeStream(source, episode, parentKey, unlocked) else itemStream(source, key, unlocked)) ?: return@withContext null
         // RTSP bypasses the HTTP client, so treat it like plain HTTP: only for sources the user allowed.
-        if ((url.startsWith("rtsp", ignoreCase = true) && !source.allowHttp) || !Urls.isPlayable(url)) return null
+        if ((url.startsWith("rtsp", ignoreCase = true) && !source.allowHttp) || !Urls.isPlayable(url)) return@withContext null
         val policy = HttpPolicy.of(source.allowHttp)
-        return ResolvedStream(url, headers, Urls.parseHttp(url)?.let(policy::scopedTo) ?: policy)
+        ResolvedStream(url, headers, Urls.parseHttp(url)?.let(policy::scopedTo) ?: policy)
     }
 
     private suspend fun episodeStream(source: SourceEntity, episode: Pair<String, String>, parentKey: String?, unlocked: Boolean): Pair<String, Map<String, String>>? {

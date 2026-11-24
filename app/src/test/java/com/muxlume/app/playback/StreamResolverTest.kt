@@ -1,6 +1,7 @@
 package com.muxlume.app.playback
 
 import android.content.Context
+import android.os.Looper
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -8,6 +9,7 @@ import com.google.common.truth.Truth.assertThat
 import com.muxlume.app.PlainBox
 import com.muxlume.app.core.net.Http
 import com.muxlume.app.core.net.HttpPolicy
+import com.muxlume.app.core.security.SecretBox
 import com.muxlume.app.data.SourceInput
 import com.muxlume.app.data.SourceRepository
 import com.muxlume.app.data.db.ItemEntity
@@ -79,6 +81,24 @@ class StreamResolverTest {
         assertThat(resolver.resolve(s, "adult", null, unlocked = false)).isNull()
         assertThat(resolver.resolve(s, "adult", null, unlocked = true)).isNotNull()
         assertThat(resolver.resolve(s, "hidden", null, unlocked = true)).isNull()
+    }
+
+    @Test
+    fun `an Xtream login is decrypted off the thread that asks, which is the main thread in the service`(): Unit = runBlocking {
+        val s = xtream()
+        db.items().insertAll(listOf(item(s, "live:1", remoteId = "1")))
+        var openedOn: Thread? = null
+        val watching = object : SecretBox() {
+            override fun open(sealed: String): String = PlainBox().open(sealed).also { openedOn = Thread.currentThread() }
+        }
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val resolver = StreamResolver(db, SourceRepository(db, Http.client(), watching, context.contentResolver, context.resources, EpgLinker(db)))
+        val caller = Thread.currentThread() // the main thread under Robolectric, like the service
+        assertThat(caller).isSameInstanceAs(Looper.getMainLooper().thread)
+        assertThat(resolver.resolve(s, "live:1", null, false)).isNotNull()
+        assertThat(Thread.currentThread()).isSameInstanceAs(caller) // resumes there, so the service's maps stay main-thread-only
+        assertThat(openedOn).isNotNull()
+        assertThat(openedOn).isNotSameInstanceAs(Looper.getMainLooper().thread)
     }
 
     @Test
