@@ -5,11 +5,13 @@ import android.content.res.Resources
 import android.net.Uri
 import androidx.core.net.toUri
 import androidx.room.withTransaction
+import com.muxlume.app.R
 import com.muxlume.app.core.net.Http.requireSuccess
 import com.muxlume.app.core.net.HttpPolicy
 import com.muxlume.app.core.net.request
 import com.muxlume.app.core.net.LimitedInputStream
 import com.muxlume.app.core.net.Urls
+import com.muxlume.app.core.net.withCancellableCalls
 import com.muxlume.app.core.security.SecretBox
 import com.muxlume.app.data.db.ItemEntity
 import com.muxlume.app.data.db.ItemKind
@@ -28,14 +30,15 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.Call
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
-import java.io.IOException
 import java.io.InputStream
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
@@ -93,10 +96,11 @@ class SourceRepository(
 
     fun secretOf(source: SourceEntity): SourceSecret = Json.decodeFromString(secrets.open(source.secret))
 
-    fun xtreamApi(source: SourceEntity): XtreamApi {
+    /** [calls] makes the requests: the app's client, or one whose calls end with a cancelled import. */
+    fun xtreamApi(source: SourceEntity, calls: Call.Factory = http): XtreamApi {
         val s = secretOf(source)
-        val server = XtreamApi.normalizeServer(s.url.orEmpty()) ?: throw IOException("Invalid server address")
-        return XtreamApi(http, server, s.username.orEmpty(), s.password.orEmpty(), HttpPolicy.of(source.allowHttp))
+        val server = XtreamApi.normalizeServer(s.url.orEmpty()) ?: throw UserFacingException("Invalid server address")
+        return XtreamApi(calls, server, s.username.orEmpty(), s.password.orEmpty(), HttpPolicy.of(source.allowHttp))
     }
 
     /** Where this source's TV guide (XMLTV) comes from: its own guide link, the one its playlist announces, or the Xtream feed. */
@@ -107,7 +111,7 @@ class SourceRepository(
 
     /** Checks Xtream credentials without saving anything. */
     suspend fun testXtream(input: SourceInput.Xtream): XtreamAccount = withContext(Dispatchers.IO) {
-        val server = XtreamApi.normalizeServer(input.server) ?: throw IOException("Invalid server address")
+        val server = XtreamApi.normalizeServer(input.server) ?: throw UserFacingException("Invalid server address")
         XtreamApi(http, server, input.username.trim(), input.password, HttpPolicy.of(input.allowHttp)).account()
     }
 
@@ -128,7 +132,7 @@ class SourceRepository(
                 input.fileName,
             )
             is SourceInput.Xtream -> {
-                val server = XtreamApi.normalizeServer(input.server) ?: throw IOException("Invalid server address")
+                val server = XtreamApi.normalizeServer(input.server) ?: throw UserFacingException("Invalid server address")
                 Triple(SourceType.XTREAM, SourceSecret(server.toString(), input.username.trim(), input.password), Urls.redact(server.toString()))
             }
         }
@@ -137,7 +141,7 @@ class SourceRepository(
         return if (existing != null) {
             // Re-read in the transaction: an import that commits meanwhile must not be overwritten with its old counts and timestamp.
             db.withTransaction {
-                val current = db.sources().get(existing.id) ?: throw IOException("Source not found")
+                val current = db.sources().get(existing.id) ?: throw UserFacingException("Source not found")
                 db.sources().update(
                     current.copy(
                         name = name, type = type, secret = sealed, label = label, allowHttp = input.allowHttp,
@@ -173,7 +177,7 @@ class SourceRepository(
     suspend fun refresh(id: Long, onProgress: (Int) -> Unit = {}): ImportResult = withContext(Dispatchers.IO) {
         val before = db.sources().get(id)?.refreshedAt
         importLocks.getOrPut(id) { Mutex() }.withLock {
-            val source = db.sources().get(id) ?: throw IOException("Source not found")
+            val source = db.sources().get(id) ?: throw UserFacingException("Source not found")
             // Another import finished while this one waited for its turn: its result is fresh enough.
             if (source.refreshedAt != before) {
                 ImportResult(source.liveCount, source.movieCount, source.seriesCount, 0, 0, guideAvailable(source))
@@ -189,19 +193,25 @@ class SourceRepository(
         val id = source.id
         db.items().deletePending(id) // left over if the app was killed during an earlier import
         val result = try {
-            when (source.type) {
-                SourceType.M3U_URL, SourceType.M3U_FILE -> importM3u(source, onProgress)
-                SourceType.XTREAM -> importXtream(source, onProgress)
+            // A blocking read of a response ignores cancellation: the calls of this import end with it.
+            http.withCancellableCalls { calls ->
+                when (source.type) {
+                    SourceType.M3U_URL, SourceType.M3U_FILE -> importM3u(source, onProgress, calls)
+                    SourceType.XTREAM -> importXtream(source, onProgress, calls)
+                }
             }
         } catch (e: CancellationException) {
             withContext(NonCancellable) { db.items().deletePending(id) }
             throw e
         } catch (e: Exception) {
             // IOException for network/format problems, SecurityException for a revoked file permission.
+            // A read that fails because the import was cancelled is the cancellation, not a failure of the provider: nothing is recorded.
+            val cancelled = !currentCoroutineContext().isActive
             withContext(NonCancellable) {
                 db.items().deletePending(id)
-                db.sources().setError(id, ErrorText.of(res, e))
+                if (!cancelled) db.sources().setError(id, ErrorText.of(res, e))
             }
+            currentCoroutineContext().ensureActive()
             throw e
         }
         // New channels may have guide data already stored.
@@ -212,7 +222,7 @@ class SourceRepository(
 
     /** Makes the staged rows visible and records the import, re-reading the source so a rename made meanwhile is kept. */
     private suspend fun commit(source: SourceEntity, update: (SourceEntity) -> SourceEntity) = db.withTransaction {
-        val current = db.sources().get(source.id) ?: throw IOException("Source not found")
+        val current = db.sources().get(source.id) ?: throw UserFacingException("Source not found")
         if (!sameCatalogue(source, current)) {
             // The user saved another link or login while this import ran; its rows belong to the old one.
             db.items().deletePending(source.id)
@@ -234,18 +244,18 @@ class SourceRepository(
         return if (secret.playlistEpgUrl == url) source.secret else secrets.seal(Json.encodeToString(SourceSecret.serializer(), secret.copy(playlistEpgUrl = url)))
     }
 
-    private fun open(source: SourceEntity): InputStream {
-        val location = secretOf(source).url ?: throw IOException("No playlist location")
+    private fun open(source: SourceEntity, calls: Call.Factory): InputStream {
+        val location = secretOf(source).url ?: throw UserFacingException("No playlist location")
         val raw = if (source.type == SourceType.M3U_FILE) {
-            resolver.openInputStream(location.toUri()) ?: throw IOException("The file can't be opened")
+            resolver.openInputStream(location.toUri()) ?: throw UserFacingException("The file can't be opened")
         } else {
-            val url = Urls.parseHttp(location) ?: throw IOException("Invalid playlist link")
-            http.newCall(request(url, HttpPolicy.of(source.allowHttp))).execute().requireSuccess().body.byteStream()
+            val url = Urls.parseHttp(location) ?: throw UserFacingException("Invalid playlist link")
+            calls.newCall(request(url, HttpPolicy.of(source.allowHttp))).execute().requireSuccess().body.byteStream()
         }
         return LimitedInputStream(raw, MAX_PLAYLIST_BYTES)
     }
 
-    private suspend fun importM3u(source: SourceEntity, onProgress: (Int) -> Unit): ImportResult = open(source).use { stream ->
+    private suspend fun importM3u(source: SourceEntity, onProgress: (Int) -> Unit, calls: Call.Factory): ImportResult = open(source, calls).use { stream ->
         val parser = M3uParser(stream.bufferedReader(Charsets.UTF_8), maxEntries = maxM3uEntries)
         val seen = HashSet<String>()
         var live = 0
@@ -259,7 +269,7 @@ class SourceRepository(
             val kind = if (e.isVod) ItemKind.MOVIE else ItemKind.LIVE
             if (kind == ItemKind.LIVE) live++ else movies++
             batch += ItemEntity(
-                sourceId = source.id, kind = kind, stableKey = key, name = e.name, groupTitle = e.group, logo = e.logo,
+                sourceId = source.id, kind = kind, stableKey = key, name = e.name.ifBlank { res.getString(R.string.import_unnamed_channel, position + 1) }, groupTitle = e.group, logo = e.logo,
                 url = e.url, tvgId = e.tvgId, number = e.number, position = position++, pending = true,
                 headers = e.headers.entries.joinToString("\n") { "${it.key}\t${it.value}" }.ifEmpty { null },
             )
@@ -272,7 +282,7 @@ class SourceRepository(
         }
         // Before the last batch is staged: a playlist cut at the cap must not be published as if it were all of it. The catch in import()
         // drops what was staged and records the error; the previous channels and last success stay.
-        if (parser.overflowed) throw IOException("The playlist has more than $maxM3uEntries entries")
+        if (parser.overflowed) throw UserFacingException("The playlist has more than $maxM3uEntries entries")
         db.items().insertAll(batch)
         onProgress(position)
         if (position > 0) reuseKeys(source)
@@ -282,7 +292,7 @@ class SourceRepository(
         // shortcut: a provider that never sends #EXTM3U cannot empty its source this way; upgrade if one turns up (delete and re-add it meanwhile).
         val emptiedOnPurpose = parser.hasHeader && parser.skipped == 0
         if (position == 0 && source.liveCount + source.movieCount > 0 && !emptiedOnPurpose) {
-            throw IOException("The playlist has no playable channels")
+            throw UserFacingException("The playlist has no playable channels")
         }
         commit(source) {
             it.copy(
@@ -305,8 +315,8 @@ class SourceRepository(
         do { val moved = items.reuseKeysByTvgId(source.id, REMAP_BATCH) } while (moved == REMAP_BATCH)
     }
 
-    private suspend fun importXtream(source: SourceEntity, onProgress: (Int) -> Unit): ImportResult {
-        val api = xtreamApi(source)
+    private suspend fun importXtream(source: SourceEntity, onProgress: (Int) -> Unit, calls: Call.Factory): ImportResult {
+        val api = xtreamApi(source, calls)
         val account = api.account()
         var count = 0
         val counts = IntArray(3)

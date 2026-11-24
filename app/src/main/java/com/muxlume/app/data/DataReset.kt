@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.io.IOException
 
 /** The access the app keeps to files and folders the user picked: playlist files (read) and the recordings folder (read and write). */
 interface UriGrants {
@@ -102,7 +101,7 @@ class DataReset(
                 delay(POLL_MS)
                 waited += POLL_MS
             }
-            if (targets.recordingBusy()) throw IOException("A recording did not stop in time")
+            if (targets.recordingBusy()) throw UserFacingException("A recording did not stop in time")
         }
         targets.stopPlayback()
         db.clearAllTables()

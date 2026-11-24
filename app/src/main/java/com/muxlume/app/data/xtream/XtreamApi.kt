@@ -16,8 +16,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeToSequence
+import okhttp3.Call
 import okhttp3.HttpUrl
-import okhttp3.OkHttpClient
 import java.io.IOException
 import java.io.InputStream
 
@@ -62,7 +62,7 @@ data class XtreamVodInfo(val plot: String?, val genre: String?, val durationSec:
  * request URL contains the credentials, so it never appears in exceptions or logs.
  */
 class XtreamApi(
-    @PublishedApi internal val client: OkHttpClient,
+    @PublishedApi internal val client: Call.Factory,
     val server: HttpUrl,
     private val username: String,
     private val password: String,

@@ -453,6 +453,36 @@ class SourceRepositoryTest {
         assertThat(repo.get(id)!!.lastError).isNull()
     }
 
+    @Test
+    fun `an unnamed entry gets a neutral name, keeps its key and its favorite, and no address part is displayed`(): Unit = runBlocking {
+        val login = "https://SYNTH-USER:SYNTH-PASS-7731@synth-host.invalid:8443/live/SYNTH-USER/SYNTH-PASS-7731/12.ts?token=SYNTH-TOKEN-4410"
+        val list = "#EXTM3U\n#EXTINF:-1 group-title=\"G\",\n$login\n" + // an empty title
+            "https://synth-host.invalid/SYNTH-PASS-7731\n" + // no #EXTINF at all
+            "#EXTINF:-1 group-title=\"G\",Provider Name\nhttps://synth-host.invalid/named\n"
+        val id = addM3u()
+        serve(list)
+        repo.refresh(id)
+
+        assertThat(names(id)).containsExactly("Channel 1", "Channel 2", "Provider Name").inOrder()
+        val key1 = SourceRepository.stableKey("G\n$login") // the key is still made of the group and the address, not of the name
+        val key2 = SourceRepository.stableKey("\nhttps://synth-host.invalid/SYNTH-PASS-7731")
+        assertThat(keys(id)).containsExactly(key1, key2, SourceRepository.stableKey("G\nhttps://synth-host.invalid/named")).inOrder()
+        listOf("SYNTH-USER", "SYNTH-PASS-7731", "SYNTH-TOKEN-4410", "synth-host", "12.ts").forEach { marker ->
+            assertThat(db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM items WHERE name LIKE ? OR groupTitle LIKE ?", arrayOf<Any>("%$marker%", "%$marker%")).use { it.moveToFirst(); it.getInt(0) }).isEqualTo(0)
+            assertThat(db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM items_fts WHERE items_fts MATCH ?", arrayOf<Any>("\"$marker\"")).use { it.moveToFirst(); it.getInt(0) }).isEqualTo(0)
+        }
+
+        db.favorites().add(FavoriteEntity(id, key1, 1))
+        serve(list)
+        repo.refresh(id)
+        assertThat(keys(id)[0]).isEqualTo(key1) // unchanged by a refresh
+        assertThat(db.items().favorites(ItemKind.LIVE, id, true).first().map { it.name }).containsExactly("Channel 1")
+    }
+
+    private fun keys(id: Long): List<String> =
+        db.openHelper.readableDatabase.query("SELECT stableKey FROM items WHERE sourceId = ? AND pending = 0 ORDER BY position", arrayOf<Any>(id))
+            .use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
+
     private val one = "https://cdn.example/1.m3u8"
     private val two = "https://cdn.example/2.m3u8"
 

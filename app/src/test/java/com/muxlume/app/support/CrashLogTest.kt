@@ -23,28 +23,40 @@ class CrashLogTest {
 
     @After fun tearDown() = Thread.setDefaultUncaughtExceptionHandler(saved)
 
+    /** Synthetic values that must never reach a shared report, written the ways a message can carry them. */
+    private val markers = listOf("SYNTH-PASS-7731", "SYNTH-TOKEN-4410", "synth-host.invalid", "203.0.113.77", "SYNTH-USER")
+
+    private fun messageWithMarkers() =
+        "unexpected end of stream on https://SYNTH-USER:SYNTH-PASS-7731@synth-host.invalid:8443/live/SYNTH-USER/SYNTH-PASS-7731/12.ts?token=SYNTH-TOKEN-4410 " +
+            "Failed to connect to synth-host.invalid/203.0.113.77:8443 (SYNTH-TOKEN-4410 written without a link)"
+
     @Test
-    fun `links are removed everywhere in the trace, including causes`() {
-        val cause = IOException("unexpected end of stream on https://me:s3cret@provider.example:8443/live/me/s3cret/12.ts?token=abc123")
-        log.record(Thread.currentThread(), IllegalStateException("playlist HTTP://Host.Example/list.m3u?pass=hunter2 failed", cause))
+    fun `a report holds the types and stack frames of the error and its causes, and none of their messages`() {
+        val cause = IOException(messageWithMarkers())
+        log.record(Thread.currentThread(), IllegalStateException(messageWithMarkers(), cause))
         val text = file.readText()
-        assertThat(text).contains("[link removed]")
-        listOf("s3cret", "abc123", "hunter2", "provider.example", "Host.Example").forEach { assertThat(text).doesNotContain(it) }
-        assertThat(text).contains("IllegalStateException") // the rest of the report is kept
-        assertThat(text).contains("Caused by: java.io.IOException")
+        markers.forEach { assertThat(text).doesNotContain(it) }
+        assertThat(text).doesNotContain("unexpected end of stream")
+        assertThat(text).contains("java.lang.IllegalStateException\n")
+        assertThat(text).contains("Caused by: java.io.IOException\n")
+        assertThat(text).contains("\tat com.muxlume.app.support.CrashLogTest") // where it happened
         assertThat(text).contains("MUXLUME 0.1.0 (1) on Android 15, Test Phone")
     }
 
     @Test
-    fun `web and RTSP links are redacted in any case, text around them is not`() {
-        assertThat(CrashLog.redact("see https://a.example/x?y=1 and rtsp://cam.example/1, then Http://b.example")).isEqualTo("see [link removed] and [link removed] then [link removed]")
-        assertThat(CrashLog.redact("no links here: host:8080/path")).isEqualTo("no links here: host:8080/path")
-        assertThat(CrashLog.redact("ftp://x.example/file")).isEqualTo("ftp://x.example/file") // not a stream or playlist scheme
+    fun `the cause chain is followed once, even when it loops`() {
+        val a = RuntimeException("a")
+        val b = RuntimeException("b", a)
+        a.initCause(b)
+        val text = CrashLog.describe(b)
+        assertThat(text.lines().count { it.startsWith("java.lang.RuntimeException") || it.startsWith("Caused by: java.lang.RuntimeException") }).isEqualTo(2)
     }
 
     @Test
     fun `the file never grows past 64 KB`() {
-        log.record(Thread.currentThread(), RuntimeException("x".repeat(500_000)))
+        val deep = RuntimeException("x")
+        deep.stackTrace = Array(5_000) { StackTraceElement("com.muxlume.app.Synthetic", "frame$it", "Synthetic.kt", it) }
+        log.record(Thread.currentThread(), deep)
         assertThat(file.length()).isAtMost(CrashLog.MAX_BYTES.toLong())
         assertThat(file.length()).isGreaterThan(60_000) // it kept as much as it may, starting from the top
         assertThat(file.readText()).startsWith("MUXLUME 0.1.0")
@@ -52,10 +64,10 @@ class CrashLogTest {
 
     @Test
     fun `a second crash replaces the first, and clear removes the log`() {
-        log.record(Thread.currentThread(), RuntimeException("alpha-error"))
-        log.record(Thread.currentThread(), RuntimeException("beta-error"))
-        assertThat(log.read()).contains("beta-error")
-        assertThat(log.read()).doesNotContain("alpha-error")
+        log.record(Thread.currentThread(), IllegalStateException("alpha"))
+        log.record(Thread.currentThread(), UnsupportedOperationException("beta"))
+        assertThat(log.read()).contains("UnsupportedOperationException")
+        assertThat(log.read()).doesNotContain("IllegalStateException")
         assertThat(log.exists()).isTrue()
         log.clear()
         assertThat(log.exists()).isFalse()
@@ -70,7 +82,8 @@ class CrashLogTest {
         val boom = IllegalArgumentException("boom at https://x.example/secret")
         Thread.getDefaultUncaughtExceptionHandler()!!.uncaughtException(Thread.currentThread(), boom)
         assertThat(seen).containsExactly(boom)
-        assertThat(log.read()).contains("boom at [link removed]")
+        assertThat(log.read()).contains("java.lang.IllegalArgumentException")
+        assertThat(log.read()).doesNotContain("x.example")
     }
 
     @Test

@@ -14,10 +14,9 @@ import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.datasource.DataSourceBitmapLoader
-import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.ListenableFuture
@@ -74,7 +73,7 @@ class PlaybackService : MediaSessionService() {
         val buffer = runBlocking { container.settings.current().buffer }
         val exo = ExoPlayer.Builder(this)
             .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(buffer.minMs, buffer.maxMs, buffer.startMs, buffer.resumeMs).build())
-            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this, streamRequests.factory)))
+            .setMediaSourceFactory(ItemMediaSourceFactory(this, ::requestsFor))
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
@@ -151,7 +150,6 @@ class PlaybackService : MediaSessionService() {
                     if (h.positionMs > 30_000 && (h.durationMs <= 0 || h.positionMs < h.durationMs * 0.95)) position = h.positionMs
                 }
             }
-            start?.let { applyFor(it.mediaId) }
             MediaSession.MediaItemsWithStartPosition(resolved, index, position)
         }
     }
@@ -198,12 +196,16 @@ class PlaybackService : MediaSessionService() {
         subtitlesOff = subtitles == TrackLanguages.OFF
     }
 
-    /** Playlist headers (User-Agent, Referer) and the source's HTTP setting apply to every request of the current item. */
-    private fun applyFor(mediaId: String) {
-        val sourceId = MediaIds.parse(mediaId)?.first
-        // The setting is read again for each request: allowing HTTP is withdrawn from a stream that is playing when the user turns it off.
-        // Unknown yet (null): the setting resolved for the item stands.
-        streamRequests.use(headersByMediaId[mediaId].orEmpty(), policyByMediaId[mediaId] ?: HttpPolicy.HTTPS_ONLY) { sourceId == null || (container.httpSources.value?.contains(sourceId) ?: true) }
+    /**
+     * The request builder of [item]: its playlist's headers (User-Agent, Referer) and its source's HTTP setting, fixed for as long as the
+     * item's media source lives. The setting is read again for each request, so allowing HTTP is withdrawn from a stream that is playing
+     * when the user turns it off (unknown yet: the setting resolved for the item stands).
+     */
+    private fun requestsFor(item: MediaItem): OkHttpDataSource.Factory {
+        val sourceId = MediaIds.parse(item.mediaId)?.first
+        return streamRequests.factoryFor(headersByMediaId[item.mediaId].orEmpty(), policyByMediaId[item.mediaId] ?: HttpPolicy.HTTPS_ONLY) {
+            sourceId == null || (container.httpSources.value?.contains(sourceId) ?: true)
+        }
     }
 
     /**
@@ -232,7 +234,6 @@ class PlaybackService : MediaSessionService() {
                 val next = container.db.neighbour(item, list, forward, unlocked) ?: return@launch // end of the list
                 val resolved = resolve(MediaIds.request(next, list)) ?: return@launch
                 saveHistory(exo)
-                applyFor(resolved.mediaId)
                 exo.setMediaItem(resolved)
                 exo.prepare()
                 exo.play()
@@ -244,7 +245,6 @@ class PlaybackService : MediaSessionService() {
     /** Reconnects after network failures (2, 4, 8 s) and rejoins live streams that fell behind. */
     private inner class Recovery(val player: Player) : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            mediaItem?.let { applyFor(it.mediaId) }
             applyLanguages(restore = false)
             retries = 0
         }
@@ -326,7 +326,6 @@ class PlaybackService : MediaSessionService() {
                 failoverAttempts++
                 val playlist = names[item.id] ?: container.db.sources().get(item.sourceId)?.name.orEmpty()
                 val meta = resolved.mediaMetadata.buildUpon().setArtist(getString(R.string.player_trying_server, playlist)).build()
-                applyFor(resolved.mediaId)
                 exoPlayer.setMediaItem(resolved.buildUpon().setMediaMetadata(meta).build())
                 exoPlayer.prepare()
                 exoPlayer.play()

@@ -4,6 +4,7 @@ import com.muxlume.app.core.net.Urls
 import java.io.Reader
 
 data class M3uEntry(
+    /** What the playlist calls it; empty when it names none (never made up from the stream address). */
     val name: String,
     val url: String,
     val group: String,
@@ -135,7 +136,8 @@ class M3uParser(
             overflowed = true // reading on past the cap is how a playlist that fits exactly differs from one that was cut off
             return null
         }
-        val name = inf?.title?.takeIf { it.isNotBlank() } ?: inf?.attrs?.get("tvg-name") ?: fallbackName(url)
+        // No name is made up from the address: its last part can be a token or a login. The importer gives such an entry a neutral one.
+        val name = inf?.title?.takeIf { it.isNotBlank() } ?: inf?.attrs?.get("tvg-name").orEmpty()
         val group = inf?.attrs?.get("group-title")?.takeIf { it.isNotBlank() } ?: grp ?: ""
         produced++
         return M3uEntry(
@@ -209,9 +211,6 @@ class M3uParser(
             val path = url.substringAfter("://").substringAfter('/', "").substringBefore('?').lowercase()
             return "/movie/" in "/$path" || "/series/" in "/$path" || path.substringAfterLast('.', "") in VOD_EXTENSIONS
         }
-
-        private fun fallbackName(url: String): String =
-            url.substringBefore('?').trimEnd('/').substringAfterLast('/').ifBlank { url.substringAfter("://").substringBefore('/') }
     }
 }
 

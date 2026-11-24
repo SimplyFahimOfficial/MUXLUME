@@ -47,6 +47,7 @@ import com.muxlume.app.AppContainer
 import com.muxlume.app.R
 import com.muxlume.app.container
 import com.muxlume.app.data.ErrorText
+import com.muxlume.app.data.UserFacingException
 import com.muxlume.app.data.backup.BackupCrypto
 import com.muxlume.app.ui.Nav
 import com.muxlume.app.ui.components.PrimaryButton
@@ -84,7 +85,7 @@ class BackupViewModel(private val c: AppContainer, private val res: Resources, p
         state.update { it.copy(busy = true, message = null) }
         viewModelScope.launch {
             try {
-                val out = files.openOutputStream(uri, "wt") ?: throw IOException("Cannot write the file")
+                val out = files.openOutputStream(uri, "wt") ?: throw UserFacingException("Cannot write the file")
                 val s = out.use { c.backup.export(it, passphrase.toCharArray()) }
                 var text = res.getQuantityString(R.plurals.backup_saved, s.sources, s.sources)
                 if (s.skippedFileSources > 0) text += " " + res.getQuantityString(R.plurals.backup_file_playlists_left_out, s.skippedFileSources, s.skippedFileSources)
@@ -100,7 +101,7 @@ class BackupViewModel(private val c: AppContainer, private val res: Resources, p
         state.update { it.copy(busy = true, message = null) }
         viewModelScope.launch {
             try {
-                val input = files.openInputStream(uri) ?: throw IOException("Cannot read the file")
+                val input = files.openInputStream(uri) ?: throw UserFacingException("Cannot read the file")
                 val r = input.use { c.backup.import(it, passphrase.toCharArray()) }
                 if (r.addedIds.isNotEmpty()) c.settings.setOnboardingDone()
                 // Fetch the channel lists of the restored playlists in the background; errors are kept on each source.

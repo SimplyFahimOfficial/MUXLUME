@@ -63,7 +63,7 @@ schedule background work go with the file. Recording files and saved backups are
 `SourceRepository.refresh` writes the new list as hidden `pending` rows in short batches of 1,000
 (checking for cancellation between them), then one short transaction deletes the old rows and
 publishes the new ones. Every read filters `pending = 0`, so a running import is invisible and the
-rest of the app can keep writing. Imports of one source run one at a time (a per-source mutex); one that waited and finds `refreshedAt` changed returns the stored counts. Failure or cancellation deletes the staged rows.
+rest of the app can keep writing. Imports of one source run one at a time (a per-source mutex); one that waited and finds `refreshedAt` changed returns the stored counts. Failure or cancellation deletes the staged rows; the calls of an import are made through `withCancellableCalls`, so cancelling it closes a blocked read at once, and a read that fails because of that is the cancellation, not an error recorded on the source.
 An M3U with more playable entries than the cap (a product limit of 500,000; `M3uParser.overflowed`, found by reading on past the cap) fails before its last batch is staged, so
 a playlist that was cut off is never published as the whole of it; the previous items and `refreshedAt` stay.
 An M3U import that finds no playable entry in a source that had channels fails as an error instead of publishing an empty list, unless the

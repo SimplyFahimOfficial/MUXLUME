@@ -118,16 +118,33 @@ class M3uParserTest {
         assertThat(entries).hasSize(2)
         assertThat(entries[0].group).isEqualTo("Movies")
         assertThat(entries[0].isVod).isTrue()
-        assertThat(entries[1].name).isEqualTo("stream.ts")
+        assertThat(entries[1].name).isEmpty() // the playlist named it nothing, and the address is not a name
         assertThat(entries[1].group).isEmpty()
+    }
+
+    @Test
+    fun `an entry the playlist gives no name is left unnamed, never named after its address`() {
+        val login = "http://SYNTH-USER:SYNTH-PASS-7731@synth-host.invalid:8080/live/SYNTH-USER/SYNTH-PASS-7731/12.ts?token=SYNTH-TOKEN-4410"
+        val (entries, _) = parse(
+            "#EXTM3U\n" +
+                "#EXTINF:-1,\n$login\n" + // an empty title
+                "#EXTINF:-1 group-title=\"G\" tvg-name=\"  \",   \nhttp://synth-host.invalid/SYNTH-PASS-7731\n" + // blank title, blank tvg-name
+                "$login\n" + // no #EXTINF at all
+                "http://SYNTH-USER:SYNTH-PASS-7731@synth-host.invalid\n" + // a login and nothing after the host
+                "#EXTINF:-1 tvg-name=\"From tvg-name\",\nhttp://synth-host.invalid/a\n" +
+                "#EXTINF:-1,Provider Name\nhttp://synth-host.invalid/b\n",
+        )
+        assertThat(entries.map { it.name }).containsExactly("", "", "", "", "From tvg-name", "Provider Name").inOrder()
+        assertThat(entries.take(4).flatMap { listOf(it.name, it.group) }.joinToString()).doesNotContain("SYNTH")
+        assertThat(entries.map { it.url }).contains(login) // the address itself is still the stream's
     }
 
     @Test
     fun `over-long lines are discarded, not buffered`() {
         val huge = "x".repeat(10_000)
         val (entries, parser) = parse("#EXTINF:-1,$huge\nhttps://a.example/1\n#EXTINF:-1,Ok\nhttps://a.example/2\n", maxLine = 1_000)
-        // The long #EXTINF is dropped, so its URL becomes a bare entry; the next entry is intact.
-        assertThat(entries.map { it.name }).containsExactly("1", "Ok").inOrder()
+        // The long #EXTINF is dropped, so its URL becomes a bare (unnamed) entry; the next entry is intact.
+        assertThat(entries.map { it.name }).containsExactly("", "Ok").inOrder()
         assertThat(parser.skipped).isEqualTo(1)
     }
 

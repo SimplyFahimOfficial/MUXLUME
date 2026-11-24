@@ -16,7 +16,9 @@ import okhttp3.Response
 import java.io.FilterInputStream
 import java.io.IOException
 import java.io.InputStream
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Thrown when a plain-HTTP request is made but the source it belongs to hasn't allowed HTTP (or it belongs to none). */
 class CleartextBlockedException(host: String) : IOException("Unencrypted HTTP to $host is not allowed")
@@ -112,6 +114,32 @@ suspend fun <T> Call.cancelWithCoroutine(block: suspend () -> T): T = coroutineS
     try {
         ensureActive()
         block()
+    } finally {
+        watcher.cancel()
+    }
+}
+
+/**
+ * Runs [block] with a call factory whose calls are all cancelled if the coroutine is cancelled, however many [block] makes
+ * (blocking reads of a response ignore coroutine cancellation). The same rule as [cancelWithCoroutine], for code that makes its own calls.
+ * Call it from a dispatcher with a spare thread (`Dispatchers.IO`).
+ */
+suspend fun <T> Call.Factory.withCancellableCalls(block: suspend (Call.Factory) -> T): T = coroutineScope {
+    val calls = ConcurrentLinkedQueue<Call>()
+    val cancelled = AtomicBoolean()
+    val tracked = Call.Factory { request -> newCall(request).also { calls += it; if (cancelled.get()) it.cancel() } }
+    val watcher = launch(start = CoroutineStart.UNDISPATCHED) {
+        try {
+            awaitCancellation()
+        } catch (e: CancellationException) {
+            cancelled.set(true)
+            calls.forEach(Call::cancel)
+            throw e
+        }
+    }
+    try {
+        ensureActive()
+        block(tracked)
     } finally {
         watcher.cancel()
     }
