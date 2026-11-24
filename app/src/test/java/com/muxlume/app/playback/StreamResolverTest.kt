@@ -1,6 +1,7 @@
 package com.muxlume.app.playback
 
 import android.content.Context
+import android.os.Looper
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -92,9 +93,12 @@ class StreamResolverTest {
         }
         val context = ApplicationProvider.getApplicationContext<Context>()
         val resolver = StreamResolver(db, SourceRepository(db, Http.client(), watching, context.contentResolver, context.resources, EpgLinker(db)))
+        val caller = Thread.currentThread() // the main thread under Robolectric, like the service
+        assertThat(caller).isSameInstanceAs(Looper.getMainLooper().thread)
         assertThat(resolver.resolve(s, "live:1", null, false)).isNotNull()
+        assertThat(Thread.currentThread()).isSameInstanceAs(caller) // resumes there, so the service's maps stay main-thread-only
         assertThat(openedOn).isNotNull()
-        assertThat(openedOn).isNotSameInstanceAs(Thread.currentThread())
+        assertThat(openedOn).isNotSameInstanceAs(Looper.getMainLooper().thread)
     }
 
     @Test

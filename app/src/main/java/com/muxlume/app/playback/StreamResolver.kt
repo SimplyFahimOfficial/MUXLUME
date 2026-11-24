@@ -22,8 +22,8 @@ class ResolvedStream(val url: String, val headers: Map<String, String>, val poli
 class StreamResolver(private val db: MuxlumeDatabase, private val sources: SourceRepository) {
     /**
      * Null if the source or item is gone, hidden or in a locked group while locked, or the URL is not playable.
-     * An episode (`ep:` key) is as locked as its series, [parentKey]. Runs off the caller's thread: the service calls it on
-     * the main thread for every channel switch, and an Xtream login is a synchronous Keystore decryption.
+     * An episode (`ep:` key) is as locked as its series, [parentKey]. Runs on `Dispatchers.IO` and resumes in the caller's
+     * context: the service calls it on the main thread for every channel switch, and an Xtream login is a synchronous Keystore decryption.
      */
     suspend fun resolve(sourceId: Long, key: String, parentKey: String?, unlocked: Boolean): ResolvedStream? = withContext(Dispatchers.IO) {
         val source = db.sources().get(sourceId) ?: return@withContext null
