@@ -9,6 +9,7 @@ import com.muxlume.app.core.net.LimitedInputStream
 import com.muxlume.app.core.net.cancelWithCoroutine
 import com.muxlume.app.core.net.request
 import com.muxlume.app.data.ErrorText
+import com.muxlume.app.data.UserFacingException
 import com.muxlume.app.data.SourceRepository
 import com.muxlume.app.data.db.EpgChannelEntity
 import com.muxlume.app.data.db.EpgDao
@@ -28,7 +29,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
-import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
@@ -90,20 +90,20 @@ class EpgRepository(
      * refresh was not needed (another one finished while it waited) or no longer applies (the guide was turned off or its feed changed).
      */
     suspend fun refresh(sourceId: Long): Int = withContext(Dispatchers.IO) {
-        val before = db.sources().get(sourceId) ?: throw IOException("Source not found")
+        val before = db.sources().get(sourceId) ?: throw UserFacingException("Source not found")
         val lane = lane(sourceId)
-        val wanted = sources.guideUrl(before) ?: throw IOException(res.getString(R.string.error_no_guide_link))
+        val wanted = sources.guideUrl(before) ?: throw UserFacingException(res.getString(R.string.error_no_guide_link))
         // A download of another feed is of no use any more: release it rather than queue behind it.
         if (lane.feed?.let { it != wanted } == true) lane.supersede()
         lane.turn.withLock {
             val epoch = lane.epoch.get()
-            val source = db.sources().get(sourceId) ?: throw IOException("Source not found")
+            val source = db.sources().get(sourceId) ?: throw UserFacingException("Source not found")
             // Another refresh finished while this one waited for its turn: its guide is fresh enough, if the feed is still the one asked for.
             val finished = source.epgRefreshedAt != null && source.epgRefreshedAt != before.epgRefreshedAt
             if (finished && runCatching { sources.guideUrl(source) }.getOrNull() == wanted) return@withLock source.epgPrograms
             // Turned off while it waited (or never on): nothing to download. The worker lists the sources it refreshes before it gets to them.
             if (!source.guideEnabled) return@withLock source.epgPrograms
-            val url = sources.guideUrl(source) ?: throw IOException(res.getString(R.string.error_no_guide_link))
+            val url = sources.guideUrl(source) ?: throw UserFacingException(res.getString(R.string.error_no_guide_link))
             refreshAndPublish(lane, epoch, source, url)
         }
     }

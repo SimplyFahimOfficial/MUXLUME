@@ -72,7 +72,7 @@ class StreamHeadersTest {
 
     /** The player's request builder for an item of a source with [policy] (http allowed, as the local servers are plain http). */
     private fun player(headers: Map<String, String>, policy: HttpPolicy, stillAllowed: () -> Boolean = { true }): DataSource.Factory =
-        StreamRequests(client).also { it.use(headers, policy, stillAllowed) }.factory
+        StreamRequests(client).factoryFor(headers, policy, stillAllowed)
 
     private fun DataSource.fetch(url: okhttp3.HttpUrl) {
         try {
@@ -135,24 +135,44 @@ class StreamHeadersTest {
     }
 
     @Test
-    fun `switching to another source applies that source's headers and HTTP setting`() {
+    fun `each item's requests keep that item's headers and setting however many items were resolved after it`() {
+        val a = origin()
+        val b = origin()
+        val c = origin()
+        val requests = StreamRequests(client)
+        // Rapid switching: A plays, the user zaps to B (a source that does not allow HTTP), then to C (another playlist, via failover).
+        val itemA = requests.factoryFor(mapOf("User-Agent" to "ua-of-a", "Referer" to "https://a.test/"), HttpPolicy.ALLOW_HTTP.scopedTo(a.url("/")))
+        val itemB = requests.factoryFor(mapOf("User-Agent" to "ua-of-b"), HttpPolicy.HTTPS_ONLY.scopedTo(b.url("/")))
+        val itemC = requests.factoryFor(mapOf("User-Agent" to "ua-of-c", "Referer" to "https://c.test/"), HttpPolicy.ALLOW_HTTP.scopedTo(c.url("/")))
+
+        // Requests that were still to be made for A and B when C was resolved (a playlist reload, the next segment) are theirs, not C's.
+        open(itemA, a.url("/late-a.ts"))
+        assertThrows(HttpDataSource.HttpDataSourceException::class.java) { open(itemB, b.url("/late-b.ts")) }
+        open(itemC, c.url("/c.ts"))
+        open(itemA, a.url("/late-a2.ts"))
+
+        assertThat(a.seen.map { it.headers["User-Agent"] }.toSet()).containsExactly("ua-of-a")
+        assertThat(a.seen.map { it.headers["Referer"] }.toSet()).containsExactly("https://a.test/")
+        assertThat(b.seen).isEmpty() // B's setting stands: C's allowance did not reach it
+        assertThat(c.seen.map { it.headers["User-Agent"] }.toSet()).containsExactly("ua-of-c")
+        assertThat(c.header("/c.ts", "Referer")).isEqualTo("https://c.test/")
+    }
+
+    @Test
+    fun `the player's media source for an item is made with that item's own request builder`() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         val a = origin()
         val b = origin()
         val requests = StreamRequests(client)
-        requests.use(headers, HttpPolicy.ALLOW_HTTP.scopedTo(a.url("/")))
-        open(requests.factory, a.url("/a.ts"))
-        assertThat(a.header("/a.ts", "User-Agent")).isEqualTo(ua)
-
-        // The next item is of a source that does not allow HTTP: nothing is sent to its server, whatever the one before allowed.
-        requests.use(mapOf("User-Agent" to "ua-of-b"), HttpPolicy.HTTPS_ONLY.scopedTo(b.url("/")))
-        assertThrows(HttpDataSource.HttpDataSourceException::class.java) { open(requests.factory, b.url("/b.ts")) }
-        assertThat(b.seen).isEmpty()
-
-        // And once it allows HTTP (failover to a server of another playlist is the same call), its own headers go, not the first one's.
-        requests.use(mapOf("User-Agent" to "ua-of-b"), HttpPolicy.ALLOW_HTTP.scopedTo(b.url("/")))
-        open(requests.factory, b.url("/b.ts"))
-        assertThat(b.header("/b.ts", "User-Agent")).isEqualTo("ua-of-b")
-        assertThat(b.header("/b.ts", "Referer")).isNull()
+        val made = mutableListOf<String>()
+        val factory = ItemMediaSourceFactory(context) { item ->
+            made += item.mediaId
+            requests.factoryFor(mapOf("User-Agent" to "ua-${item.mediaId}"), HttpPolicy.ALLOW_HTTP.scopedTo(a.url("/")))
+        }
+        factory.createMediaSource(androidx.media3.common.MediaItem.Builder().setMediaId("1|a").setUri(a.url("/a.ts").toString()).build())
+        factory.createMediaSource(androidx.media3.common.MediaItem.Builder().setMediaId("2|b").setUri(b.url("/b.ts").toString()).build())
+        assertThat(made).containsExactly("1|a", "2|b").inOrder()
+        assertThat(factory.supportedTypes).asList().containsAtLeast(androidx.media3.common.C.CONTENT_TYPE_HLS, androidx.media3.common.C.CONTENT_TYPE_OTHER)
     }
 
     @Test
@@ -206,6 +226,29 @@ class StreamHeadersTest {
     }
 
     @Test
+    fun `two recordings at once, of two playlists, each send only their own headers and setting`() {
+        val a = origin { r -> if (r.url.encodedPath.endsWith(".m3u8")) text(media) else ok() }
+        val b = origin { r -> if (r.url.encodedPath.endsWith(".m3u8")) text(media) else ok() }
+        val blocked = origin()
+        val headersB = mapOf("User-Agent" to "ua-of-b", "Referer" to "https://b.test/page")
+        fun record(url: okhttp3.HttpUrl, headers: Map<String, String>, policy: HttpPolicy) = runCatching {
+            runBlocking { Recorder(client, minPollMs = 10, giveUpAfterMs = 400).record(url.toString(), headers, policy, System.currentTimeMillis() + 5_000, ByteArrayOutputStream()) }
+        }
+        val jobs = listOf(
+            Thread { record(a.url("/live.m3u8"), headers, HttpPolicy.ALLOW_HTTP.scopedTo(a.url("/"))) },
+            Thread { record(b.url("/live.m3u8"), headersB, HttpPolicy.ALLOW_HTTP.scopedTo(b.url("/"))) },
+            Thread { record(blocked.url("/live.m3u8"), headersB, HttpPolicy.HTTPS_ONLY.scopedTo(blocked.url("/"))) },
+        )
+        jobs.forEach(Thread::start)
+        jobs.forEach(Thread::join)
+        assertThat(a.seen.map { it.headers["User-Agent"] }.toSet()).containsExactly(ua)
+        assertThat(a.seen.map { it.headers["Referer"] }.toSet()).containsExactly(full)
+        assertThat(b.seen.map { it.headers["User-Agent"] }.toSet()).containsExactly("ua-of-b")
+        assertThat(b.seen.map { it.headers["Referer"] }.toSet()).containsExactly("https://b.test/page")
+        assertThat(blocked.seen).isEmpty()
+    }
+
+    @Test
     fun `a recording of a source that does not allow HTTP sends nothing`() {
         val a = origin()
         assertThrows(com.muxlume.app.recording.RecordingException::class.java) { recordHls(a.url("/live.ts"), HttpPolicy.HTTPS_ONLY.scopedTo(a.url("/live.ts"))) }
@@ -235,7 +278,7 @@ class StreamHeadersTest {
 
     private fun redirectCode(url: okhttp3.HttpUrl, policy: HttpPolicy): Int {
         val e = assertThrows(HttpDataSource.HttpDataSourceException::class.java) {
-            open(StreamRequests(tlsClient).also { it.use(headers, policy) }.factory, url)
+            open(StreamRequests(tlsClient).factoryFor(headers, policy), url)
         }
         return (e as HttpDataSource.InvalidResponseCodeException).responseCode
     }
@@ -259,7 +302,7 @@ class StreamHeadersTest {
     @Test
     fun `https keeps working with the headers whole`() {
         val secure = https { ok() }
-        val factory = StreamRequests(tlsClient).also { it.use(headers, HttpPolicy.HTTPS_ONLY.scopedTo(secure.url("/"))) }.factory
+        val factory = StreamRequests(tlsClient).factoryFor(headers, HttpPolicy.HTTPS_ONLY.scopedTo(secure.url("/")))
         open(factory, secure.url("/live.ts"))
         assertThat(secure.takeRequest().headers["Referer"]).isEqualTo(full)
     }

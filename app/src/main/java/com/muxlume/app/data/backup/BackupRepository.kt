@@ -3,6 +3,7 @@ package com.muxlume.app.data.backup
 import com.muxlume.app.core.net.LimitedInputStream
 import com.muxlume.app.core.net.TooLargeException
 import com.muxlume.app.core.net.Urls
+import com.muxlume.app.data.UserFacingException
 import com.muxlume.app.data.Accent
 import com.muxlume.app.data.AppSettings
 import com.muxlume.app.data.PlaylistRefresh
@@ -28,7 +29,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
-import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -253,10 +253,10 @@ class BackupRepository(
         val input = when (s.type) {
             SourceType.XTREAM -> SourceInput.Xtream(s.name, secret.url.orEmpty(), secret.username.orEmpty(), secret.password.orEmpty(), s.allowHttp)
             SourceType.M3U_URL -> {
-                if (Urls.parseHttp(secret.url) == null) throw IOException("Invalid link")
+                if (Urls.parseHttp(secret.url) == null) throw UserFacingException("Invalid link")
                 SourceInput.M3uUrl(s.name, secret.url.orEmpty(), s.allowHttp, secret.epgUrl)
             }
-            SourceType.M3U_FILE -> throw IOException("Files cannot be restored")
+            SourceType.M3U_FILE -> throw UserFacingException("Files cannot be restored")
         }
         val id = sources.save(input)
         if (s.guideEnabled) epg.setEnabled(id, true)

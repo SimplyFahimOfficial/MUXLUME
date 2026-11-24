@@ -71,9 +71,9 @@ class AddSourceHttpTest {
 
     private fun play(source: Long): Result<Unit> = runBlocking {
         val stream = resolver.resolve(source, "ch", null, unlocked = true)!!
-        val requests = StreamRequests(Http.client()).also { it.use(stream.headers, stream.policy) }
+        val factory = StreamRequests(Http.client()).factoryFor(stream.headers, stream.policy)
         runCatching {
-            val data = requests.factory.createDataSource()
+            val data = factory.createDataSource()
             try { data.open(DataSpec(Uri.parse(stream.url))) } finally { data.close() }
             Unit
         }

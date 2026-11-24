@@ -120,4 +120,12 @@ class ChannelNamesTest {
         val pairs = names.indices.flatMap { i -> (i + 1 until names.size).map { j -> names[i] to names[j] } }
         pairs.forEach { (x, y) -> assertWithMessage("$x / $y").that(ChannelNames.normalise(x)?.let { a -> ChannelNames.normalise(y)?.let { b -> ChannelNames.tier(a, b) } }).isNull() }
     }
+
+    @Test
+    fun `a name made only of a number sign and digits has no alternatives, so generated names never match across playlists`() {
+        // Why: a generated name made of words, like "Channel 1", would be the same channel in every playlist.
+        assertThat(ChannelNames.tier(ChannelNames.normalise("Channel 1")!!, ChannelNames.normalise("Channel 1")!!)).isEqualTo(ChannelNames.Tier.SAME)
+        listOf("#1", "#42", "#1234", " #12345678 ").forEach { assertThat(ChannelNames.normalise(it)).isNull() }
+        assertThat(ChannelNames.normalise("#1 Hits")).isNotNull() // a provider's own name that merely starts with a number sign stays
+    }
 }

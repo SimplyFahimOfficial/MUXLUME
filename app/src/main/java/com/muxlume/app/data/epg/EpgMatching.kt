@@ -3,6 +3,7 @@ package com.muxlume.app.data.epg
 import com.muxlume.app.data.db.EpgChannelEntity
 import com.muxlume.app.data.db.EpgLinkEntity
 import com.muxlume.app.data.db.MuxlumeDatabase
+import com.muxlume.app.data.m3u.UnnamedChannel
 import java.util.Locale
 
 /**
@@ -30,7 +31,8 @@ class EpgMatcher(channels: List<EpgChannelEntity>) {
         private val BRACKETS = Regex("""\[[^\]]*]|\([^)]*\)""")
         private val SEPARATORS = Regex("""[^\p{L}\p{N}]+""")
 
-        fun normalize(name: String): String =
+        /** A name the importer made up for an unnamed entry ("#5") is no name: it must not meet a guide channel called "5". */
+        fun normalize(name: String): String = if (UnnamedChannel.isGenerated(name)) "" else
             name.lowercase(Locale.ROOT).replace(BRACKETS, " ").split(SEPARATORS).filter { it.isNotEmpty() && it !in NOISE }.joinToString("")
     }
 }

@@ -15,14 +15,20 @@ import java.io.InterruptedIOException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLException
 
-/** User-facing explanations of import and connection failures. Never includes URLs or credentials. */
+/**
+ * A failure the app words itself, for the user to read: its message is shown as it is. Nothing else's is: the text of an exception
+ * from the network stack, the system or a provider can hold an address, a login or whatever a server chose to send.
+ */
+class UserFacingException(message: String, cause: Throwable? = null) : IOException(message, cause)
+
+/** User-facing explanations of import and connection failures. Never includes URLs, credentials or the text of another exception. */
 object ErrorText {
     fun of(res: Resources, e: Throwable): String = when (e) {
         is CleartextBlockedException -> res.getString(R.string.error_cleartext)
         is XtreamAuthException -> when (e.reason) {
             XtreamAuthException.Reason.INVALID_CREDENTIALS -> res.getString(R.string.error_xtream_credentials)
             XtreamAuthException.Reason.EXPIRED -> res.getString(R.string.error_xtream_expired)
-            XtreamAuthException.Reason.INACTIVE -> res.getString(R.string.error_xtream_inactive, e.status)
+            XtreamAuthException.Reason.INACTIVE -> res.getString(R.string.error_xtream_inactive, shown(res, e.status))
         }
         is XtreamFormatException -> res.getString(R.string.error_xtream_format)
         is HttpStatusException -> when (e.code) {
@@ -46,8 +52,14 @@ object ErrorText {
         is SSLException -> res.getString(R.string.error_tls)
         is InterruptedIOException -> res.getString(R.string.error_timeout)
         is FileNotFoundException, is SecurityException -> res.getString(R.string.error_file)
-        // Our own messages are short and URL-free; anything else gets the generic text.
-        is IOException -> e.message?.takeIf { it.length < 120 && "://" !in it } ?: res.getString(R.string.error_network)
+        is UserFacingException -> e.message ?: res.getString(R.string.error_other)
+        is IOException -> res.getString(R.string.error_network)
         else -> res.getString(R.string.error_other)
     }
+
+    /** The account status a provider sent, for display: one of the usual words, in lower case, or the app's word for "unknown". Nothing else a provider wrote. */
+    fun shown(res: Resources, status: String?): String =
+        status?.trim()?.lowercase(java.util.Locale.ROOT)?.takeIf { it in KNOWN_STATUSES } ?: res.getString(R.string.error_status_unknown)
+
+    private val KNOWN_STATUSES = setOf("disabled", "banned", "inactive", "suspended", "blocked", "paused", "pending", "trial")
 }

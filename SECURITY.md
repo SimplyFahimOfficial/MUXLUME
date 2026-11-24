@@ -17,7 +17,7 @@ secrets (playlist links that often embed tokens, provider usernames and password
 | Source configuration | The playlist link or file location, the guide link and the Xtream login are AES-256-GCM sealed, key in Android Keystore (non-exportable); only ciphertext in the database | `core/security/SecretBox.kt` |
 | Imported channel data | **Not encrypted.** An M3U playlist's channel stream links and their User-Agent/Referer headers are stored as plain text in the app-private Room database (stream links often carry a token or login). Xtream stream links are not stored: they are built from the sealed login when played. The protection is Android's per-app storage, `allowBackup=false` and the transfer exclusions below, and Settings → Delete all data; the database itself is not encrypted, which is a separate change from this transport control | `data/db/Entities.kt` (`ItemEntity.url`, `headers`) |
 | Backups / device transfer | `allowBackup=false`, data extraction rules exclude every domain | `AndroidManifest.xml`, `res/xml/` |
-| Logs and diagnostics | No logging of URLs or credentials; error texts never contain URLs; player diagnostics list codecs and sizes only | `data/ErrorText.kt`, `ui/player/PlayerScreen.kt` |
+| Logs and diagnostics | No logging of URLs or credentials. A failure is shown or stored only as a text the app wrote (`UserFacingException`) or a fixed one for its type (authentication, timeout, TLS, HTTP status, ...); the text of any other exception, which can quote an address, a login or what a server sent, is never displayed. Player diagnostics list codecs and sizes only | `data/ErrorText.kt`, `ui/player/PlayerScreen.kt` |
 | Plain HTTP | See below | `core/net/Http.kt` |
 | TLS | System CAs only, no user CAs, no custom trust managers or hostname verifiers; https→http redirects refused | `res/xml/network_security_config.xml`, `Http.kt` |
 | Malicious playlists | Streaming parser, 64 KB line limit, 500k entries, 256 MB download limit; only `http`, `https`, `rtsp` stream URLs (no `file:`/`content:`); header values validated (no CR/LF) and limited to User-Agent and Referer | `data/m3u/M3uParser.kt` |
@@ -26,8 +26,27 @@ secrets (playlist links that often embed tokens, provider usernames and password
 | Exported components | Only the launcher activity (no deep links yet) | `AndroidManifest.xml`, `scripts/ci/apk_audit.py` |
 | Parental PIN | PBKDF2-HMAC-SHA256 hash with a random salt (150,000 rounds), constant-time comparison; 5 wrong tries lock out for 30 s, doubling each time (kept across restarts); unlocked state lives in memory only and ends after 5 minutes in the background; locked groups are filtered in the database view and in every item, history, reminder and programme query, and the playback service refuses their items (a test lists every such query) | `data/lock/ParentalLock.kt`, `data/db/MuxlumeDatabase.kt`, `playback/PlaybackService.kt` |
 | Recording | Streams are copied byte for byte by `RecordingService`, which resolves them itself from an id: the UI, notifications and logs never hold a stream URL, and a failed recording stores only a reason (`RecordingException.Reason`), never a message that could contain one. DASH, RTSP, DRM, encrypted and fragmented-MP4 streams are refused. Requests carry the source's HTTP setting like playback does. Recordings of a channel in a locked group are hidden and refused while locked | `recording/`, `playback/StreamResolver.kt` |
-| Crash report | The last uncaught exception is written to a private file with every `http(s)://` and `rtsp://` link removed (messages from the network stack quote stream and playlist URLs, which can hold logins), capped at 64 KB, and shared only if the user taps Share. Only links are removed: a secret written some other way in a message would stay | `support/CrashLog.kt` |
+| Crash report | The last uncaught exception is written to a private file as the types and stack frames of it and its causes, and never their messages (those can quote a stream or playlist address, a login, a host or a server's reply, in forms no pattern catches). Capped at 64 KB, and shared only if the user taps Share. A report from an earlier version, which has messages, is removed when the app starts | `support/CrashLog.kt` |
 | Storage | Storage Access Framework only, read access persisted per file, released on removal | `ui/onboarding/AddSourceScreen.kt` |
+
+### Deferred decision: encrypting the channel database
+
+Today the playlists' channel data, including the stream links and headers of an M3U playlist, is plain text in the app-private Room
+database (see "Imported channel data" above). Encrypting it is a separate change; this is what the decision rests on.
+
+- **The threat it would address:** someone who holds a copy of the database file without the running app and without the device's
+  Keystore: a file-system image of a rooted or otherwise compromised device, or storage read out of the app's sandbox. A Keystore-held key
+  would make that copy unreadable. It would not help against code running as the app (it can ask the Keystore), a screen recording, or
+  a network observer of plain-HTTP streams.
+- **Upgrades:** an existing install needs a one-time re-encryption of its database, with free space of about its size, that can be
+  interrupted and must resume; the schema and migration tests grow. A restored or transferred device cannot reuse the key (backups are
+  separately passphrase-encrypted, so nothing is lost).
+- **Offline playback:** unaffected: the key is on the device and nothing is fetched to open the database.
+- **Large playlists:** whole-database encryption (for example SQLCipher) puts a native dependency in every ABI and taxes every page read,
+  including full-text search and paged lists over hundreds of thousands of rows. Encrypting only the `url` and `headers` columns avoids
+  that: the cost is at import (every row) and at play (one row), provided one data key is unwrapped once and kept in memory, since a
+  Keystore call per row would be far too slow at 500,000 entries. None of this has been measured here.
+- **Not done in this change**, which makes the documents accurate instead (above).
 
 ### Cleartext HTTP (reviewed exception)
 
@@ -43,6 +62,10 @@ setting. A stream that is playing, and the next artwork loaded for it, lose the 
 be made for an https playlist or account too (Library → edit), because its channels or artwork may be http://. RTSP (which
 bypasses OkHttp) is only played for sources with the opt-in. Redirects between https and http are
 never followed (`followSslRedirects(false)`, tested against a local TLS server).
+
+The player's request builder is made per media item (`ItemMediaSourceFactory`): every request of an item, including a late one made
+after the user moved to another item or another playlist (failover included), carries that item's own headers and HTTP setting.
+A recording has its own for its whole run.
 
 A playlist's Referer is meant for its stream's own server. A request to another origin (a redirect to
 a CDN, or an HLS playlist or segment hosted elsewhere) carries the Referer reduced to its origin, as a

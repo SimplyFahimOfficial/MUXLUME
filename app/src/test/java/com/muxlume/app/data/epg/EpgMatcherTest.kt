@@ -39,4 +39,13 @@ class EpgMatcherTest {
         assertThat(matcher.match(null, "Sport")).isEqualTo("dup1") // first one wins
         assertThat(EpgMatcher(emptyList()).match("x", "y")).isNull()
     }
+
+    @Test
+    fun `an entry the importer named by its place is not matched to a guide channel by that name, but its tvg-id and a manual link are`() {
+        val matcher = EpgMatcher(listOf(EpgChannelEntity(1, "c5", "5"), EpgChannelEntity(1, "c-id", "Something")))
+        assertThat(matcher.match(null, "#5")).isNull() // "5" would have matched a channel literally called 5
+        assertThat(matcher.match(null, "5")).isEqualTo("c5")
+        assertThat(matcher.match("C-ID", "#5")).isEqualTo("c-id") // an explicit tvg-id is the provider's word
+        assertThat(EpgMatcher.normalize("#5")).isEmpty()
+    }
 }

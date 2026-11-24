@@ -2,6 +2,7 @@ package com.muxlume.app.core.net
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
@@ -16,7 +17,9 @@ import okhttp3.Response
 import java.io.FilterInputStream
 import java.io.IOException
 import java.io.InputStream
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Thrown when a plain-HTTP request is made but the source it belongs to hasn't allowed HTTP (or it belongs to none). */
 class CleartextBlockedException(host: String) : IOException("Unencrypted HTTP to $host is not allowed")
@@ -97,11 +100,12 @@ fun request(url: HttpUrl, policy: HttpPolicy): Request = Request.Builder().url(u
 
 /**
  * Runs [block], cancelling the blocked [Call] if the coroutine is cancelled (OkHttp's blocking calls ignore coroutine cancellation).
- * Call it from a dispatcher with a spare thread (`Dispatchers.IO`): the watcher that cancels the call runs while [block] is blocked.
+ * The watcher that cancels the call runs in the thread that cancels, so [block] can be blocked in a read.
  */
 suspend fun <T> Call.cancelWithCoroutine(block: suspend () -> T): T = coroutineScope {
-    // Undispatched, so it is waiting for the cancellation before the blocking call starts; and a scope that is already cancelled never starts one.
-    val watcher = launch(start = CoroutineStart.UNDISPATCHED) {
+    // Undispatched, so it is waiting for the cancellation before the blocking call starts; unconfined, so it runs in the thread that cancels
+    // rather than waiting for a free one of a pool whose threads may all be blocked in reads; and a scope that is already cancelled never starts one.
+    val watcher = launch(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) {
         try {
             awaitCancellation()
         } catch (e: CancellationException) {
@@ -112,6 +116,32 @@ suspend fun <T> Call.cancelWithCoroutine(block: suspend () -> T): T = coroutineS
     try {
         ensureActive()
         block()
+    } finally {
+        watcher.cancel()
+    }
+}
+
+/**
+ * Runs [block] with a call factory whose calls are all cancelled if the coroutine is cancelled, however many [block] makes
+ * (blocking reads of a response ignore coroutine cancellation). The same rule as [cancelWithCoroutine], for code that makes its own calls.
+ * For a bounded number of calls, such as one import's: each is kept until [block] ends.
+ */
+suspend fun <T> Call.Factory.withCancellableCalls(block: suspend (Call.Factory) -> T): T = coroutineScope {
+    val calls = ConcurrentLinkedQueue<Call>()
+    val cancelled = AtomicBoolean()
+    val tracked = Call.Factory { request -> newCall(request).also { calls += it; if (cancelled.get()) it.cancel() } }
+    val watcher = launch(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) {
+        try {
+            awaitCancellation()
+        } catch (e: CancellationException) {
+            cancelled.set(true)
+            calls.forEach(Call::cancel)
+            throw e
+        }
+    }
+    try {
+        ensureActive()
+        block(tracked)
     } finally {
         watcher.cancel()
     }

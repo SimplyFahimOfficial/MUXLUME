@@ -10,6 +10,7 @@ import com.muxlume.app.core.net.Http
 import com.muxlume.app.core.net.HttpStatusException
 import com.muxlume.app.PlainBox
 import com.muxlume.app.data.epg.EpgLinker
+import com.muxlume.app.playback.AlternativeFinder
 import com.muxlume.app.data.db.FavoriteEntity
 import com.muxlume.app.data.db.ItemDao
 import com.muxlume.app.data.db.ItemEntity
@@ -452,6 +453,61 @@ class SourceRepositoryTest {
         assertThat(names(id)).isEmpty()
         assertThat(repo.get(id)!!.lastError).isNull()
     }
+
+    @Test
+    fun `an unnamed entry gets a neutral name, keeps its key and its favorite, and no address part is displayed`(): Unit = runBlocking {
+        val login = "https://SYNTH-USER:SYNTH-PASS-7731@synth-host.invalid:8443/live/SYNTH-USER/SYNTH-PASS-7731/12.ts?token=SYNTH-TOKEN-4410"
+        val list = "#EXTM3U\n#EXTINF:-1 group-title=\"G\",\n$login\n" + // an empty title
+            "https://synth-host.invalid/SYNTH-PASS-7731\n" + // no #EXTINF at all
+            "#EXTINF:-1 group-title=\"G\",Provider Name\nhttps://synth-host.invalid/named\n"
+        val id = addM3u()
+        serve(list)
+        repo.refresh(id)
+
+        assertThat(names(id)).containsExactly("#1", "#2", "Provider Name").inOrder()
+        val key1 = SourceRepository.stableKey("G\n$login") // the key is still made of the group and the address, not of the name
+        val key2 = SourceRepository.stableKey("\nhttps://synth-host.invalid/SYNTH-PASS-7731")
+        assertThat(keys(id)).containsExactly(key1, key2, SourceRepository.stableKey("G\nhttps://synth-host.invalid/named")).inOrder()
+        listOf("SYNTH-USER", "SYNTH-PASS-7731", "SYNTH-TOKEN-4410", "synth-host", "12.ts").forEach { marker ->
+            assertThat(db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM items WHERE name LIKE ? OR groupTitle LIKE ?", arrayOf<Any>("%$marker%", "%$marker%")).use { it.moveToFirst(); it.getInt(0) }).isEqualTo(0)
+            assertThat(db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM items_fts WHERE items_fts MATCH ?", arrayOf<Any>("\"$marker\"")).use { it.moveToFirst(); it.getInt(0) }).isEqualTo(0)
+        }
+
+        // Two playlists' unnamed entries are not the same channel because they stand at the same place: failover finds no alternative for them.
+        val other = repo.save(SourceInput.M3uUrl("Other", server.url("/other.m3u").toString(), true))
+        serve("#EXTM3U\n#EXTINF:-1 group-title=\"G\",\nhttps://other.example/1.ts\n#EXTINF:-1 group-title=\"G\",\nhttps://other.example/2.ts\n")
+        repo.refresh(other)
+        assertThat(names(other)).containsExactly("#1", "#2").inOrder()
+        val unnamed = db.items().byKey(id, key1, true)!!
+        assertThat(AlternativeFinder(db).find(unnamed, unlocked = true)).isEmpty()
+        assertThat(AlternativeFinder(db).find(db.items().byKey(other, keys(other)[0], true)!!, unlocked = true)).isEmpty()
+
+        db.favorites().add(FavoriteEntity(id, key1, 1))
+        serve(list)
+        repo.refresh(id)
+        assertThat(keys(id)[0]).isEqualTo(key1) // unchanged by a refresh
+        assertThat(db.items().favorites(ItemKind.LIVE, id, true).first().map { it.name }).containsExactly("#1")
+    }
+
+    @Test
+    fun `a local playlist file that fails to read reports a file problem, not a network one, and not the provider's words`(): Unit = runBlocking {
+        val uri = android.net.Uri.parse("content://muxlume.test/list.m3u")
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        org.robolectric.Shadows.shadowOf(context.contentResolver).registerInputStream(uri, object : java.io.InputStream() {
+            override fun read(): Int = throw IOException("SYNTH-TOKEN-4410 from a cloud documents provider at synth-host.invalid")
+        })
+        val id = repo.save(SourceInput.M3uFile("F", uri, "list.m3u", allowHttp = false))
+        val thrown = assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+        val error = repo.get(id)!!.lastError!!
+        assertThat(error).isEqualTo(context.resources.getString(com.muxlume.app.R.string.error_file))
+        assertThat(ErrorText.of(context.resources, thrown)).isEqualTo(error) // the Add playlist screen shows the same
+        assertThat(thrown.cause).isInstanceOf(IOException::class.java) // and the original is kept for a diagnostic
+        assertThat(error).doesNotContain("SYNTH")
+    }
+
+    private fun keys(id: Long): List<String> =
+        db.openHelper.readableDatabase.query("SELECT stableKey FROM items WHERE sourceId = ? AND pending = 0 ORDER BY position", arrayOf<Any>(id))
+            .use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
 
     private val one = "https://cdn.example/1.m3u8"
     private val two = "https://cdn.example/2.m3u8"

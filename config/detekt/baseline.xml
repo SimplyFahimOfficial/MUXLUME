@@ -71,7 +71,7 @@
     <ID>SwallowedException:XtreamApi.kt$XtreamApi$e: SerializationException</ID>
     <ID>SwallowedException:XtreamApi.kt$XtreamApi.Companion$e: IllegalArgumentException</ID>
     <ID>SwallowedException:XtreamApi.kt$XtreamApi.Companion$e: SerializationException</ID>
-    <ID>ThrowsCount:SourceRepository.kt$SourceRepository$private fun open(source: SourceEntity): InputStream</ID>
+    <ID>ThrowsCount:SourceRepository.kt$SourceRepository$private fun open(source: SourceEntity, calls: Call.Factory): InputStream</ID>
     <ID>ThrowsCount:XtreamApi.kt$XtreamApi.Companion$fun parseAccount(root: JsonObject): XtreamAccount</ID>
     <ID>TooGenericExceptionCaught:AddSourceScreen.kt$AddSourceViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:DetailScreen.kt$DetailViewModel$e: Exception</ID>

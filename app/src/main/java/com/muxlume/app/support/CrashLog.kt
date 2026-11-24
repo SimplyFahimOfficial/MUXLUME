@@ -4,17 +4,17 @@ import java.io.File
 import java.time.Instant
 
 /**
- * The last crash, kept on the device only, for the user to share if they choose to. An uncaught exception is
- * written as text with every link removed (exception messages from the network stack often quote the stream or
- * playlist URL, which can hold a login), capped at [MAX_BYTES], then handed to the previous handler so Android
- * ends the process as usual. There is no third-party crash reporting.
- *
- * shortcut: only web and RTSP links are removed; a login or token written some other way in a message is not.
- * Extend [LINK] if a new case turns up.
+ * The last crash, kept on the device only, for the user to share if they choose to. An uncaught exception is written as the
+ * types and stack frames of it and its causes, and never its message: the text of an exception from the network stack, the system or
+ * a provider can quote a stream or playlist address, a login, a host or whatever a server sent, and no pattern finds all of that.
+ * What helps to fix a crash, where it happened and what kind of failure it was, is kept. The file is capped at [MAX_BYTES], then the
+ * error is handed to the previous handler so Android ends the process as usual. There is no third-party crash reporting.
  */
 class CrashLog(private val file: File, private val header: () -> String) {
     /** Takes over as the default handler, calling the one that was there. */
     fun install() {
+        // A report written by an earlier version has every message in it, and so possibly an address or a login: it is not kept.
+        if (exists() && read()?.contains(FORMAT) != true) runCatching { clear() }
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             record(thread, error)
@@ -25,7 +25,7 @@ class CrashLog(private val file: File, private val header: () -> String) {
     /** Never throws: the process is already dying, and a failure here must not hide the crash. */
     fun record(thread: Thread, error: Throwable) {
         runCatching {
-            val text = redact("${header()}\n${Instant.now()}\nthread: ${thread.name}\n\n${error.stackTraceToString()}")
+            val text = "${header()}\n$FORMAT\n${Instant.now()}\nthread: ${thread.name}\n\n${describe(error)}"
             file.writeBytes(text.encodeToByteArray().let { if (it.size > MAX_BYTES) it.copyOf(MAX_BYTES) else it })
         }
     }
@@ -41,9 +41,19 @@ class CrashLog(private val file: File, private val header: () -> String) {
 
     companion object {
         const val MAX_BYTES = 64 * 1024
-        private val LINK = Regex("(?:https?|rtsp)://\\S*", RegexOption.IGNORE_CASE)
 
-        /** Every web or RTSP link, up to the next space, becomes a marker. */
-        fun redact(text: String): String = LINK.replace(text, "[link removed]")
+        /** Marks the format of a report: types and frames, no messages. Reports without it are from before, and are removed. */
+        const val FORMAT = "report format: 2 (types and stack frames, no messages)"
+
+        /** The type and the stack frames of [error] and of each cause (once each), with no message. */
+        fun describe(error: Throwable): String = buildString {
+            val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Throwable, Boolean>())
+            var current: Throwable? = error
+            while (current != null && seen.add(current)) {
+                append(if (seen.size == 1) "" else "Caused by: ").append(current.javaClass.name).append('\n')
+                current.stackTrace.forEach { append("\tat ").append(it).append('\n') }
+                current = current.cause
+            }
+        }
     }
 }
