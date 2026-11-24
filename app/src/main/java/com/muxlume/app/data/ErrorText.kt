@@ -19,7 +19,7 @@ import javax.net.ssl.SSLException
  * A failure the app words itself, for the user to read: its message is shown as it is. Nothing else's is: the text of an exception
  * from the network stack, the system or a provider can hold an address, a login or whatever a server chose to send.
  */
-class UserFacingException(message: String) : IOException(message)
+class UserFacingException(message: String, cause: Throwable? = null) : IOException(message, cause)
 
 /** User-facing explanations of import and connection failures. Never includes URLs, credentials or the text of another exception. */
 object ErrorText {

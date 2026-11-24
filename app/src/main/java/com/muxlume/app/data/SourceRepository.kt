@@ -192,7 +192,7 @@ class SourceRepository(
 
     /** A local file's failure is about the file, whatever its provider (a cloud or custom documents provider) wrote in the exception. */
     private fun fileFailure(e: Exception): Exception =
-        if (e is IOException && e !is UserFacingException && e !is TooLargeException) UserFacingException(res.getString(R.string.error_file)) else e
+        if (e is IOException && e !is UserFacingException && e !is TooLargeException) UserFacingException(res.getString(R.string.error_file), e) else e
 
     private fun guideAvailable(source: SourceEntity) = runCatching { guideUrl(source) }.getOrNull() != null
 
@@ -214,12 +214,13 @@ class SourceRepository(
             // IOException for network/format problems, SecurityException for a revoked file permission.
             // A read that fails because the import was cancelled is the cancellation, not a failure of the provider: nothing is recorded.
             val cancelled = !currentCoroutineContext().isActive
+            val failure = if (source.type == SourceType.M3U_FILE) fileFailure(e) else e // what is stored and what the caller shows are the same
             withContext(NonCancellable) {
                 db.items().deletePending(id)
-                if (!cancelled) db.sources().setError(id, ErrorText.of(res, if (source.type == SourceType.M3U_FILE) fileFailure(e) else e))
+                if (!cancelled) db.sources().setError(id, ErrorText.of(res, failure))
             }
             currentCoroutineContext().ensureActive()
-            throw e
+            throw failure
         }
         // New channels may have guide data already stored.
         val fresh = db.sources().get(id)

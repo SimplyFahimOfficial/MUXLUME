@@ -497,9 +497,11 @@ class SourceRepositoryTest {
             override fun read(): Int = throw IOException("SYNTH-TOKEN-4410 from a cloud documents provider at synth-host.invalid")
         })
         val id = repo.save(SourceInput.M3uFile("F", uri, "list.m3u", allowHttp = false))
-        assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
+        val thrown = assertThrows(IOException::class.java) { runBlocking { repo.refresh(id) } }
         val error = repo.get(id)!!.lastError!!
         assertThat(error).isEqualTo(context.resources.getString(com.muxlume.app.R.string.error_file))
+        assertThat(ErrorText.of(context.resources, thrown)).isEqualTo(error) // the Add playlist screen shows the same
+        assertThat(thrown.cause).isInstanceOf(IOException::class.java) // and the original is kept for a diagnostic
         assertThat(error).doesNotContain("SYNTH")
     }
 
