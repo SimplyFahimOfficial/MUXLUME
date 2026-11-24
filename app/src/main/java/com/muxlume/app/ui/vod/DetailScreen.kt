@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -197,7 +198,7 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav, fromPoster: Boolean = fa
                             Text(extra.meta.joinToString("  ·  "), style = MaterialTheme.typography.bodyMedium, color = MuxTheme.TextSecondary)
                         }
                         Spacer(Modifier.height(18.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(Modifier.heightIn(min = 52.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) { // the height of a button, before its state is known
                             if (it.kind == ItemKind.MOVIE) {
                                 val h = history[MediaIds.of(it.sourceId, it.stableKey)]
                                 val resume = h != null && h.positionMs > 30_000 && (h.durationMs <= 0 || h.positionMs < h.durationMs * 0.95)
