@@ -93,7 +93,8 @@ data class Extra(
 @OptIn(ExperimentalCoroutinesApi::class)
 class DetailViewModel(private val c: AppContainer, private val res: Resources, private val sourceId: Long, private val key: String) : ViewModel() {
     val item: StateFlow<ItemEntity?> = c.lock.unlocked.flatMapLatest { c.db.items().observe(sourceId, key, it) }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
-    val favorite = c.db.favorites().isFavorite(sourceId, key).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    /** Null until the database has answered. */
+    val favorite: StateFlow<Boolean?> = c.db.favorites().isFavorite(sourceId, key).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val extra = MutableStateFlow(Extra(loading = true))
     val season = MutableStateFlow<Int?>(null)
 
@@ -150,7 +151,7 @@ class DetailViewModel(private val c: AppContainer, private val res: Resources, p
     }
 
     fun toggleFavorite() = viewModelScope.launch {
-        if (favorite.value) c.db.favorites().remove(sourceId, key) else c.db.favorites().add(FavoriteEntity(sourceId, key, System.currentTimeMillis()))
+        if (favorite.value == true) c.db.favorites().remove(sourceId, key) else c.db.favorites().add(FavoriteEntity(sourceId, key, System.currentTimeMillis()))
     }
 
     fun episodeRequest(series: ItemEntity, ep: XtreamEpisode) = MediaIds.request(
@@ -160,7 +161,7 @@ class DetailViewModel(private val c: AppContainer, private val res: Resources, p
 }
 
 @Composable
-fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
+fun DetailScreen(sourceId: Long, key: String, nav: Nav, fromPoster: Boolean = false) {
     val context = LocalContext.current
     val res = LocalResources.current
     val vm: DetailViewModel = viewModel(key = "$sourceId|$key") { DetailViewModel(context.container, context.applicationContext.resources, sourceId, key) }
@@ -173,7 +174,7 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
     val it = item
 
     Box(Modifier.fillMaxSize().background(MuxTheme.Background)) {
-        if (it == null) {
+        if (it == null || favorite == null) { // the watchlist button is drawn in its real state at once, not animated into it
             CircularProgressIndicator(Modifier.align(Alignment.Center), color = MuxTheme.Accent)
         } else {
             val seasons = extra.episodes.map { e -> e.season }.distinct()
@@ -181,7 +182,7 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
             val episodes = extra.episodes.filter { e -> e.season == season }
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
                 item {
-                    Box(Modifier.sharedPoster(it.sourceId, it.stableKey, detail = true).fillMaxWidth().aspectRatio(0.8f)) {
+                    Box(Modifier.sharedPoster(it.sourceId, it.stableKey, detail = true, fromPoster = fromPoster).fillMaxWidth().aspectRatio(0.8f)) {
                         Artwork(extra.backdrop ?: it.logo, it.name, it.sourceId, Modifier.fillMaxSize(), monogramSize = 72)
                         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to MuxTheme.Background)))
                     }
@@ -215,9 +216,9 @@ fun DetailScreen(sourceId: Long, key: String, nav: Nav) {
                                 }, icon = Icons.Rounded.PlayArrow)
                             }
                             SecondaryButton(
-                                stringResource(if (favorite) R.string.detail_in_watchlist else R.string.detail_watchlist),
+                                stringResource(if (favorite == true) R.string.detail_in_watchlist else R.string.detail_watchlist),
                                 vm::toggleFavorite,
-                                iconPainter = watchlistPainter(favorite),
+                                iconPainter = watchlistPainter(favorite == true),
                             )
                         }
                         extra.plot?.let { plot ->

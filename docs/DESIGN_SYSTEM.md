@@ -47,7 +47,7 @@ Primary actions are cream pills with black text (≈ 19:1). Orange is an accent,
 - The watchlist icon draws its plus into a tick (animated vector, original artwork in `res/drawable`).
 - Reduced motion (app setting, or the system animator scale at 0, followed live) turns all of it into
   instant changes: springs become snaps, no shared element, the icon is a plain drawing, artwork appears
-  without a fade.
+  without a fade. Touch ripples and loading spinners stay: they are feedback and progress, not decoration.
 
 ## Artwork
 

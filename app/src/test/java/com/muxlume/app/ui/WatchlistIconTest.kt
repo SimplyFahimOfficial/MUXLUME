@@ -33,7 +33,12 @@ class WatchlistIconTest {
     @get:Rule val compose = createComposeRule()
     private var added by mutableStateOf(false)
 
-    private fun show(reduceMotion: Boolean) = compose.setContent {
+    private fun show(reduceMotion: Boolean, startAdded: Boolean = false) {
+        added = startAdded
+        setContent(reduceMotion)
+    }
+
+    private fun setContent(reduceMotion: Boolean) = compose.setContent {
         MuxlumeTheme(reduceMotion = reduceMotion) {
             Box(Modifier.size(24.dp).background(Color.White).testTag("icon")) { Icon(watchlistPainter(added), null, Modifier.size(24.dp), tint = Color.Black) }
         }
@@ -47,6 +52,7 @@ class WatchlistIconTest {
 
     private fun plus() = inked(12f, 6.5f)
     private fun tick() = inked(7.5f, 15f)
+    private fun tickEnd() = inked(18.7f, 7.3f) // the far end of the tick, more than the plus's reach from the centre
 
     @Test
     fun `plus first, tick after, and a tick that is already added is drawn at once`() {
@@ -61,16 +67,29 @@ class WatchlistIconTest {
     }
 
     @Test
-    fun `a change reversed half way settles on the state it was reversed to`() {
+    fun `a title that is already added shows the tick on the first frame, not a plus drawing into one`() {
+        show(reduceMotion = false, startAdded = true)
+        compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeByFrame()
+        assertThat(plus() to tick()).isEqualTo(false to true)
+    }
+
+    @Test
+    fun `a change reversed while the tick is being drawn turns back instead of finishing it first`() {
         show(reduceMotion = false)
         compose.mainClock.autoAdvance = false
         added = true
-        compose.mainClock.advanceTimeBy(120)
-        added = false // the tick is still being drawn
-        compose.mainClock.advanceTimeBy(40)
+        var frames = 0
+        while (!tick() && frames++ < 60) compose.mainClock.advanceTimeBy(16) // until the tick has started
+        assertThat(tick() && !tickEnd()).isTrue() // drawn part of the way
+        added = false
+        repeat(25) { // 400 ms: the tick's far end is never reached
+            compose.mainClock.advanceTimeBy(16)
+            assertThat(tickEnd()).isFalse()
+        }
         compose.mainClock.autoAdvance = true
         compose.waitForIdle()
-        assertThat(plus() && !tick()).isTrue() // no half-drawn tick left over
+        assertThat(plus() && !tick()).isTrue() // and no half-drawn tick left over
     }
 
     @Test

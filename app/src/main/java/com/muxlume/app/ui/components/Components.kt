@@ -146,7 +146,7 @@ fun Artwork(url: String?, title: String, sourceId: Long?, modifier: Modifier = M
         // Keyed on allowHttp: Coil's default model comparison ignores request headers, so the painter would not restart when the source's setting arrives or changes.
         key(allowHttp) {
             SubcomposeAsyncImage(
-                model = remember(url, reduced) { artworkRequest(context, url, allowHttp, reduced) },
+                model = remember(url) { artworkRequest(context, url, allowHttp, reduced) }, // `reduced` applies to requests made after it changes
                 contentDescription = null,
                 contentScale = contentScale,
                 modifier = Modifier.fillMaxSize(),

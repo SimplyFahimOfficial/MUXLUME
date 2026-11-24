@@ -17,6 +17,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
@@ -52,8 +53,9 @@ class MotionRouteTest {
 
     @Before
     fun seed() = runBlocking {
-        source = db.sources().insert(SourceEntity(name = "Home", type = SourceType.M3U_URL, secret = "x", label = "https://iptv.example", allowHttp = false, createdAt = 0, refreshedAt = 1, liveCount = 3, movieCount = 40))
+        source = db.sources().insert(SourceEntity(name = "Home", type = SourceType.M3U_URL, secret = "x", label = "https://iptv.example", allowHttp = false, createdAt = 0, refreshedAt = 1, liveCount = 3, movieCount = 41, seriesCount = 3))
         db.items().insertAll(List(40) { i -> item(ItemKind.MOVIE, "m$i", "Movie %02d".format(i), i) })
+        db.items().insertAll(listOf(item(ItemKind.MOVIE, "zq", "Zed Quantum", -1).copy(addedAt = 500))) // first in the grid; "ZQ" is the only placeholder with those initials
         db.items().insertAll(List(3) { i -> item(ItemKind.SERIES, "s$i", "Show %02d".format(i), i) })
         db.items().insertAll(List(3) { i -> item(ItemKind.LIVE, "l$i", "Channel %02d".format(i), i) })
     }
@@ -93,6 +95,23 @@ class MotionRouteTest {
         compose.waitUntil(5_000) { !onDetail() }
         compose.onNodeWithText("Movie 30").assertIsDisplayed()
         assertThat(exists("Movie 00")).isFalse()
+    }
+
+    @Test
+    fun `the poster grows into the page header while the page comes in`() {
+        start()
+        val initials = { compose.onAllNodesWithText("ZQ", useUnmergedTree = true) } // the placeholder drawn in the poster, and later in the header
+        compose.onNodeWithText("Zed Quantum").performClick()
+        compose.mainClock.autoAdvance = false
+        var frames = 0
+        while (initials().fetchSemanticsNodes().size < 2 && frames++ < 200) { compose.mainClock.advanceTimeByFrame(); Thread.sleep(10) } // the page's data loads in the background
+        compose.mainClock.advanceTimeByFrame()
+        val header = initials().fetchSemanticsNodes().minBy { it.boundsInRoot.height }.boundsInRoot // the poster's own initials are the larger, scaled up with it
+        compose.mainClock.autoAdvance = true
+        compose.waitUntil(5_000) { initials().fetchSemanticsNodes().size == 1 } // the grid screen is gone, the header stays
+        val placed = initials().onFirst().fetchSemanticsNode().boundsInRoot
+        assertThat(header.height).isLessThan(placed.height * 0.8f) // on its first frame the header is a poster-sized thumbnail ...
+        assertThat(header.center.x).isLessThan(placed.center.x - 100) // ... at the poster's place, not yet where the header ends up
     }
 
     @Test
@@ -147,13 +166,13 @@ class MotionRouteTest {
     @Test
     fun `a page whose poster is gone from the grid still closes`() {
         start()
-        compose.onNodeWithText("Movie 03").performClick()
+        compose.onNodeWithText("Movie 02").performClick()
         waitFor("Watchlist")
-        runBlocking { db.channelPrefs().edit(source, "m3") { it.copy(hidden = true) } } // the item leaves the catalogue while its page is open
+        runBlocking { db.channelPrefs().edit(source, "m2") { it.copy(hidden = true) } } // the item leaves the catalogue while its page is open
         compose.waitUntil(5_000) { !exists("Watchlist") }
         back()
-        waitFor("Movie 02")
-        assertThat(exists("Movie 03")).isFalse()
+        waitFor("Movie 03")
+        assertThat(exists("Movie 02")).isFalse()
     }
 
     @Test

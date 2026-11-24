@@ -104,7 +104,7 @@ workflow requires a `## [x.y.z]` section for the version being tagged.
 - Opening a stream (first play, channel up/down, failover) no longer decrypts an Xtream login on the main thread.
 - Motion follows the Material 3 spring scheme, so a change of mind mid-animation (a quick second tab tap) carries on from where
   the first one was. Reduced motion, and the system animator scale at 0 (also when changed while the app is open), now also
-  cover the About answers, artwork fades and every other animation.
+  cover the About answers and artwork fades. (Touch ripples and loading spinners are not changed: they are feedback and progress, not decoration.)
 - In Movies and Series a tapped poster grows into the detail page and back (not with reduced motion).
 - The watchlist button's plus turns into a tick when a title is added, and back.
 

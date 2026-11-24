@@ -30,7 +30,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.muxlume.app.container
 import com.muxlume.app.ui.components.LocalPosterTransition
-import com.muxlume.app.ui.components.PosterOpening
 import com.muxlume.app.ui.components.PosterTransition
 import com.muxlume.app.ui.guide.GuideMappingScreen
 import com.muxlume.app.ui.guide.GuideScreen
@@ -61,7 +60,8 @@ import kotlinx.serialization.Serializable
 @Serializable object MainRoute
 @Serializable object PlayerRoute
 @Serializable object SearchRoute
-@Serializable data class DetailRoute(val sourceId: Long, val key: String)
+/** [poster]: opened from a Movies or Series poster, which then grows into the page (and back). */
+@Serializable data class DetailRoute(val sourceId: Long, val key: String, val poster: Boolean = false)
 @Serializable object SettingsRoute
 @Serializable object AppearanceRoute
 @Serializable object SupportRoute
@@ -78,7 +78,7 @@ import kotlinx.serialization.Serializable
 class Nav(private val controller: NavHostController) {
     fun player() = controller.navigate(PlayerRoute) { launchSingleTop = true }
     fun search() = controller.navigate(SearchRoute) { launchSingleTop = true }
-    fun detail(sourceId: Long, key: String) = controller.navigate(DetailRoute(sourceId, key)) { launchSingleTop = true } // a double tap opens one page
+    fun detail(sourceId: Long, key: String, poster: Boolean = false) = controller.navigate(DetailRoute(sourceId, key, poster)) { launchSingleTop = true } // a double tap opens one page
     fun addSource(sourceId: Long = -1) = controller.navigate(AddSourceRoute(sourceId))
     fun settings() = controller.navigate(SettingsRoute)
     fun appearance() = controller.navigate(AppearanceRoute)
@@ -111,7 +111,6 @@ fun MuxlumeRoot() {
         val nav = Nav(controller)
         val motion = MuxTheme.motion
         val reduced = motion.reduced
-        val opening = remember { PosterOpening() }
         // The screen underneath stays opaque and still: only the screen on top fades and slides. Two translucent
         // screens at once let the window show through and ghost each other.
         SharedTransitionLayout(Modifier.fillMaxSize()) {
@@ -130,12 +129,12 @@ fun MuxlumeRoot() {
                     val route = entry.toRoute<AddSourceRoute>()
                     AddSourceScreen(route.sourceId.takeIf { it > 0 }, onDone = { if (route.fromOnboarding) nav.home() else nav.back() }, onBack = { nav.back() })
                 }
-                composable<MainRoute> { PosterRoute(this, motion, opening) { MainScreen(nav) } }
+                composable<MainRoute> { PosterRoute(this, motion) { MainScreen(nav) } }
                 composable<PlayerRoute>(
                     enterTransition = { if (reduced) EnterTransition.None else fadeIn(motion.effects()) },
                 ) { PlayerScreen(onBack = { nav.back() }) }
                 composable<SearchRoute> { SearchScreen(nav) }
-                composable<DetailRoute> { entry -> PosterRoute(this, motion, opening) { entry.toRoute<DetailRoute>().let { DetailScreen(it.sourceId, it.key, nav) } } }
+                composable<DetailRoute> { entry -> PosterRoute(this, motion) { entry.toRoute<DetailRoute>().let { DetailScreen(it.sourceId, it.key, nav, it.poster) } } }
                 composable<SettingsRoute> { SettingsScreen(nav) }
                 composable<AppearanceRoute> { AppearanceScreen(onBack = { nav.back() }) }
                 composable<SupportRoute> { SupportScreen(onBack = { nav.back() }) }
@@ -155,8 +154,8 @@ fun MuxlumeRoot() {
 /** Lets the poster grid and the detail page of this route fly one poster between them. */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun SharedTransitionScope.PosterRoute(visibility: AnimatedVisibilityScope, motion: Motion, opening: PosterOpening, content: @Composable () -> Unit) {
-    val transition = remember(this, visibility, motion, opening) { PosterTransition(this, visibility, motion, opening) }
+private fun SharedTransitionScope.PosterRoute(visibility: AnimatedVisibilityScope, motion: Motion, content: @Composable () -> Unit) {
+    val transition = remember(this, visibility, motion) { PosterTransition(this, visibility, motion) }
     CompositionLocalProvider(LocalPosterTransition provides transition, content = content)
 }
 

@@ -32,6 +32,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -180,8 +181,12 @@ fun LiveScreen(nav: Nav) {
     val listState = rememberLazyListState()
     var options by remember { mutableStateOf<ItemEntity?>(null) }
     // Back to the top when the filter changes, not when the screen returns (another tab, a closed page) to the position it saved.
-    var arrived by remember { mutableStateOf(false) }
-    LaunchedEffect(browse, sourceId) { if (arrived) listState.scrollToItem(0) else arrived = true }
+    var seen by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(browse, sourceId) {
+        val now = "$sourceId|$browse"
+        if (seen != null && seen != now) listState.scrollToItem(0)
+        seen = now
+    }
 
     Column(Modifier.fillMaxSize()) {
         TopHeader(

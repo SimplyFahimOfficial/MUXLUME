@@ -13,7 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -24,7 +24,6 @@ import com.muxlume.app.container
 import com.muxlume.app.data.db.ItemKind
 import com.muxlume.app.ui.Nav
 import com.muxlume.app.ui.components.EmptyState
-import com.muxlume.app.ui.components.LocalPosterTransition
 import com.muxlume.app.ui.components.PosterCard
 import com.muxlume.app.ui.components.sharedPoster
 import com.muxlume.app.ui.live.BrowseFilters
@@ -48,10 +47,13 @@ fun VodScreen(kind: ItemKind, nav: Nav) {
     val groups by vm.groups.collectAsStateWithLifecycle()
     val items = vm.items.collectAsLazyPagingItems()
     val gridState = rememberLazyGridState()
-    val poster = LocalPosterTransition.current
     // Back to the top when the filter changes, not when the screen returns (another tab, a closed page) to the position it saved.
-    var arrived by remember { mutableStateOf(false) }
-    LaunchedEffect(browse, sourceId) { if (arrived) gridState.scrollToItem(0) else arrived = true }
+    var seen by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(browse, sourceId) {
+        val now = "$sourceId|$browse"
+        if (seen != null && seen != now) gridState.scrollToItem(0)
+        seen = now
+    }
     val title = stringResource(if (kind == ItemKind.MOVIE) R.string.vod_movies else R.string.vod_series)
 
     Column(Modifier.fillMaxSize()) {
@@ -84,7 +86,7 @@ fun VodScreen(kind: ItemKind, nav: Nav) {
             items(items.itemCount, key = items.itemKey { it.id }) { i ->
                 val item = items[i] ?: return@items // placeholder while the page loads
                 PosterCard(
-                    item.name, item.logo, item.sourceId, { poster?.opens(item.sourceId, item.stableKey); nav.detail(item.sourceId, item.stableKey) },
+                    item.name, item.logo, item.sourceId, { nav.detail(item.sourceId, item.stableKey, poster = true) },
                     subtitle = item.year, width = null, artworkModifier = Modifier.sharedPoster(item.sourceId, item.stableKey),
                 )
             }

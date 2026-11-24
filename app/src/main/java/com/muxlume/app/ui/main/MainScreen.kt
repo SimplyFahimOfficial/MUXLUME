@@ -46,8 +46,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.muxlume.app.ui.Nav
@@ -121,7 +123,8 @@ private fun BottomBar(selected: Int, modifier: Modifier, onSelect: (Int) -> Unit
         // One indicator that slides between tabs instead of five that fade. A spring keeps its velocity when the tab changes mid-slide,
         // and the position is read while drawing, so a slide does not re-layout the bar.
         val position by animateFloatAsState(selected.toFloat(), motion.spatial(), label = "indicator")
-        Box(Modifier.graphicsLayer { translationX = position * itemWidth.toPx() }.width(itemWidth).fillMaxHeight().padding(6.dp).clip(Mux.PillShape).background(MuxTheme.Primary))
+        val direction = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1f else 1f // the tabs run right to left there
+        Box(Modifier.graphicsLayer { translationX = direction * position * itemWidth.toPx() }.width(itemWidth).fillMaxHeight().padding(6.dp).clip(Mux.PillShape).background(MuxTheme.Primary))
         Row(Modifier.fillMaxSize().selectableGroup()) {
             Tab.entries.forEachIndexed { i, t ->
                 val color by animateColorAsState(if (i == selected) MuxTheme.OnPrimary else MuxTheme.TextSecondary, motion.effects(Speed.FAST), label = "tabColor")
